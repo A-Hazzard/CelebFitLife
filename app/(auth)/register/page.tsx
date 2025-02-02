@@ -139,7 +139,8 @@ export default function RegisterPage() {
               id="terms"
               checked={acceptedTnC}
               onCheckedChange={(checked) => setAcceptedTnC(!!checked)}
-              className="border-brandOrange data-[state=checked]:bg-brandOrange data-[state=checked]:text-brandBlack"
+              className="border-white bg-white data-[state=checked]:bg-brandOrange data-[state=checked]:text-brandBlack"
+              style={{ width: '20px', height: '20px' }}
             />
             <Label htmlFor="terms" className="text-sm">
               I accept the Terms & Conditions

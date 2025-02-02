@@ -27,7 +27,7 @@ export default function LoginClient() {
     completeSignInWithEmailLink()
       .then((result) => {
         if (result) {
-          router.push('/dashboard');
+          router.push('/sreaming');
         }
       })
       .catch(console.error);
@@ -38,7 +38,7 @@ export default function LoginClient() {
     setError('');
     try {
       await loginWithEmailPassword(email, password);
-      router.push('/dashboard');
+      router.push('/streaming');
     } catch (err: unknown) {
       if (err instanceof FirebaseError) {
         setError(err.message);
