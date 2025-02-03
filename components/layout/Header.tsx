@@ -1,6 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import Link from 'next/link';
 
 export default function Header() {
   return (
@@ -27,7 +28,9 @@ export default function Header() {
           </DropdownMenuTrigger>
 
           <DropdownMenuContent>
-            <DropdownMenuItem>Profile</DropdownMenuItem>
+            <DropdownMenuItem>
+              <Link href="/profile">Profile</Link>
+            </DropdownMenuItem>
             <DropdownMenuItem>Log Out</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
