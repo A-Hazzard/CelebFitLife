@@ -1,17 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { signUpUser } from '@/lib/services/AuthService';
-import { FirebaseError } from 'firebase/app';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@radix-ui/react-checkbox';
-import { Form } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
+import { signUpUser } from '@/lib/services/AuthService';
+import { FirebaseError } from 'firebase/app';
+import { useRouter } from 'next/navigation';
+import React, { useState } from 'react';
 
 export default function RegisterPage() {
   const router = useRouter();
+
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,13 +48,15 @@ export default function RegisterPage() {
         acceptedTnC,
       });
 
+      // After forcing email verification, direct the user to login
       router.push('/login?verification=sent');
     } catch (err: unknown) {
       if (err instanceof FirebaseError) {
-        // Handle Firebase error
+        setError(err.message);
+      } else if (err instanceof Error) {
+        // For non-Firebase errors
         setError(err.message);
       } else {
-        // Handle unknown error
         setError('An unknown error occurred');
       }
     } finally {
@@ -135,11 +136,12 @@ export default function RegisterPage() {
           </label>
 
           <label className="flex items-center space-x-2">
-            <Checkbox 
+            <input
               id="terms"
+              type="checkbox"
               checked={acceptedTnC}
-              onCheckedChange={(checked) => setAcceptedTnC(!!checked)}
-              className="border-brandOrange data-[state=checked]:bg-brandOrange data-[state=checked]:text-brandBlack"
+              onChange={(e) => setAcceptedTnC(e.target.checked)}
+              className="border-brandOrange"
             />
             <Label htmlFor="terms" className="text-sm">
               I accept the Terms & Conditions
