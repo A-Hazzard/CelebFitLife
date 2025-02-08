@@ -1,7 +1,7 @@
 // store/useAuthStore.ts
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { UserData } from '@/lib/models/userData';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { UserData } from "@/lib/models/userData";
 
 type AuthState = {
   currentUser: UserData | null;
@@ -35,7 +35,7 @@ export const useAuthStore = create<AuthState>()(
         })),
     }),
     {
-      name: 'auth-storage', // Key in localStorage
+      name: "auth-storage", // Key in localStorage
       storage: createJSONStorage(() => localStorage),
     }
   )

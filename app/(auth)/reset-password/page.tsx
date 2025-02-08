@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { sendPasswordReset } from '@/lib/services/AuthService';
 import { FirebaseError } from 'firebase/app';
-
+import Link from 'next/link';
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
@@ -33,7 +33,9 @@ export default function ResetPasswordPage() {
         <h1 className="text-4xl font-edo text-brandOrange mb-6">Reset Password</h1>
 
         {error && <p className="text-brandOrange mb-4 font-semibold">{error}</p>}
-        {message && <p className="text-brandOrange mb-4 font-semibold">{message}</p>}
+        {message && (
+          <p className="text-brandOrange mb-4 font-semibold">{message}</p>
+        )}
 
         <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
           <input
@@ -52,12 +54,12 @@ export default function ResetPasswordPage() {
         </form>
 
         <div className="mt-6 text-center text-sm space-x-4">
-          <a href="/login" className="text-brandGray underline">
+          <Link href="/login" className="text-brandGray underline">
             Back to Login
-          </a>
-          <a href="/register" className="text-brandOrange underline">
+          </Link>
+          <Link href="/register" className="text-brandOrange underline">
             Don&apos;t have an account? Sign Up
-          </a>
+          </Link>
         </div>
       </div>
     </div>

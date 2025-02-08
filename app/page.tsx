@@ -1,39 +1,43 @@
+"use client";
 import Image from "next/image";
-
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 export default function LandingPage() {
+  const router = useRouter();
   return (
     <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite">
       {/* Header */}
       <header className="flex items-center justify-between p-4 border-b border-brandOrange">
-        <div className="flex items-center space-x-4">
+        <div className="cursor-pointer flex items-center space-x-4">
           <Image
             src="/og-image.jpg"
             alt="CelebFitLife Logo"
             width={100}
             height={100}
             className="w-12 h-12 object-contain"
+            onClick={() => router.push("/")}
           />
           <h1 className="text-2xl font-bold">CelebFitLife</h1>
         </div>
         <nav className="space-x-4">
-          <a
+          <Link
             href="/login"
             className="transition-colors duration-300 hover:text-brandOrange"
           >
             Login
-          </a>
-          <a
+          </Link>
+          <Link
             href="/register"
             className="transition-colors duration-300 hover:text-brandOrange"
           >
             Sign Up
-          </a>
-          <a
+          </Link>
+          <Link
             href="#contact"
             className="transition-colors duration-300 hover:text-brandOrange"
           >
             Contact
-          </a>
+          </Link>
         </nav>
       </header>
 
@@ -48,18 +52,18 @@ export default function LandingPage() {
           sessions, and a vibrant community to elevate your fitness journey.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 mb-12">
-          <a
+          <Link
             href="/register"
             className="px-6 py-3 bg-brandOrange text-brandBlack rounded-md transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
           >
             Get Started
-          </a>
-          <a
+          </Link>
+          <Link
             href="/learn-more"
             className="px-6 py-3 border border-brandOrange rounded-md transition-colors duration-300 hover:bg-brandOrange hover:text-brandBlack"
           >
             Learn More
-          </a>
+          </Link>
         </div>
 
         {/* Choose Your Plan Section */}
@@ -80,12 +84,12 @@ export default function LandingPage() {
                 <li>1 minute free previews</li>
                 <li>Basic chat access</li>
               </ul>
-              <a
+              <Link
                 href="/register"
                 className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
               >
                 Choose Plan
-              </a>
+              </Link>
             </div>
             {/* Plus Plan */}
             <div className="bg-brandBlack border border-brandGray rounded-lg p-6 flex flex-col text-left">
@@ -99,12 +103,12 @@ export default function LandingPage() {
                 <li>Exclusive Q&amp;A sessions</li>
                 <li>Priority chat access</li>
               </ul>
-              <a
+              <Link
                 href="/register"
                 className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
               >
                 Choose Plan
-              </a>
+              </Link>
             </div>
             {/* Unlimited Plan */}
             <div className="bg-brandBlack border border-brandGray rounded-lg p-6 flex flex-col text-left">
@@ -118,12 +122,12 @@ export default function LandingPage() {
                 <li>One-to-one coaching sessions</li>
                 <li>VIP chat access &amp; badges</li>
               </ul>
-              <a
+              <Link
                 href="/register"
                 className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
               >
                 Choose Plan
-              </a>
+              </Link>
             </div>
           </div>
         </section>
@@ -189,13 +193,13 @@ export default function LandingPage() {
           &copy; {new Date().getFullYear()} CelebFitLife. All rights reserved.
         </p>
         <p>
-          <a href="#contact" className="text-brandOrange hover:underline">
+          <Link href="#contact" className="text-brandOrange hover:underline">
             Contact Us
-          </a>{" "}
+          </Link>{" "}
           |{" "}
-          <a href="/privacy" className="text-brandOrange hover:underline">
+          <Link href="/privacy" className="text-brandOrange hover:underline">
             Privacy Policy
-          </a>
+          </Link>
         </p>
       </footer>
     </div>
