@@ -15,19 +15,14 @@ import {
   RemoteTrack,
   RemoteVideoTrack,
 } from "twilio-video";
-import { ChatMessage } from "@/types/stream"; // ensure this type is defined
-import { Picker } from "emoji-mart";
+import { ChatMessage } from "@/types/stream";
+import EmojiPicker, { Theme } from "emoji-picker-react";
 
-// ----------------------------------------------------------------
-// RemoteVideoPlayer: Renders the remote video track or a skeleton loader.
-// Autoplay is forced by muting the video element.
-// ----------------------------------------------------------------
 function RemoteVideoPlayer({ track }: { track: RemoteVideoTrack | null }) {
   const videoRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (track && videoRef.current) {
-      // Detach any previously attached elements.
       track.detach().forEach((el) => el.remove());
       console.log("RemoteVideoPlayer: Attaching track:", track.sid);
       const videoElement = track.attach() as HTMLVideoElement;
@@ -35,17 +30,14 @@ function RemoteVideoPlayer({ track }: { track: RemoteVideoTrack | null }) {
       videoElement.style.height = "100%";
       videoElement.style.objectFit = "cover";
       videoElement.autoplay = true;
-      // Muted to ensure autoplay works without user interaction.
       videoElement.muted = true;
       videoRef.current.appendChild(videoElement);
       videoElement
         .play()
-        .then(() => {
-          console.log("RemoteVideoPlayer: Video playback started.");
-        })
-        .catch((err) => {
-          console.error("RemoteVideoPlayer: Video play error:", err);
-        });
+        .then(() => console.log("RemoteVideoPlayer: Video playback started."))
+        .catch((err) =>
+          console.error("RemoteVideoPlayer: Video play error:", err)
+        );
     }
     return () => {
       if (track) {
@@ -64,10 +56,6 @@ function RemoteVideoPlayer({ track }: { track: RemoteVideoTrack | null }) {
   return <div ref={videoRef} className="w-full h-full" />;
 }
 
-// ----------------------------------------------------------------
-// LiveViewPage: Viewer page that connects to Twilio and shows an overlay
-// if the streamer's video is paused or offline.
-// ----------------------------------------------------------------
 export default function LiveViewPage() {
   const pathname = usePathname();
   const slug = pathname?.split("/").pop() || "";
@@ -76,10 +64,10 @@ export default function LiveViewPage() {
   const [newMessage, setNewMessage] = useState("");
   const [remoteVideoTrack, setRemoteVideoTrack] =
     useState<RemoteVideoTrack | null>(null);
-  // videoStatus: "active" means video is playing; "paused" means the track is disabled; "offline" means participant disconnected.
+  // videoStatus: "active" = playing; "paused" = track disabled; "offline" = participant disconnected; "ended" = stream ended; "waiting" = stream not started.
   const [videoStatus, setVideoStatus] = useState<
-    "active" | "paused" | "offline"
-  >("active");
+    "active" | "paused" | "offline" | "ended" | "waiting"
+  >("waiting");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const roomRef = useRef<Room | null>(null);
   const { currentUser, isLoggedIn } = useAuthStore();
@@ -100,16 +88,14 @@ export default function LiveViewPage() {
         });
         const data = await res.json();
         if (!data.token) throw new Error("No token returned");
-
-        // Connect without requesting local media.
         const twRoom = await connect(data.token, {
           audio: false,
           video: false,
         });
         roomRef.current = twRoom;
         console.log("Viewer: Connected to room:", twRoom.sid);
+        setVideoStatus("waiting");
 
-        // Handle participant disconnection.
         twRoom.on(
           "participantDisconnected",
           (participant: RemoteParticipant) => {
@@ -117,13 +103,11 @@ export default function LiveViewPage() {
               "Viewer: Participant disconnected:",
               participant.identity
             );
-            // If our current remote video track belongs to a disconnected participant, mark as offline.
             setRemoteVideoTrack(null);
             setVideoStatus("offline");
           }
         );
 
-        // Helper to process remote participant tracks.
         const setupParticipantTracks = (participant: RemoteParticipant) => {
           participant.tracks.forEach((pub: RemoteTrackPublication) => {
             if (pub.isSubscribed && pub.track) {
@@ -132,7 +116,6 @@ export default function LiveViewPage() {
                 const rvt = pub.track as RemoteVideoTrack;
                 setRemoteVideoTrack(rvt);
                 setVideoStatus("active");
-                // Subscribe to track events.
                 rvt.on("disabled", () => {
                   console.log("Viewer: Remote video track disabled.");
                   setVideoStatus("paused");
@@ -156,6 +139,16 @@ export default function LiveViewPage() {
                   const audioElement = pub.track.attach() as HTMLAudioElement;
                   audioElement.autoplay = true;
                   audioElement.controls = false;
+                  audioElement.muted = false;
+                  try {
+                    audioElement
+                      .play()
+                      .catch((err) =>
+                        console.error("Viewer: Audio play error:", err)
+                      );
+                  } catch (err) {
+                    console.error("Viewer: Audio play exception:", err);
+                  }
                   audioElement.setAttribute("data-twilio-track", pub.track.sid);
                   audioContainerRef.current.appendChild(audioElement);
                 }
@@ -193,6 +186,16 @@ export default function LiveViewPage() {
                 const audioElement = track.attach() as HTMLAudioElement;
                 audioElement.autoplay = true;
                 audioElement.controls = false;
+                audioElement.muted = false;
+                try {
+                  audioElement
+                    .play()
+                    .catch((err) =>
+                      console.error("Viewer: Audio play error:", err)
+                    );
+                } catch (err) {
+                  console.error("Viewer: Audio play exception:", err);
+                }
                 audioElement.setAttribute("data-twilio-track", track.sid);
                 audioContainerRef.current.appendChild(audioElement);
               }
@@ -209,9 +212,12 @@ export default function LiveViewPage() {
         });
         twRoom.on("disconnected", () => {
           console.log("Viewer: Disconnected from room");
-          twRoom.localParticipant.tracks.forEach((pub) =>
-            stopAndDetachTrack(pub.track)
-          );
+          twRoom.localParticipant.tracks.forEach((pub) => {
+            if (pub.track.kind === "audio" || pub.track.kind === "video") {
+              stopAndDetachTrack(pub.track);
+            }
+          });
+          setVideoStatus("ended");
         });
       } catch (err) {
         console.error("Viewer join error:", err);
@@ -248,8 +254,14 @@ export default function LiveViewPage() {
       {/* Header */}
       <header className="h-16 flex items-center justify-between px-4 border-b border-brandOrange">
         <div className="text-2xl font-bold">CelebFitLife</div>
+        <div className="flex-1 mx-4">
+          <Input
+            placeholder="Search..."
+            className="w-3/4 border border-brandOrange bg-brandBlack text-brandWhite rounded-md px-2 py-1"
+          />
+        </div>
         <div className="flex items-center space-x-4">
-          <Button className="px-4 py-2 bg-brandOrange text-brandBlack rounded">
+          <Button className="px-4 py-2 bg-brandOrange text-brandBlack rounded hover:bg-brandWhite hover:text-brandBlack">
             Subscribe
           </Button>
           <Button className="p-2 bg-brandGray rounded-full">😀</Button>
@@ -271,17 +283,32 @@ export default function LiveViewPage() {
           <div className="flex-1 p-4 relative">
             <div className="relative bg-black w-full h-64 md:h-full rounded-lg shadow-lg overflow-hidden">
               <RemoteVideoPlayer track={remoteVideoTrack} />
-              {(videoStatus === "paused" || videoStatus === "offline") && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70">
-                  {videoStatus === "paused" ? (
-                    <span className="text-xl text-brandOrange font-bold">
-                      Streamer Paused Their Video
-                    </span>
-                  ) : (
-                    <span className="text-xl text-brandOrange font-bold">
-                      Streamer is Offline
-                    </span>
-                  )}
+              {videoStatus === "waiting" && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                  <span className="text-xl text-brandOrange font-bold">
+                    Stream hasn&apos;t started yet
+                  </span>
+                </div>
+              )}
+              {videoStatus === "paused" && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                  <span className="text-xl text-brandOrange font-bold">
+                    Streamer Paused Their Video
+                  </span>
+                </div>
+              )}
+              {videoStatus === "offline" && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                  <span className="text-xl text-brandOrange font-bold">
+                    Streamer is Offline
+                  </span>
+                </div>
+              )}
+              {videoStatus === "ended" && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                  <span className="text-xl text-brandOrange font-bold">
+                    Stream has Ended
+                  </span>
                 </div>
               )}
             </div>
@@ -324,12 +351,12 @@ export default function LiveViewPage() {
               </Button>
               {showEmojiPicker && (
                 <div className="absolute bottom-full mb-2 right-0 z-50">
-                  <Picker
-                    onSelect={(emoji) =>
-                      setNewMessage((prev) => prev + emoji.native)
+                  <EmojiPicker
+                    onEmojiClick={(emojiData) =>
+                      setNewMessage((prev) => prev + emojiData.emoji)
                     }
-                    theme="dark"
-                    style={{ maxWidth: "320px" }}
+                    theme={"dark" as Theme}
+                    width={320}
                   />
                 </div>
               )}
