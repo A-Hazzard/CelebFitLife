@@ -1,40 +1,47 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { signUpUser } from '@/lib/services/AuthService';
-import { FirebaseError } from 'firebase/app';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@radix-ui/react-checkbox';
-import { Form } from '@/components/ui/form';
-import { Label } from '@/components/ui/label';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { signUpUser } from "@/lib/services/AuthService";
+import { FirebaseError } from "firebase/app";
+import { useRouter } from "next/navigation";
+import React, { useState } from "react";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('');
-  const [country, setCountry] = useState('');
-  const [city, setCity] = useState('');
-  const [age, setAge] = useState('');
+
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState("");
+  const [city, setCity] = useState("");
+  const [age, setAge] = useState("");
   const [acceptedTnC, setAcceptedTnC] = useState(false);
 
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       if (!acceptedTnC) {
-        throw new Error('You must accept the Terms & Conditions.');
+        throw new Error("You must accept the Terms & Conditions.");
       }
-      if (!username || !email || !password || !phone || !country || !city || !age) {
-        throw new Error('Please fill out all required fields.');
+      if (
+        !username ||
+        !email ||
+        !password ||
+        !phone ||
+        !country ||
+        !city ||
+        !age
+      ) {
+        throw new Error("Please fill out all required fields.");
       }
 
       const ageNum = parseInt(age, 10);
@@ -49,14 +56,16 @@ export default function RegisterPage() {
         acceptedTnC,
       });
 
-      router.push('/login?verification=sent');
+      // After forcing email verification, direct the user to login
+      router.push("/login?verification=sent");
     } catch (err: unknown) {
       if (err instanceof FirebaseError) {
-        // Handle Firebase error
+        setError(err.message);
+      } else if (err instanceof Error) {
+        // For non-Firebase errors
         setError(err.message);
       } else {
-        // Handle unknown error
-        setError('An unknown error occurred');
+        setError("An unknown error occurred");
       }
     } finally {
       setLoading(false);
@@ -67,7 +76,9 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-brandBlack text-brandWhite">
       <div className="w-full max-w-md px-6 py-8">
         <h1 className="text-4xl font-edo text-brandOrange mb-6">Sign Up</h1>
-        {error && <p className="text-brandOrange mb-2 font-semibold">{error}</p>}
+        {error && (
+          <p className="text-brandOrange mb-2 font-semibold">{error}</p>
+        )}
 
         <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
           <label className="flex flex-col space-y-1">
@@ -135,12 +146,12 @@ export default function RegisterPage() {
           </label>
 
           <label className="flex items-center space-x-2">
-            <Checkbox 
+            <input
               id="terms"
+              type="checkbox"
               checked={acceptedTnC}
-              onCheckedChange={(checked) => setAcceptedTnC(!!checked)}
-              className="border-white bg-white data-[state=checked]:bg-brandOrange data-[state=checked]:text-brandBlack"
-              style={{ width: '20px', height: '20px' }}
+              onChange={(e) => setAcceptedTnC(e.target.checked)}
+              className="border-brandOrange bg-white checked:bg-brandOrange checked:text-brandBlack w-5 h-5"
             />
             <Label htmlFor="terms" className="text-sm">
               I accept the Terms & Conditions
@@ -152,7 +163,7 @@ export default function RegisterPage() {
             className="bg-brandOrange text-brandBlack font-semibold py-2 mt-4 rounded disabled:bg-opacity-50"
             type="submit"
           >
-            {loading ? 'Signing Up...' : 'Sign Up'}
+            {loading ? "Signing Up..." : "Sign Up"}
           </Button>
         </form>
       </div>

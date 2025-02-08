@@ -18,10 +18,10 @@ export default function ResetPasswordPage() {
       setMessage('Password reset email sent. Check your inbox.');
     } catch (err: unknown) {
       if (err instanceof FirebaseError) {
-        // Handle Firebase error
+        setError(err.message);
+      } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        // Handle unknown error
         setError('An unknown error occurred');
       }
     }
