@@ -6,7 +6,9 @@ export default function Home() {
       {/* Header */}
       <header className="flex items-center justify-between p-4">
         <div className="flex items-center space-x-4">
-          <img
+          <Image
+            width={100}
+            height={100}
             src="/og-image.jpg"
             alt="CelebFitLife Logo"
             className="w-12 h-12 object-contain"
