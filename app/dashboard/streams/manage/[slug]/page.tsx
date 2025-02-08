@@ -9,13 +9,14 @@ import {
   LocalAudioTrack,
   LocalTrackPublication
 } from 'twilio-video';
-import { stopAndDetachTrack, attachVideoTrack } from '@/lib/twilioTrackUtils';
+import { stopAndDetachTrack } from '@/lib/twilioTrackUtils';
 import { sendChatMessage, listenToMessages } from '@/lib/services/ChatService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
+import { Picker } from 'emoji-mart';
 
 interface ChatMessage {
   id: string;
@@ -34,6 +35,7 @@ export default function ManageStreamPage() {
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isStreamStarted, setIsStreamStarted] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const { currentUser, isLoggedIn } = useAuthStore();
 
@@ -67,24 +69,30 @@ export default function ManageStreamPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           roomName: slug,
-          userName: currentUser.displayName || currentUser.email,
-        }),
+          userName: currentUser.displayName || currentUser.email
+        })
       });
       const data = await res.json();
       if (!data.token) throw new Error('No token returned');
 
-      // The connect call will trigger getUserMedia and (because of the user click) prompt for mic/camera permission.
+      // The connect call triggers getUserMedia and prompts for mic/camera permission.
       const twRoom = await connect(data.token, {
         video: { width: 640, height: 360 },
-        audio: true,
+        audio: true
       });
       roomRef.current = twRoom;
 
-      // Attach the local video track.
+      // Attach the local video track with explicit style adjustments.
       twRoom.localParticipant.tracks.forEach((pub: LocalTrackPublication) => {
         if (pub.track.kind === 'video' && videoContainerRef.current) {
+          // Clear any previous attachments.
           videoContainerRef.current.innerHTML = '';
-          attachVideoTrack(pub.track as LocalVideoTrack, videoContainerRef.current);
+          // Attach the track and then style the video element.
+          const videoElement = pub.track.attach() as HTMLVideoElement;
+          videoElement.style.width = '100%';
+          videoElement.style.height = '100%';
+          videoElement.style.objectFit = 'cover';
+          videoContainerRef.current.appendChild(videoElement);
         }
       });
 
@@ -144,50 +152,91 @@ export default function ManageStreamPage() {
   };
 
   if (!isLoggedIn) {
-    return <div className="p-4 text-white">Please log in first.</div>;
+    return <div className="p-4 text-brandWhite">Please log in first.</div>;
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row text-white">
-      {/* Video section */}
-      <div className="flex-1 bg-gray-800 p-4 relative">
-        {/* Button to trigger mic/camera permission via user gesture */}
-        {!isStreamStarted && (
-          <div className="mb-4">
-            <Button onClick={joinAsStreamer}>Start Stream (Enable Mic/Camera)</Button>
-          </div>
-        )}
-        <div ref={videoContainerRef} className="bg-black w-full h-64 md:h-full"></div>
-        {isStreamStarted && (
-          <div className="mt-2 space-x-2">
-            <Button onClick={handleToggleAudio}>
-              {isAudioEnabled ? 'Mute' : 'Unmute'}
-            </Button>
-            <Button onClick={handleToggleVideo}>
-              {isVideoEnabled ? 'Stop Cam' : 'Start Cam'}
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {/* Chat panel */}
-      <div className="w-full md:w-80 bg-white text-gray-800 border-l border-gray-200 flex flex-col">
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {messages.map((msg) => (
-            <div key={msg.id} className="bg-gray-100 p-2 rounded-md text-sm">
-              <strong>{msg.userName}: </strong>
-              {msg.content}
-            </div>
-          ))}
+    <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite">
+      {/* Header */}
+      <header className="h-16 flex items-center justify-between px-4 border-b border-brandOrange">
+        <div className="text-2xl font-bold">CelebFitLife</div>
+        <div className="flex items-center space-x-4">
+          <Button className="px-4 py-2 bg-brandOrange text-brandBlack rounded">Subscribe</Button>
+          <Button className="p-2 bg-brandGray rounded-full">😀</Button>
         </div>
-        <form onSubmit={handleSendMessage} className="p-2 border-t border-gray-200 flex">
-          <Input
-            className="flex-1 border border-gray-300 mr-2"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-          />
-          <Button type="submit">Send</Button>
-        </form>
+      </header>
+
+      <div className="flex flex-1">
+        {/* Side Nav */}
+        <nav className="w-20 bg-brandBlack border-r border-brandOrange flex flex-col items-center py-4 space-y-4">
+          <div className="w-12 h-12 rounded-full bg-brandWhite"></div>
+          <div className="w-12 h-12 rounded-full bg-brandWhite opacity-50"></div>
+          <div className="w-12 h-12 rounded-full bg-brandWhite opacity-75"></div>
+          <div className="w-12 h-12 rounded-full bg-brandWhite opacity-50"></div>
+        </nav>
+
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col md:flex-row">
+          {/* Video Section */}
+          <div className="flex-1 p-4 relative">
+            {!isStreamStarted && (
+              <div className="mb-4">
+                <Button onClick={joinAsStreamer} className="bg-brandOrange text-brandBlack">
+                  Start Stream (Enable Mic/Camera)
+                </Button>
+              </div>
+            )}
+            <div ref={videoContainerRef} className="bg-black w-full h-64 md:h-full rounded-lg shadow-lg overflow-hidden"></div>
+            {isStreamStarted && (
+              <div className="mt-2 space-x-2">
+                <Button onClick={handleToggleAudio} className="bg-brandOrange text-brandBlack">
+                  {isAudioEnabled ? 'Mute' : 'Unmute'}
+                </Button>
+                <Button onClick={handleToggleVideo} className="bg-brandOrange text-brandBlack">
+                  {isVideoEnabled ? 'Stop Cam' : 'Start Cam'}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Chat Panel */}
+          <div className="w-full md:w-80 bg-brandGray border-l border-brandOrange flex flex-col">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {messages.map((msg, index) => (
+                <div key={msg.id || index} className="bg-brandBlack p-2 rounded-md text-sm">
+                  <strong className="text-brandOrange">{msg.userName}:</strong> {msg.content}
+                </div>
+              ))}
+            </div>
+            <div className="relative p-2 border-t border-brandOrange flex items-center">
+              <Input
+                className="flex-1 border border-brandOrange mr-2 bg-brandBlack text-brandWhite"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Type your message..."
+              />
+              <Button
+                type="button"
+                onClick={() => setShowEmojiPicker((prev) => !prev)}
+                className="px-2 py-1 bg-brandGray rounded"
+              >
+                😊
+              </Button>
+              <Button type="submit" onClick={handleSendMessage} className="bg-brandOrange text-brandBlack ml-2">
+                Send
+              </Button>
+              {showEmojiPicker && (
+                <div className="absolute bottom-full mb-2 right-0 z-50">
+                  <Picker
+                    onSelect={(emoji) => setNewMessage((prev) => prev + emoji.native)}
+                    theme="dark"
+                    style={{ maxWidth: '320px' }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </main>
       </div>
     </div>
   );
