@@ -1,5 +1,5 @@
 import Image from "next/image";
-
+import Link from "next/link";
 export default function LearnMorePage() {
   return (
     <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite">
@@ -16,30 +16,30 @@ export default function LearnMorePage() {
           <h1 className="text-2xl font-bold">CelebFitLife</h1>
         </div>
         <nav className="space-x-4">
-          <a
+          <Link
             href="/"
             className="transition-colors duration-300 hover:text-brandOrange"
           >
             Home
-          </a>
-          <a
+          </Link>
+          <Link
             href="/learn-more"
             className="transition-colors duration-300 hover:text-brandOrange"
           >
             Learn More
-          </a>
-          <a
+          </Link>
+          <Link
             href="#contact"
             className="transition-colors duration-300 hover:text-brandOrange"
           >
             Contact
-          </a>
-          <a
+          </Link>
+          <Link
             href="/login"
             className="transition-colors duration-300 hover:text-brandOrange"
           >
             Login
-          </a>
+          </Link>
         </nav>
       </header>
 
@@ -58,18 +58,18 @@ export default function LearnMorePage() {
             lifestyle.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a
+            <Link
               href="/register"
               className="px-6 py-3 bg-brandOrange text-brandBlack rounded-md transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
             >
               Get Started
-            </a>
-            <a
-              href="/learn-more"
+            </Link>
+            <Link
+              href="/features"
               className="px-6 py-3 border border-brandOrange rounded-md transition-colors duration-300 hover:bg-brandOrange hover:text-brandBlack"
             >
               Explore Features
-            </a>
+            </Link>
           </div>
         </section>
 
@@ -130,12 +130,12 @@ export default function LearnMorePage() {
                   <li>1 minute free previews</li>
                   <li>Basic chat access</li>
                 </ul>
-                <a
+                <Link
                   href="/register"
                   className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
                 >
                   Choose Plan
-                </a>
+                </Link>
               </div>
               {/* Plus Plan */}
               <div className="bg-brandBlack border border-brandGray rounded-lg p-6 flex flex-col text-left">
@@ -149,12 +149,12 @@ export default function LearnMorePage() {
                   <li>Exclusive Q&amp;A sessions</li>
                   <li>Priority chat access</li>
                 </ul>
-                <a
+                <Link
                   href="/register"
                   className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
                 >
                   Choose Plan
-                </a>
+                </Link>
               </div>
               {/* Unlimited Plan */}
               <div className="bg-brandBlack border border-brandGray rounded-lg p-6 flex flex-col text-left">
@@ -168,12 +168,12 @@ export default function LearnMorePage() {
                   <li>One-to-one coaching sessions</li>
                   <li>VIP chat access &amp; badges</li>
                 </ul>
-                <a
+                <Link
                   href="/register"
                   className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
                 >
                   Choose Plan
-                </a>
+                </Link>
               </div>
             </div>
           </div>
@@ -215,13 +215,13 @@ export default function LearnMorePage() {
           &copy; {new Date().getFullYear()} CelebFitLife. All rights reserved.
         </p>
         <p>
-          <a href="#contact" className="text-brandOrange hover:underline">
+          <Link href="#contact" className="text-brandOrange hover:underline">
             Contact Us
-          </a>{" "}
+          </Link>{" "}
           |{" "}
-          <a href="/privacy" className="text-brandOrange hover:underline">
+          <Link href="/privacy" className="text-brandOrange hover:underline">
             Privacy Policy
-          </a>
+          </Link>
         </p>
       </footer>
     </div>
