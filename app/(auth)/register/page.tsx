@@ -1,5 +1,6 @@
 "use client";
 
+import LandingHeader from "@/components/layout/landing/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +9,30 @@ import { FirebaseError } from "firebase/app";
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 
+function LabelInput({
+  label,
+  type,
+  value,
+  onChange,
+}: {
+  label: string;
+  type: string;
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  return (
+    <label className="flex flex-col space-y-1">
+      <span className="text-sm">{label}</span>
+      <Input
+        type={type}
+        placeholder={`Enter ${label.toLowerCase()}`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-gray-900 text-white border border-gray-500 focus:outline-none focus:ring-2 focus:ring-brandOrange py-2 px-4 rounded"
+      />
+    </label>
+  );
+}
 export default function RegisterPage() {
   const router = useRouter();
 
@@ -56,13 +81,11 @@ export default function RegisterPage() {
         acceptedTnC,
       });
 
-      // After forcing email verification, direct the user to login
       router.push("/login?verification=sent");
     } catch (err: unknown) {
       if (err instanceof FirebaseError) {
         setError(err.message);
       } else if (err instanceof Error) {
-        // For non-Firebase errors
         setError(err.message);
       } else {
         setError("An unknown error occurred");
@@ -73,100 +96,89 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-brandBlack text-brandWhite">
-      <div className="w-full max-w-md px-6 py-8">
-        <h1 className="text-4xl font-edo text-brandOrange mb-6">Sign Up</h1>
-        {error && (
-          <p className="text-brandOrange mb-2 font-semibold">{error}</p>
-        )}
+    <>
+      <LandingHeader />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#ff7f3017] to-brandBlack text-brandWhite">
+        <div className="w-full max-w-md bg-gray-800 shadow-xl rounded-lg px-8 py-10">
+          <h1 className="text-4xl font-extrabold text-brandOrange text-center mb-6">
+            Sign Up
+          </h1>
 
-        <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
-          <label className="flex flex-col space-y-1">
-            <span className="text-sm">Username</span>
-            <Input
+          {error && (
+            <p className="text-red-500 bg-gray-700 p-3 rounded mb-4 text-center font-semibold">
+              {error}
+            </p>
+          )}
+
+          <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
+            <LabelInput
+              label="Username"
               type="text"
-              placeholder="dummy_username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={setUsername}
             />
-          </label>
-          <label className="flex flex-col space-y-1">
-            <span className="text-sm">Email</span>
-            <Input
+            <LabelInput
+              label="Email"
               type="email"
-              placeholder="dummy@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={setEmail}
             />
-          </label>
-          <label className="flex flex-col space-y-1">
-            <span className="text-sm">Password</span>
-            <Input
+            <LabelInput
+              label="Password"
               type="password"
-              placeholder="dummy_password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={setPassword}
             />
-          </label>
-          <label className="flex flex-col space-y-1">
-            <span className="text-sm">Phone Number</span>
-            <Input
+            <LabelInput
+              label="Phone Number"
               type="text"
-              placeholder="123-456-7890"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={setPhone}
             />
-          </label>
-          <label className="flex flex-col space-y-1">
-            <span className="text-sm">Country</span>
-            <Input
+            <LabelInput
+              label="Country"
               type="text"
-              placeholder="United States"
               value={country}
-              onChange={(e) => setCountry(e.target.value)}
+              onChange={setCountry}
             />
-          </label>
-          <label className="flex flex-col space-y-1">
-            <span className="text-sm">City</span>
-            <Input
+            <LabelInput
+              label="City"
               type="text"
-              placeholder="New York"
               value={city}
-              onChange={(e) => setCity(e.target.value)}
+              onChange={setCity}
             />
-          </label>
-          <label className="flex flex-col space-y-1">
-            <span className="text-sm">Age</span>
-            <Input
+            <LabelInput
+              label="Age"
               type="number"
-              placeholder="25"
               value={age}
-              onChange={(e) => setAge(e.target.value)}
+              onChange={setAge}
             />
-          </label>
 
-          <label className="flex items-center space-x-2">
-            <input
-              id="terms"
-              type="checkbox"
-              checked={acceptedTnC}
-              onChange={(e) => setAcceptedTnC(e.target.checked)}
-              className="border-brandOrange bg-white checked:bg-brandOrange checked:text-brandBlack w-5 h-5"
-            />
-            <Label htmlFor="terms" className="text-sm">
-              I accept the Terms & Conditions
-            </Label>
-          </label>
+            <label className="flex items-center space-x-2">
+              <input
+                id="terms"
+                type="checkbox"
+                checked={acceptedTnC}
+                onChange={(e) => setAcceptedTnC(e.target.checked)}
+                className="border-brandOrange bg-white checked:bg-brandOrange checked:text-brandBlack w-5 h-5"
+              />
+              <Label htmlFor="terms" className="text-sm">
+                I accept the Terms & Conditions
+              </Label>
+            </label>
 
-          <Button
-            disabled={loading}
-            className="bg-brandOrange text-brandBlack font-semibold py-2 mt-4 rounded disabled:bg-opacity-50"
-            type="submit"
-          >
-            {loading ? "Signing Up..." : "Sign Up"}
-          </Button>
-        </form>
+            <Button
+              disabled={loading}
+              className="bg-brandOrange text-brandBlack font-semibold py-2 mt-4 rounded disabled:bg-opacity-50"
+              type="submit"
+            >
+              {loading ? "Signing Up..." : "Sign Up"}
+            </Button>
+          </form>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
+
+

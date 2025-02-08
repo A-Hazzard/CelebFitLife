@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CelebFitLife
+![CelebFitLife Logo](public/og-image.jpg)
 
-## Getting Started
+CelebFitLife is a live-streaming fitness platform that connects fans with their favorite celebrities and top fitness instructors in real time. Our mission is to make fitness fun, engaging, and interactive—allowing users to work out alongside the stars while enjoying exclusive content and community features.
 
-First, run the development server:
+## Table of Contents
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Folder Structure](#folder-structure)
+- [Setup and Installation](#setup-and-installation)
+- [Environment Variables](#environment-variables)
+- [Scripts](#scripts)
+- [Future Improvements](#future-improvements)
+- [License](#license)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Live Streaming & Interaction:**  
+  - Streamers host live workout sessions using Twilio Video.
+  - Fans join live streams, participate in real‑time chat, polls, and reactions.
+  - Free 1‑minute preview for non‑subscribers, with full access for paid subscribers.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Subscription Plans:**  
+  - **Basic:** $9.99/month – Access to 1 streamer, live workouts & replays, 1-minute free previews, basic chat access.
+  - **Plus:** $19.99/month – Access to 3 streamers, live workouts & replays, exclusive Q&A sessions, priority chat access.
+  - **Unlimited:** $29.99/month – Unlimited streamers, exclusive fitness challenges, one-to-one coaching sessions, VIP chat access & badges.
+  - 1‑day free trial is available.
 
-## Learn More
+- **User Authentication & Registration:**  
+  - Multiple sign-in options including Email/Password, Magic Link, Google, and Facebook.
+  - Email verification is required before accessing the platform.
 
-To learn more about Next.js, take a look at the following resources:
+- **Payment & Subscription Management:**  
+  - Recurring billing via Stripe.
+  - Subscription status tracked in Firestore.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Moderation & Notifications:**  
+  - Moderators can ban/mute users, manage live polls, and enforce chat rules.
+  - Streamers can schedule sessions and send notifications to subscribers.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Additional Interactive Features:**  
+  - Integrated emoji support in chat using **emoji-picker-react**.
+  - Responsive and modern UI for an engaging user experience.
 
-## Deploy on Vercel
+## Tech Stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Next.js 15**
+- **React 18**
+- **TypeScript**
+- **Tailwind CSS** (with tailwindcss-animate and tailwind-merge)
+- **Firebase** (Authentication & Firestore)
+- **Stripe** (for recurring payments)
+- **Twilio Video** (for live streaming)
+- **Zustand** (for state management)
+- **EmailJS** (for contact form handling)
+- **emoji-picker-react** (for chat emoji support)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Folder Structure
+
