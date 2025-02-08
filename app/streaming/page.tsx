@@ -1,11 +1,8 @@
 'use client';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import Header from '@/components/layout/Header';
-import Sidebar from '@/components/layout/Sidebar';
-import StreamGrid from '@/components/streaming/StreamGrid';
+import Header from "@/components/layout/Header";
+import Sidebar from "@/components/layout/Sidebar";
+import StreamGrid from "@/components/streaming/StreamGrid";
 
 export default function StreamingPage() {
   // Array of 10 iframes for testing
