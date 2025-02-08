@@ -1,45 +1,12 @@
 "use client";
-import Image from "next/image";
+import LandingHeader from "@/components/layout/landing/Header";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 export default function LandingPage() {
-  const router = useRouter();
   return (
     <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite">
-      {/* Header */}
-      <header className="flex items-center justify-between p-4 border-b border-brandOrange">
-        <div className="cursor-pointer flex items-center space-x-4">
-          <Image
-            src="/og-image.jpg"
-            alt="CelebFitLife Logo"
-            width={100}
-            height={100}
-            className="w-12 h-12 object-contain"
-            onClick={() => router.push("/")}
-          />
-          <h1 className="text-2xl font-bold">CelebFitLife</h1>
-        </div>
-        <nav className="space-x-4">
-          <Link
-            href="/login"
-            className="transition-colors duration-300 hover:text-brandOrange"
-          >
-            Login
-          </Link>
-          <Link
-            href="/register"
-            className="transition-colors duration-300 hover:text-brandOrange"
-          >
-            Sign Up
-          </Link>
-          <Link
-            href="#contact"
-            className="transition-colors duration-300 hover:text-brandOrange"
-          >
-            Contact
-          </Link>
-        </nav>
-      </header>
+      <LandingHeader />
+
 
       {/* Hero Section */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 text-center mt-12">

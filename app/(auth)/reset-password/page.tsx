@@ -4,6 +4,9 @@ import React, { useState } from 'react';
 import { sendPasswordReset } from '@/lib/services/AuthService';
 import { FirebaseError } from 'firebase/app';
 import Link from 'next/link';
+import LandingHeader from '@/components/layout/landing/Header';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
@@ -28,40 +31,57 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-brandBlack text-brandWhite flex items-center justify-center">
-      <div className="w-full max-w-md px-6 py-8">
-        <h1 className="text-4xl font-edo text-brandOrange mb-6">Reset Password</h1>
+    <>
+      <LandingHeader />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-brandBlack to-gray-900 text-brandWhite">
+        <div className="w-full max-w-md bg-gray-800 shadow-xl rounded-lg px-8 py-10">
+          <h1 className="text-4xl font-extrabold text-brandOrange text-center mb-6">
+            Reset Password
+          </h1>
 
-        {error && <p className="text-brandOrange mb-4 font-semibold">{error}</p>}
-        {message && (
-          <p className="text-brandOrange mb-4 font-semibold">{message}</p>
-        )}
+          {error && (
+            <p className="text-red-500 bg-gray-700 p-3 rounded mb-4 text-center font-semibold">
+              {error}
+            </p>
+          )}
+          {message && (
+            <p className="text-green-500 bg-gray-700 p-3 rounded mb-4 text-center font-semibold">
+              {message}
+            </p>
+          )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
-          <input
-            className="bg-transparent border-b border-brandGray focus:outline-none py-2"
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <button
-            className="bg-brandOrange text-brandBlack font-semibold py-2 rounded"
-            type="submit"
-          >
-            Send Reset Email
-          </button>
-        </form>
+          <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
+            <Input
+              className="bg-gray-900 text-white border border-gray-500 focus:outline-none focus:ring-2 focus:ring-brandOrange py-2 px-4 rounded"
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <Button
+              className="bg-brandOrange hover:bg-orange-600 text-brandBlack font-semibold py-2 rounded text-lg"
+              type="submit"
+            >
+              Send Reset Email
+            </Button>
+          </form>
 
-        <div className="mt-6 text-center text-sm space-x-4">
-          <Link href="/login" className="text-brandGray underline">
-            Back to Login
-          </Link>
-          <Link href="/register" className="text-brandOrange underline">
-            Don&apos;t have an account? Sign Up
-          </Link>
+          <div className="mt-6 text-center text-sm space-x-4">
+            <Link
+              href="/login"
+              className="text-brandGray underline hover:text-brandOrange"
+            >
+              Back to Login
+            </Link>
+            <Link
+              href="/register"
+              className="text-brandOrange underline hover:text-orange-400"
+            >
+              Don&apos;t have an account? Sign Up
+            </Link>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
