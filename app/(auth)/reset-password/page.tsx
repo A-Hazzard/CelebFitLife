@@ -5,6 +5,8 @@ import { sendPasswordReset } from '@/lib/services/AuthService';
 import { FirebaseError } from 'firebase/app';
 import Link from 'next/link';
 import LandingHeader from '@/components/layout/landing/Header';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
