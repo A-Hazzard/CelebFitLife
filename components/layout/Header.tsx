@@ -1,7 +1,15 @@
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import Link from 'next/link';
+"use client";
+
+import Link from "next/link";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+
 
 export default function Header() {
   return (
@@ -31,7 +39,9 @@ export default function Header() {
             <DropdownMenuItem>
               <Link href="/profile">Profile</Link>
             </DropdownMenuItem>
+
             <DropdownMenuItem>Log Out</DropdownMenuItem>
+
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
