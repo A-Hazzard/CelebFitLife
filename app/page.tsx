@@ -33,10 +33,17 @@ export default function LandingPage() {
         formRef.current?.reset();
       }
     } catch (error) {
-      setSubmitStatus({
-        type: "error",
-        message: "Failed to send message. Please try again later.",
-      });
+      if (error instanceof Error) {
+        setSubmitStatus({
+          type: "error",
+          message: `Failed to send message: ${error.message}`,
+        });
+      } else {
+        setSubmitStatus({
+          type: "error", 
+          message: "Failed to send message. Please try again later.",
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
