@@ -1,12 +1,50 @@
 "use client";
 import LandingHeader from "@/components/layout/landing/Header";
 import Link from "next/link";
+import { useRef, useState } from "react";
+import emailjs from "@emailjs/browser";
 
 export default function LandingPage() {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<{
+    type: "success" | "error" | null;
+    message: string;
+  }>({ type: null, message: "" });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitStatus({ type: null, message: "" });
+
+    try {
+      const result = await emailjs.sendForm(
+        process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID!,
+        process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID!,
+        formRef.current!,
+        process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY
+      );
+
+      if (result.text === "OK") {
+        setSubmitStatus({
+          type: "success",
+          message: "Message sent successfully! We'll get back to you soon.",
+        });
+        formRef.current?.reset();
+      }
+    } catch (error) {
+      setSubmitStatus({
+        type: "error",
+        message: "Failed to send message. Please try again later.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite">
       <LandingHeader />
-
 
       {/* Hero Section */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 text-center mt-12">
@@ -108,38 +146,56 @@ export default function LandingPage() {
         <p className="mb-6 text-center text-brandGray">
           Have questions or feedback? Get in touch with us!
         </p>
-        <form className="bg-brandWhite text-brandBlack p-6 rounded-lg shadow-lg">
+        <form
+          ref={formRef}
+          onSubmit={handleSubmit}
+          className="bg-brandWhite text-brandBlack p-6 rounded-lg shadow-lg"
+        >
+          {submitStatus.type && (
+            <div
+              className={`mb-4 p-3 rounded ${
+                submitStatus.type === "success"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
+              }`}
+            >
+              {submitStatus.message}
+            </div>
+          )}
           <div className="mb-4">
-            <label htmlFor="contact-name" className="block mb-1 font-semibold">
+            <label htmlFor="user_name" className="block mb-1 font-semibold">
               Name
             </label>
             <input
-              id="contact-name"
+              id="user_name"
+              name="user_name"
               type="text"
+              required
               placeholder="Your name"
               className="w-full border border-brandGray rounded-md px-3 py-2"
             />
           </div>
           <div className="mb-4">
-            <label htmlFor="contact-email" className="block mb-1 font-semibold">
+            <label htmlFor="user_email" className="block mb-1 font-semibold">
               Email
             </label>
             <input
-              id="contact-email"
+              id="user_email"
+              name="user_email"
               type="email"
+              required
               placeholder="Your email"
               className="w-full border border-brandGray rounded-md px-3 py-2"
             />
           </div>
           <div className="mb-4">
-            <label
-              htmlFor="contact-message"
-              className="block mb-1 font-semibold"
-            >
+            <label htmlFor="message" className="block mb-1 font-semibold">
               Message
             </label>
             <textarea
-              id="contact-message"
+              id="message"
+              name="message"
+              required
               placeholder="Your message"
               rows={5}
               className="w-full border border-brandGray rounded-md px-3 py-2"
@@ -147,9 +203,15 @@ export default function LandingPage() {
           </div>
           <button
             type="submit"
-            className="w-full px-4 py-2 bg-brandOrange text-brandBlack rounded-md transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
+            disabled={isSubmitting}
+            className={`w-full px-4 py-2 bg-brandOrange text-brandBlack rounded-md transition-colors duration-300 
+              ${
+                isSubmitting
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:bg-brandWhite hover:text-brandBlack"
+              }`}
           >
-            Send Message
+            {isSubmitting ? "Sending..." : "Send Message"}
           </button>
         </form>
       </section>
