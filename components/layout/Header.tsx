@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 
+
 export default function Header() {
   return (
     <header className="bg-brandBlack border-b border-brandGray p-4 flex items-center justify-between">
@@ -38,9 +39,9 @@ export default function Header() {
             <DropdownMenuItem>
               <Link href="/profile">Profile</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Link href="/logout">Log Out</Link>
-            </DropdownMenuItem>
+
+            <DropdownMenuItem>Log Out</DropdownMenuItem>
+
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
