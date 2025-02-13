@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSignupStore } from "@/store/useSignupStore";
-import { signUpUser } from "@/lib/services/AuthService"; // Firebase signup function
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useSignupStore } from "@/store/useSignupStore";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function BasicInfo() {
   const { nextStep } = useSignupStore();
@@ -77,18 +76,10 @@ export default function BasicInfo() {
 
         // ✅ Redirect to login after successful signup
         router.push("/login?verification=sent");
-      }catch(error:any){
-        if (error.response) {
-          // Server responded with an error
-          throw new Error(error.response.data.error || 'Registration failed');
-        } else if (error.request) {
-          // Request was made but no response received
-          throw new Error('No response from server. Please try again.');
-        } else {
-          // Something else went wrong
-          console.error('Registration error:', error);
-          throw new Error('Failed to register. Please try again.');
-        }
+      } catch (error: unknown) {
+        console.error('Registration error:', error);
+        const message = error instanceof Error ? error.message : 'Failed to register. Please try again.';
+        throw new Error(message);
       }
 
       // ✅ Save data in Zustand and go to next step

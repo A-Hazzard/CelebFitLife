@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/config/firebaseAdmin";
-import bcrypt from "bcryptjs";
 import { SessionManager } from "@/lib/session";
+import bcrypt from "bcryptjs";
+import { NextRequest, NextResponse } from "next/server";
 
 const SALT_ROUNDS = 10;
 
@@ -23,7 +23,7 @@ function validateInput(input: string[], acceptedTnC: boolean): Promise<NextRespo
   return true
 }
 
-export async function POST(request: NextRequest, response: NextResponse) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { email, password, username, phone, country, city, age, acceptedTnC } = body;
@@ -82,11 +82,12 @@ export async function POST(request: NextRequest, response: NextResponse) {
     }
    
 
-  } catch (error:any) {
-    console.error("Registration error:", error)
+  } catch (error: Error | unknown) {
+    console.error("Registration error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
     return NextResponse.json(
-        { error: error.message || "Internal Server Error" },
+        { error: errorMessage },
         { status: 500 }
-    )
+    );
   }
 }
