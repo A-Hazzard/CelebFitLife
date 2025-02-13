@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/config/firebase";
 import EmojiPicker, { Theme } from "emoji-picker-react";
+import ShareButton from "@/components/ui/ShareButton";
 
 interface ChatMessage {
   id: string;
@@ -256,8 +257,16 @@ export default function ManageStreamPage() {
             )}
           </div>
 
-          {/* Chat Panel */}
-          <div className="w-full md:w-80 bg-brandGray border-l border-brandOrange flex flex-col">
+          {/* Chat Panel with Share Button */}
+          <div className="w-full md:w-80 bg-brandGray border-l border-brandOrange flex flex-col relative">
+            {/* Chat Panel Header with Share Button */}
+            <div className="flex items-center justify-end p-2 border-b border-brandOrange">
+              <ShareButton
+                streamLink={
+                  typeof window !== "undefined" ? window.location.href : ""
+                }
+              />
+            </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {messages.map((msg, index) => (
                 <div

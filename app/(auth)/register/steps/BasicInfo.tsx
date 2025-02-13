@@ -48,30 +48,51 @@ export default function BasicInfo() {
       const ageNum = parseInt(age, 10);
 
       // ✅ Send user data to Firebase
-      await signUpUser({
-        email,
-        password,
-        username,
-        phone,
-        country,
-        city,
-        age: ageNum,
-        acceptedTnC,
-      });
+      try{
+        const response = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            username, email,
+            password, phone,
+            country, city,
+            age: ageNum,
+            acceptedTnC
+          })
+        })
+        const data = await response.json()
+        if(!response.ok) throw new Error(data.error || "Registration Failed")
+
+        nextStep({
+          username,
+          email,
+          password,
+          phone,
+          country,
+          city,
+          age: ageNum,
+        });
+
+        // ✅ Redirect to login after successful signup
+        router.push("/login?verification=sent");
+      }catch(error:any){
+        if (error.response) {
+          // Server responded with an error
+          throw new Error(error.response.data.error || 'Registration failed');
+        } else if (error.request) {
+          // Request was made but no response received
+          throw new Error('No response from server. Please try again.');
+        } else {
+          // Something else went wrong
+          console.error('Registration error:', error);
+          throw new Error('Failed to register. Please try again.');
+        }
+      }
 
       // ✅ Save data in Zustand and go to next step
-      nextStep({
-        username,
-        email,
-        password,
-        phone,
-        country,
-        city,
-        age: ageNum,
-      });
-
-      // ✅ Redirect to login after successful signup
-      router.push("/login?verification=sent");
+      
     } catch (err: Error | unknown) {
       const errorMessage =
         err instanceof Error ? err.message : "An unknown error occurred";
