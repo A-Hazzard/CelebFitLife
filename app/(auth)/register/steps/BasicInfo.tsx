@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
 import { useSignupStore } from '@/store/useSignupStore';
 import { signUpUser } from '@/lib/services/AuthService'; // your Firebase function
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function BasicInfo() {
   const { nextStep } = useSignupStore();
@@ -39,24 +40,50 @@ export default function BasicInfo() {
 
       const ageNum = parseInt(age, 10);
 
-      // 🔸 1) Create user in Firebase, but DO NOT redirect yet
-      await signUpUser({
-        email,
-        password,
-        username,
-        phone,
-        country,
-        city,
-        age: ageNum,
-        acceptedTnC,
-        isStreamer: false,
-        isAdmin: false,
-      });
+      // ✅ Send user data to Firebase
+      try{
+        const response = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            username, email,
+            password, phone,
+            country, city,
+            age: ageNum,
+            acceptedTnC,
+            isStreamer: false,
+            isAdmin: false,
+          })
+        })
+        const data = await response.json()
+        if(!response.ok) throw new Error(data.error || "Registration Failed")
 
-      // 🔸 2) Move to the next signup step
-      nextStep({ username, email, password, phone, country, city, age: ageNum });
-    } catch (err: any) {
-      setError(err.message || 'An unknown error occurred');
+        nextStep({
+          username,
+          email,
+          password,
+          phone,
+          country,
+          city,
+          age: ageNum,
+        });
+
+        // ✅ Redirect to login after successful signup
+        router.push("/login?verification=sent");
+      } catch (error: unknown) {
+        console.error('Registration error:', error);
+        const message = error instanceof Error ? error.message : 'Failed to register. Please try again.';
+        throw new Error(message);
+      }
+
+      // ✅ Save data in Zustand and go to next step
+      
+    } catch (err: Error | unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : "An unknown error occurred";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

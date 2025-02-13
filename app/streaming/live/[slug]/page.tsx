@@ -17,6 +17,7 @@ import {
 } from "twilio-video";
 import { ChatMessage } from "@/types/stream";
 import EmojiPicker, { Theme } from "emoji-picker-react";
+import ShareButton from "@/components/ui/ShareButton";
 
 function RemoteVideoPlayer({ track }: { track: RemoteVideoTrack | null }) {
   const videoRef = useRef<HTMLDivElement>(null);
@@ -251,118 +252,98 @@ export default function LiveViewPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite">
-      {/* Header */}
-      <header className="h-16 flex items-center justify-between px-4 border-b border-brandOrange">
-        <div className="text-2xl font-bold">CelebFitLife</div>
-        <div className="flex-1 mx-4">
-          <Input
-            placeholder="Search..."
-            className="w-3/4 border border-brandOrange bg-brandBlack text-brandWhite rounded-md px-2 py-1"
-          />
-        </div>
-        <div className="flex items-center space-x-4">
-          <Button className="px-4 py-2 bg-brandOrange text-brandBlack rounded hover:bg-brandWhite hover:text-brandBlack">
-            Subscribe
-          </Button>
-          <Button className="p-2 bg-brandGray rounded-full">😀</Button>
-        </div>
-      </header>
-
+      {/* Video Section */}
       <div className="flex flex-1">
-        {/* Side Nav */}
-        <nav className="w-20 bg-brandBlack border-r border-brandOrange flex flex-col items-center py-4 space-y-4">
-          <div className="w-12 h-12 rounded-full bg-brandWhite"></div>
-          <div className="w-12 h-12 rounded-full bg-brandWhite opacity-50"></div>
-          <div className="w-12 h-12 rounded-full bg-brandWhite opacity-75"></div>
-          <div className="w-12 h-12 rounded-full bg-brandWhite opacity-50"></div>
-        </nav>
-
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col md:flex-row">
-          {/* Video Section */}
-          <div className="flex-1 p-4 relative">
-            <div className="relative bg-black w-full h-64 md:h-full rounded-lg shadow-lg overflow-hidden">
-              <RemoteVideoPlayer track={remoteVideoTrack} />
-              {videoStatus === "waiting" && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
-                  <span className="text-xl text-brandOrange font-bold">
-                    Stream hasn&apos;t started yet
-                  </span>
-                </div>
-              )}
-              {videoStatus === "paused" && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
-                  <span className="text-xl text-brandOrange font-bold">
-                    Streamer Paused Their Video
-                  </span>
-                </div>
-              )}
-              {videoStatus === "offline" && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
-                  <span className="text-xl text-brandOrange font-bold">
-                    Streamer is Offline
-                  </span>
-                </div>
-              )}
-              {videoStatus === "ended" && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
-                  <span className="text-xl text-brandOrange font-bold">
-                    Stream has Ended
-                  </span>
-                </div>
-              )}
-            </div>
-            <div ref={audioContainerRef} style={{ display: "none" }} />
+        <div className="flex-1 p-4 relative">
+          <div className="relative bg-black w-full h-64 md:h-full rounded-lg shadow-lg overflow-hidden">
+            <RemoteVideoPlayer track={remoteVideoTrack} />
+            {videoStatus === "waiting" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                <span className="text-xl text-brandOrange font-bold">
+                  Stream hasn&apos;t started yet
+                </span>
+              </div>
+            )}
+            {videoStatus === "paused" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                <span className="text-xl text-brandOrange font-bold">
+                  Streamer Paused Their Video
+                </span>
+              </div>
+            )}
+            {videoStatus === "offline" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                <span className="text-xl text-brandOrange font-bold">
+                  Streamer is Offline
+                </span>
+              </div>
+            )}
+            {videoStatus === "ended" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                <span className="text-xl text-brandOrange font-bold">
+                  Stream has Ended
+                </span>
+              </div>
+            )}
           </div>
+          <div ref={audioContainerRef} style={{ display: "none" }} />
+        </div>
 
-          {/* Chat Panel */}
-          <div className="w-full md:w-80 bg-brandGray border-l border-brandOrange flex flex-col">
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {messages.map((msg, index) => (
-                <div
-                  key={msg.id || index}
-                  className="bg-brandBlack p-2 rounded-md text-sm"
-                >
-                  <strong className="text-brandOrange">{msg.userName}:</strong>{" "}
-                  {msg.content}
-                </div>
-              ))}
-            </div>
-            <div className="relative p-2 border-t border-brandOrange flex items-center">
-              <Input
-                className="flex-1 border border-brandOrange mr-2 bg-brandBlack text-brandWhite"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Type your message..."
-              />
-              <Button
-                type="button"
-                onClick={() => setShowEmojiPicker((prev) => !prev)}
-                className="px-2 py-1 bg-brandGray rounded"
-              >
-                😊
-              </Button>
-              <Button
-                type="submit"
-                onClick={handleSendMessage}
-                className="bg-brandOrange text-brandBlack ml-2"
-              >
-                Send
-              </Button>
-              {showEmojiPicker && (
-                <div className="absolute bottom-full mb-2 right-0 z-50">
-                  <EmojiPicker
-                    onEmojiClick={(emojiData) =>
-                      setNewMessage((prev) => prev + emojiData.emoji)
-                    }
-                    theme={"dark" as Theme}
-                    width={320}
-                  />
-                </div>
-              )}
-            </div>
+        {/* Chat Panel with Share Button */}
+        <div className="w-full md:w-80 bg-brandGray border-l border-brandOrange flex flex-col relative">
+          {/* Chat Panel Header with Share Button */}
+          <div className="flex items-center justify-end p-2 border-b border-brandOrange">
+            <ShareButton
+              streamLink={
+                typeof window !== "undefined" ? window.location.href : ""
+              }
+            />
           </div>
-        </main>
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {messages.map((msg, index) => (
+              <div
+                key={msg.id || index}
+                className="bg-brandBlack p-2 rounded-md text-sm"
+              >
+                <strong className="text-brandOrange">{msg.userName}:</strong>{" "}
+                {msg.content}
+              </div>
+            ))}
+          </div>
+          <div className="relative p-2 border-t border-brandOrange flex items-center">
+            <Input
+              className="flex-1 border border-brandOrange mr-2 bg-brandBlack text-brandWhite"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Type your message..."
+            />
+            <Button
+              type="button"
+              onClick={() => setShowEmojiPicker((prev) => !prev)}
+              className="px-2 py-1 bg-brandGray rounded"
+            >
+              😊
+            </Button>
+            <Button
+              type="submit"
+              onClick={handleSendMessage}
+              className="bg-brandOrange text-brandBlack ml-2"
+            >
+              Send
+            </Button>
+            {showEmojiPicker && (
+              <div className="absolute bottom-full mb-2 right-0 z-50">
+                <EmojiPicker
+                  onEmojiClick={(emojiData) =>
+                    setNewMessage((prev) => prev + emojiData.emoji)
+                  }
+                  theme={"dark" as Theme}
+                  width={320}
+                />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
