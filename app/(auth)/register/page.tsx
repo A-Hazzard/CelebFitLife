@@ -15,10 +15,10 @@ export default function RegisterPage() {
       <div className="w-full max-w-md px-6 py-8">
         <Stepper currentStep={step} />
 
-        {step === 1 && <BasicInfo />}
-        {step === 2 && <SelectPlan />}
+        {step ===  4&& <BasicInfo />}
+        {step === 1 && <SelectPlan />}
         {step === 3 && <Payment />}
-        {step === 4 && <SelectStreamers />}
+        {step === 2 && <SelectStreamers />}
       </div>
     </div>
   );

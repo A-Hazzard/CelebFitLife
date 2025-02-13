@@ -27,6 +27,8 @@ export async function signUpUser({
   city,
   age,
   acceptedTnC,
+  isStreamer = false,
+  isAdmin = false,
 }: {
   email: string;
   password: string;
@@ -36,6 +38,8 @@ export async function signUpUser({
   city: string;
   age: number;
   acceptedTnC: boolean;
+  isStreamer?: boolean;
+  isAdmin?: boolean;
 }) {
   // 1. Create user in Firebase Auth
   const userCred = await createUserWithEmailAndPassword(auth, email, password);
@@ -57,6 +61,8 @@ export async function signUpUser({
     city,
     age,
     acceptedTnC,
+    isStreamer,
+    isAdmin,
     createdAt: serverTimestamp(),
   });
 
