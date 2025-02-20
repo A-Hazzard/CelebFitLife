@@ -1,93 +1,142 @@
-import { adminDb } from "@/config/firebaseAdmin";
+// app/api/auth/register/route.ts
+import { adminDb } from "@/lib/config/firebaseAdmin";
 import { SessionManager } from "@/lib/session";
 import bcrypt from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
+import type { SignOptions } from "jsonwebtoken"; // for reference if needed
 
 const SALT_ROUNDS = 10;
 
-function validateInput(input: string[], acceptedTnC: boolean): Promise<NextResponse> | boolean {
-  input.forEach((field) => {
-    if (field.length === 0)
+/**
+ * Validate that none of the required fields are empty and that the Terms have been accepted.
+ * Returns a NextResponse error if validation fails, or true if everything is okay.
+ */
+function validateInput(
+  input: Record<string, any>,
+  acceptedTnC: boolean
+): NextResponse | true {
+  const requiredFields = [
+    "email",
+    "password",
+    "username",
+    "phone",
+    "country",
+    "city",
+    "age",
+  ];
+
+  for (const field of requiredFields) {
+    const value = input[field];
+    if (value === undefined || value === null) {
       return NextResponse.json(
-        { message: "Missing required fields" },
+        { message: `${field} is required` },
         { status: 400 }
       );
+    }
 
-    if (!acceptedTnC)
+    // Convert numbers to strings for length validation
+    const strValue = String(value).trim();
+    if (strValue.length === 0) {
       return NextResponse.json(
-        { message: "You Must Accept The Terms & Conditions." },
+        { message: `${field} cannot be empty` },
         { status: 400 }
       );
-  });
+    }
+  }
 
-  return true
+  // Email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(input.email)) {
+    return NextResponse.json(
+      { message: "Please enter a valid email address" },
+      { status: 400 }
+    );
+  }
+
+  // Password validation (at least 6 characters)
+  if (input.password.length < 6) {
+    return NextResponse.json(
+      { message: "Password must be at least 6 characters long" },
+      { status: 400 }
+    );
+  }
+
+  if (!acceptedTnC) {
+    return NextResponse.json(
+      { message: "You must accept the Terms & Conditions." },
+      { status: 400 }
+    );
+  }
+
+  return true;
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { email, password, username, phone, country, city, age, acceptedTnC } = body;
-    const inputs = [email, password, username, phone, country, city, age];
-    const isValidated = validateInput(inputs, acceptedTnC);
+    const data = await request.json();
 
-    if(isValidated){
-      //Check if user exists
-      const userDoc = await adminDb.collection("users").doc(email).get();
-
-      if (userDoc.exists)
-        return NextResponse.json(
-          { error: "User already exists." },
-          { status: 400 }
-        );
-
-      const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-
-      //Create user object
-      const userData = {
-        username,
-        email,
-        password: hashedPassword,
-        phone,
-        country,
-        city,
-        age,
-        isStreamer: false,
-        isAdmin: false,
-        createdAt: new Date().toISOString(),
-      };
-      console.log("created user data oject")
-      //Create user in firebase
-      await adminDb.collection("users").doc(email).set(userData)
-
-      //Create session token using SessionManager Class
-      const sessionManager = new SessionManager()
-      const sessionData = {
-        email, 
-        isStreamer: userData.isStreamer,
-        isAdmin: userData.isAdmin
-      }
-      const token = sessionManager.createSession(sessionData)
-      console.log(`Token created for ${userData.username}: ${token}`)
-      //Create response and set token in HTTP-only cookie
-      const response = NextResponse.json({success: true})
-
-      response.cookies.set("token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV == "production",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7, // 7 days in seconds
-      });
-
-      return response
+    // Validate all fields
+    const validationResult = validateInput(data, data.acceptedTnC);
+    if (validationResult !== true) {
+      return validationResult;
     }
-   
 
-  } catch (error: Error | unknown) {
+    const { email, password, username, phone, country, city, age } = data;
+
+    // Check if user exists
+    const userDoc = await adminDb.collection("users").doc(email).get();
+    if (userDoc.exists) {
+      return NextResponse.json(
+        { error: "User already exists." },
+        { status: 400 }
+      );
+    }
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
+    // Create user object
+    const userData = {
+      username,
+      email,
+      password: hashedPassword,
+      phone,
+      country,
+      city,
+      age,
+      isStreamer: false,
+      isAdmin: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Save user in Firestore
+    await adminDb.collection("users").doc(email).set(userData);
+    console.log("Created user data object");
+
+    // Create session token using SessionManager class
+    const sessionManager = new SessionManager();
+    const sessionData = {
+      email,
+      isStreamer: userData.isStreamer,
+      isAdmin: userData.isAdmin,
+    };
+    const token = await sessionManager.createSession(sessionData);
+    console.log(`Token created for ${userData.username}: ${token}`);
+
+    // Create response and set token in an HTTP-only cookie
+    const response = NextResponse.json({ success: true });
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7, // 7 days in seconds
+    });
+
+    return response;
+  } catch (error: any) {
     console.error("Registration error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
-    return NextResponse.json(
-        { error: errorMessage },
-        { status: 500 }
-    );
+    const errorMessage =
+      error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

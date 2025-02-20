@@ -2,15 +2,16 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useSignupStore } from "@/store/useSignupStore";
+import { useSignupStore } from "@/lib/store/useSignupStore";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { registerUser } from "@/lib/helpers/auth";
+import { RegistrationData } from "@/lib/types/auth";
 
 export default function BasicInfo() {
   const { nextStep } = useSignupStore();
   const router = useRouter();
 
-  // ✅ Declare all fields properly
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,71 +23,39 @@ export default function BasicInfo() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ✅ Handles form submission and sends data to Firebase
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      if (!acceptedTnC) {
-        throw new Error("You must accept the Terms & Conditions.");
-      }
-      if (
-        !username ||
-        !email ||
-        !password ||
-        !phone ||
-        !country ||
-        !city ||
-        !age
-      ) {
-        throw new Error("Please fill out all required fields.");
-      }
-
       const ageNum = parseInt(age, 10);
+      const registrationData: RegistrationData = {
+        username,
+        email,
+        password,
+        phone,
+        country,
+        city,
+        age: ageNum,
+        acceptedTnC,
+      };
+      await registerUser(registrationData);
 
-      // ✅ Send user data to Firebase
-      try{
-        const response = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            username, email,
-            password, phone,
-            country, city,
-            age: ageNum,
-            acceptedTnC
-          })
-        })
-        const data = await response.json()
-        if(!response.ok) throw new Error(data.error || "Registration Failed")
+      nextStep({
+        username,
+        email,
+        password,
+        phone,
+        country,
+        city,
+        age: ageNum,
+      });
 
-        nextStep({
-          username,
-          email,
-          password,
-          phone,
-          country,
-          city,
-          age: ageNum,
-        });
-
-        // ✅ Redirect to login after successful signup
-        router.push("/login?verification=sent");
-      } catch (error: unknown) {
-        console.error('Registration error:', error);
-        const message = error instanceof Error ? error.message : 'Failed to register. Please try again.';
-        throw new Error(message);
-      }
-
-      // ✅ Save data in Zustand and go to next step
-      
-    } catch (err: Error | unknown) {
-      const errorMessage =
-        err instanceof Error ? err.message : "An unknown error occurred";
+      // Redirect to login (or next step) after successful registration
+      router.push("/login");
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
       setError(errorMessage);
     } finally {
       setLoading(false);

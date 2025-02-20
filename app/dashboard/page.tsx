@@ -2,54 +2,97 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore } from '@/lib/store/useAuthStore';
+import DashboardAreaChart from '@/components/dashboard/AreaChart';
+import { 
+  Laptop, 
+  Users, 
+  Coins, 
+  Play 
+} from 'lucide-react';
+import Loader from '@/components/dashboard/Loader';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { currentUser, isLoggedIn } = useAuthStore();
 
   if (!isLoggedIn || !currentUser) {
-    return (
-      <div className="p-4 text-white">
-        <h1 className="text-2xl">Please log in to access the dashboard.</h1>
-      </div>
-    );
+    return <Loader /> 
   }
 
-  // Fake metrics
-  const totalStreams = 12;
-  const totalViewers = 340;
-  const monthlyEarnings = 1020;
+  // Metrics data for the chart
+  const metricsData = [
+    { month: 'Jan', streams: 55, viewers: 150, earnings: 450 },
+    { month: 'Feb', streams: 80, viewers: 220, earnings: 650 },
+    { month: 'Mar', streams: 100, viewers: 280, earnings: 850 },
+    { month: 'Apr', streams: 127, viewers: 340, earnings: 1020 },
+    { month: 'May', streams: 900, viewers: 300, earnings: 950 },
+    { month: 'Jun', streams: 1100, viewers: 320, earnings: 1100 },
+  ];
 
   const handleGoLive = () => {
-    // Navigate to the form that creates a new stream
     router.push('/dashboard/streams/new');
   };
 
+  const statsCards = [
+    {
+      icon: <Laptop className="text-brandOrange text-4xl" />,
+      title: 'Total Streams',
+      value: '12',
+      bgClass: 'bg-brandBlack border border-brandOrange/30',
+    },
+    {
+      icon: <Users className="text-brandOrange text-4xl" />,
+      title: 'Total Viewers',
+      value: '340',
+      bgClass: 'bg-brandBlack border border-brandOrange/30',
+    },
+    {
+      icon: <Coins className="text-brandOrange text-4xl" />,
+      title: 'Monthly Earnings',
+      value: '$1,020',
+      bgClass: 'bg-brandBlack border border-brandOrange/30',
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-black text-white p-8">
-      <h1 className="text-3xl font-bold mb-4">Welcome, {currentUser.displayName}</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="bg-gray-800 p-4 rounded">
-          <h2 className="text-lg font-semibold">Total Streams</h2>
-          <p className="text-2xl mt-2">{totalStreams}</p>
-        </div>
-        <div className="bg-gray-800 p-4 rounded">
-          <h2 className="text-lg font-semibold">Total Viewers</h2>
-          <p className="text-2xl mt-2">{totalViewers}</p>
-        </div>
-        <div className="bg-gray-800 p-4 rounded">
-          <h2 className="text-lg font-semibold">Monthly Earnings</h2>
-          <p className="text-2xl mt-2">${monthlyEarnings}</p>
-        </div>
+    <div className="min-h-screen bg-brandBlack text-brandWhite p-8 space-y-8">
+      <div className="flex justify-between items-center">
+        <h1 className="text-4xl font-bold text-brandOrange">
+          Welcome, {currentUser.displayName}
+        </h1>
+        <button
+          onClick={handleGoLive}
+          className="flex items-center gap-2 px-6 py-3 bg-brandOrange text-brandBlack 
+          rounded-full font-semibold hover:bg-opacity-90 transition-colors"
+        >
+          <Play className="text-2xl" />
+          Go Live
+        </button>
       </div>
 
-      <button
-        onClick={handleGoLive}
-        className="px-4 py-2 bg-orange-500 rounded text-black font-semibold hover:bg-orange-600"
-      >
-        Go Live
-      </button>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {statsCards.map((card, index) => (
+          <div 
+            key={index} 
+            className={`p-6 rounded-xl ${card.bgClass} 
+            flex items-center space-x-4 shadow-lg hover:scale-105 transition-transform`}
+          >
+            <div>{card.icon}</div>
+            <div>
+              <h2 className="text-lg text-brandGray">{card.title}</h2>
+              <p className="text-3xl font-bold text-brandWhite">{card.value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-brandBlack border border-brandOrange/30 rounded-xl p-6">
+        <h2 className="text-2xl font-bold text-brandOrange mb-6">
+          Performance Overview
+        </h2>
+        <DashboardAreaChart data={metricsData} />
+      </div>
     </div>
   );
 }

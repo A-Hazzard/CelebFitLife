@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listenToMessages, sendChatMessage } from "@/lib/services/ChatService";
 import { stopAndDetachTrack } from "@/lib/twilioTrackUtils";
-import { useAuthStore } from "@/store/useAuthStore";
+import { useAuthStore } from "@/lib/store/useAuthStore";
 import { usePathname } from "next/navigation";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -15,7 +15,7 @@ import {
   RemoteTrack,
   RemoteVideoTrack,
 } from "twilio-video";
-import { ChatMessage } from "@/types/stream";
+import { ChatMessage } from "@/lib/types/stream";
 import EmojiPicker, { Theme } from "emoji-picker-react";
 import ShareButton from "@/components/ui/ShareButton";
 
@@ -246,9 +246,9 @@ export default function LiveViewPage() {
     setNewMessage("");
   };
 
-  if (!isLoggedIn) {
-    return <div className="p-4 text-brandWhite">Please log in first.</div>;
-  }
+  // if (!isLoggedIn) {
+  //   return <div className="p-4 text-brandWhite">Please log in first.</div>;
+  // }
 
   return (
     <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite">

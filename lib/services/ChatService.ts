@@ -1,5 +1,5 @@
-import { db } from '@/config/firebase';
-import { ChatMessage } from '@/types/stream';
+import { db } from '@/lib/config/firebase';
+import { ChatMessage } from '@/lib/types/stream';
 import {
   collection,
   addDoc,

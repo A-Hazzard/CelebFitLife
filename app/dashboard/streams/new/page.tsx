@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 // Suppose you have a Firestore or DB to store the created streams
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { db } from '@/lib/config/firebase';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function CreateStreamPage() {

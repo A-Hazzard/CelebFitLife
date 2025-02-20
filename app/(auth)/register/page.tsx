@@ -1,6 +1,6 @@
 'use client';
 
-import { useSignupStore } from '@/store/useSignupStore';
+import { useSignupStore } from '@/lib/store/useSignupStore';
 import BasicInfo from './steps/BasicInfo';
 import SelectPlan from './steps/SelectPlan';
 import Payment from './steps/Payment';

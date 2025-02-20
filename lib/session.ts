@@ -1,5 +1,4 @@
-// lib/session.ts
-import jwt, {SignOptions} from "jsonwebtoken";
+import { SignJWT, jwtVerify, JWTVerifyResult } from "jose";
 
 export interface SessionData {
   email: string;
@@ -8,35 +7,51 @@ export interface SessionData {
 }
 
 export class SessionManager {
-  private secret: jwt.Secret;
+  private secret: Uint8Array;
 
   constructor() {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
+    const secretStr = process.env.JWT_SECRET;
+    if (!secretStr) {
       throw new Error("JWT_SECRET is not set in environment variables");
     }
-    this.secret = secret;
+    // jose expects a Uint8Array for the secret
+    this.secret = new TextEncoder().encode(secretStr);
   }
 
-  /**
-   * Creates a JWT token for the given session data.
-   * @param data - The session data to encode.
-   * @param expiresIn - Token expiry (default: "7d").
-   * @returns A signed JWT token string.
-   */
-  createSession(data: SessionData, expiresIn: string | number = "7d"): string {
-    const options: SignOptions = { 
-      expiresIn: typeof expiresIn === 'string' ? expiresIn as jwt.SignOptions["expiresIn"] : expiresIn 
+  async createSession(
+    data: SessionData,
+    expiresIn: string | number = "7d"
+  ): Promise<string> {
+    let expires: number;
+    if (typeof expiresIn === "number") {
+      expires = expiresIn;
+    } else {
+      // For simplicity, assume the format "Xd" for days (e.g. "7d" => 7*24*60*60 seconds)
+      const days = parseInt(expiresIn, 10) || 7;
+      expires = days * 24 * 60 * 60;
+    }
+    const token = await new SignJWT({ ...data } as unknown as Record<string, any>)
+      .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+      .setIssuedAt()
+      .setExpirationTime(Math.floor(Date.now() / 1000) + expires)
+      .sign(this.secret);
+    return token;
+  }
+
+  async verifySession(token: string): Promise<SessionData> {
+    const { payload } = await jwtVerify(token, this.secret);
+    // Verify the payload has the required SessionData properties
+    if (
+      typeof payload.email !== "string" ||
+      typeof payload.isStreamer !== "boolean" ||
+      typeof payload.isAdmin !== "boolean"
+    ) {
+      throw new Error("Invalid session data");
+    }
+    return {
+      email: payload.email,
+      isStreamer: payload.isStreamer,
+      isAdmin: payload.isAdmin
     };
-    return jwt.sign(data, this.secret, options);
-  }
-
-  /**
-   * Verifies the given JWT token.
-   * @param token - The JWT token to verify.
-   * @returns The decoded session data.
-   */
-  verifySession(token: string): SessionData {
-    return jwt.verify(token, this.secret) as SessionData;
   }
 }

@@ -1,4 +1,4 @@
-import { auth, db } from '@/config/firebase';
+import { auth, db } from '@/lib/config/firebase';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -12,8 +12,8 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 
-import { useAuthStore } from '@/store/useAuthStore';
-import { User } from '@/lib/models/User';
+import { useAuthStore } from '@/lib/store/useAuthStore';
+import { User } from '@/app/api/models/User';
 
 /**
  * Create a new user, store additional fields, and send email verification link.

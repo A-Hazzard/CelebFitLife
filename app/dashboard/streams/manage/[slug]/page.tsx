@@ -11,11 +11,11 @@ import {
 } from "twilio-video";
 import { stopAndDetachTrack } from "@/lib/twilioTrackUtils";
 import { sendChatMessage, listenToMessages } from "@/lib/services/ChatService";
-import { useAuthStore } from "@/store/useAuthStore";
+import { useAuthStore } from "@/lib/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { db } from "@/config/firebase";
+import { db } from "@/lib/config/firebase";
 import EmojiPicker, { Theme } from "emoji-picker-react";
 import ShareButton from "@/components/ui/ShareButton";
 
@@ -182,9 +182,9 @@ export default function ManageStreamPage() {
     setTimeout(() => setShowEndConfirmation(false), 300);
   };
 
-  if (!isLoggedIn) {
-    return <div className="p-4 text-brandWhite">Please log in first.</div>;
-  }
+  // if (!isLoggedIn) {
+  //   return <div className="p-4 text-brandWhite">Please log in first.</div>;
+  // }
 
   return (
     <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite relative">

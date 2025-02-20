@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSignupStore } from '@/store/useSignupStore';
+import { useSignupStore } from '@/lib/store/useSignupStore';
 import { Button } from '@/components/ui/button';
 
 const plans = [

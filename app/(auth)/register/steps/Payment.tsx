@@ -1,4 +1,4 @@
-import { useSignupStore } from '@/store/useSignupStore';
+import { useSignupStore } from '@/lib/store/useSignupStore';
 import StripeForm from '@/components/payment/StripeForm';
 import { Button } from '@/components/ui/button';
 
