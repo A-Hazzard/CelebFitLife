@@ -1,44 +1,30 @@
 "use client";
-
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { listenToMessages, sendChatMessage } from "@/lib/services/ChatService";
-import { stopAndDetachTrack } from "@/lib/twilioTrackUtils";
-import { useAuthStore } from "@/lib/store/useAuthStore";
-import { usePathname } from "next/navigation";
+//TODO Fix bug where viewer cannot see streamer's camera
 import React, { useEffect, useRef, useState } from "react";
-import {
-  connect,
-  Room,
-  RemoteParticipant,
-  RemoteTrackPublication,
-  RemoteTrack,
-  RemoteVideoTrack,
-} from "twilio-video";
+import { usePathname } from "next/navigation";
+import { connect, Room, RemoteParticipant, RemoteTrackPublication, RemoteVideoTrack } from "twilio-video";
+import { useAuthStore } from "@/lib/store/useAuthStore";
+import { db } from "@/lib/config/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
 import { ChatMessage } from "@/lib/types/stream";
-import EmojiPicker, { Theme } from "emoji-picker-react";
-import ShareButton from "@/components/ui/ShareButton";
+import { listenToMessages } from "@/lib/services/ChatService";
+import { stopAndDetachTrack } from "@/lib/twilioTrackUtils";
 
 function RemoteVideoPlayer({ track }: { track: RemoteVideoTrack | null }) {
   const videoRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (track && videoRef.current) {
+      // Detach old track
       track.detach().forEach((el) => el.remove());
-      console.log("RemoteVideoPlayer: Attaching track:", track.sid);
-      const videoElement = track.attach() as HTMLVideoElement;
-      videoElement.style.width = "100%";
-      videoElement.style.height = "100%";
-      videoElement.style.objectFit = "cover";
-      videoElement.autoplay = true;
-      videoElement.muted = true;
-      videoRef.current.appendChild(videoElement);
-      videoElement
-        .play()
-        .then(() => console.log("RemoteVideoPlayer: Video playback started."))
-        .catch((err) =>
-          console.error("RemoteVideoPlayer: Video play error:", err)
-        );
+
+      const videoEl = track.attach() as HTMLVideoElement;
+      videoEl.style.width = "100%";
+      videoEl.style.height = "100%";
+      videoEl.style.objectFit = "cover";
+      videoEl.autoplay = true;
+      videoEl.muted = true;
+      videoRef.current.appendChild(videoEl);
     }
     return () => {
       if (track) {
@@ -49,9 +35,9 @@ function RemoteVideoPlayer({ track }: { track: RemoteVideoTrack | null }) {
 
   if (!track) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-brandGray">
-        <div className="animate-pulse bg-brandBlack w-full h-full" />
-      </div>
+        <div className="w-full h-full flex items-center justify-center bg-brandGray">
+          <div className="animate-pulse bg-brandBlack w-full h-full" />
+        </div>
     );
   }
   return <div ref={videoRef} className="w-full h-full" />;
@@ -60,291 +46,177 @@ function RemoteVideoPlayer({ track }: { track: RemoteVideoTrack | null }) {
 export default function LiveViewPage() {
   const pathname = usePathname();
   const slug = pathname?.split("/").pop() || "";
+  const { currentUser } = useAuthStore();
 
+  const [hasStarted, setHasStarted] = useState(false);
+  const [room, setRoom] = useState<Room | null>(null);
+  const [remoteVideoTrack, setRemoteVideoTrack] = useState<RemoteVideoTrack | null>(null);
+  const [videoStatus, setVideoStatus] = useState<"waiting" | "active" | "paused" | "offline" | "ended">("waiting");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [remoteVideoTrack, setRemoteVideoTrack] =
-    useState<RemoteVideoTrack | null>(null);
-  // videoStatus: "active" = playing; "paused" = track disabled; "offline" = participant disconnected; "ended" = stream ended; "waiting" = stream not started.
-  const [videoStatus, setVideoStatus] = useState<
-    "active" | "paused" | "offline" | "ended" | "waiting"
-  >("waiting");
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const roomRef = useRef<Room | null>(null);
-  const { currentUser, isLoggedIn } = useAuthStore();
-  const audioContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!slug || !isLoggedIn || !currentUser) return;
-
-    const joinAsViewer = async () => {
-      try {
-        const res = await fetch("/api/twilio/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            roomName: slug,
-            userName: currentUser.displayName || currentUser.email,
-          }),
-        });
-        const data = await res.json();
-        if (!data.token) throw new Error("No token returned");
-        const twRoom = await connect(data.token, {
-          audio: false,
-          video: false,
-        });
-        roomRef.current = twRoom;
-        console.log("Viewer: Connected to room:", twRoom.sid);
-        setVideoStatus("waiting");
-
-        twRoom.on(
-          "participantDisconnected",
-          (participant: RemoteParticipant) => {
-            console.log(
-              "Viewer: Participant disconnected:",
-              participant.identity
-            );
-            setRemoteVideoTrack(null);
-            setVideoStatus("offline");
-          }
-        );
-
-        const setupParticipantTracks = (participant: RemoteParticipant) => {
-          participant.tracks.forEach((pub: RemoteTrackPublication) => {
-            if (pub.isSubscribed && pub.track) {
-              if (pub.track.kind === "video") {
-                console.log("Viewer: Found remote video track:", pub.track.sid);
-                const rvt = pub.track as RemoteVideoTrack;
-                setRemoteVideoTrack(rvt);
-                setVideoStatus("active");
-                rvt.on("disabled", () => {
-                  console.log("Viewer: Remote video track disabled.");
-                  setVideoStatus("paused");
-                });
-                rvt.on("enabled", () => {
-                  console.log("Viewer: Remote video track enabled.");
-                  setVideoStatus("active");
-                });
-              }
-              if (pub.track.kind === "audio") {
-                if (
-                  audioContainerRef.current &&
-                  !audioContainerRef.current.querySelector(
-                    `[data-twilio-track="${pub.track.sid}"]`
-                  )
-                ) {
-                  console.log(
-                    "Viewer: Attaching remote audio track:",
-                    pub.track.sid
-                  );
-                  const audioElement = pub.track.attach() as HTMLAudioElement;
-                  audioElement.autoplay = true;
-                  audioElement.controls = false;
-                  audioElement.muted = false;
-                  try {
-                    audioElement
-                      .play()
-                      .catch((err) =>
-                        console.error("Viewer: Audio play error:", err)
-                      );
-                  } catch (err) {
-                    console.error("Viewer: Audio play exception:", err);
-                  }
-                  audioElement.setAttribute("data-twilio-track", pub.track.sid);
-                  audioContainerRef.current.appendChild(audioElement);
-                }
-              }
-            }
-          });
-          participant.on("trackSubscribed", (track: RemoteTrack) => {
-            if (track.kind === "video") {
-              console.log(
-                "Viewer: Subscribed to remote video track:",
-                track.sid
-              );
-              setRemoteVideoTrack(track as RemoteVideoTrack);
-              setVideoStatus("active");
-              (track as RemoteVideoTrack).on("disabled", () => {
-                console.log("Viewer: Remote video track disabled.");
-                setVideoStatus("paused");
-              });
-              (track as RemoteVideoTrack).on("enabled", () => {
-                console.log("Viewer: Remote video track enabled.");
-                setVideoStatus("active");
-              });
-            }
-            if (track.kind === "audio") {
-              if (
-                audioContainerRef.current &&
-                !audioContainerRef.current.querySelector(
-                  `[data-twilio-track="${track.sid}"]`
-                )
-              ) {
-                console.log(
-                  "Viewer: Subscribed to remote audio track:",
-                  track.sid
-                );
-                const audioElement = track.attach() as HTMLAudioElement;
-                audioElement.autoplay = true;
-                audioElement.controls = false;
-                audioElement.muted = false;
-                try {
-                  audioElement
-                    .play()
-                    .catch((err) =>
-                      console.error("Viewer: Audio play error:", err)
-                    );
-                } catch (err) {
-                  console.error("Viewer: Audio play exception:", err);
-                }
-                audioElement.setAttribute("data-twilio-track", track.sid);
-                audioContainerRef.current.appendChild(audioElement);
-              }
-            }
-          });
-        };
-
-        twRoom.participants.forEach((participant: RemoteParticipant) => {
-          setupParticipantTracks(participant);
-        });
-        twRoom.on("participantConnected", (participant: RemoteParticipant) => {
-          console.log("Viewer: Participant connected:", participant.identity);
-          setupParticipantTracks(participant);
-        });
-        twRoom.on("disconnected", () => {
-          console.log("Viewer: Disconnected from room");
-          twRoom.localParticipant.tracks.forEach((pub) => {
-            if (pub.track.kind === "audio" || pub.track.kind === "video") {
-              stopAndDetachTrack(pub.track);
-            }
-          });
-          setVideoStatus("ended");
-        });
-      } catch (err) {
-        console.error("Viewer join error:", err);
+    if (!slug) return;
+    // Subscribe to Firestore stream doc for hasStarted
+    const streamRef = doc(db, "streams", slug);
+    const unsub = onSnapshot(streamRef, (snap) => {
+      if (!snap.exists()) {
+        setHasStarted(false);
+        setVideoStatus("ended");
+        return;
       }
-    };
+      const data = snap.data();
+      setHasStarted(Boolean(data.hasStarted));
 
-    joinAsViewer();
-    const unsub = listenToMessages(slug, (msgs: ChatMessage[]) =>
-      setMessages(msgs)
-    );
-    return () => {
-      unsub();
-      if (roomRef.current) roomRef.current.disconnect();
-    };
-  }, [slug, isLoggedIn, currentUser]);
+      if (data.hasStarted) {
+        console.log("✅ Stream has started. Attempting to connect...");
+        joinAsViewer();
+      } else {
+        console.log("❌ Stream not started yet.");
+        setVideoStatus("waiting");
+      }
+    });
+    return unsub;
+  }, [slug]);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !currentUser) return;
-    await sendChatMessage(
-      slug,
-      currentUser.displayName || currentUser.email,
-      newMessage.trim()
-    );
-    setNewMessage("");
+  useEffect(() => {
+    if (!slug) return;
+    // Chat subscription
+    const unsub = listenToMessages(slug, (msgs) => setMessages(msgs));
+    return () => unsub();
+  }, [slug]);
+
+  const joinAsViewer = async () => {
+    try {
+      if (room) return; // Already connected
+      if (!currentUser) return;
+
+      const res = await fetch("/api/twilio/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomName: slug,
+          userName: currentUser.displayName || currentUser.email,
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.token) {
+        console.error("No Twilio token returned");
+        return;
+      }
+
+      const twRoom = await connect(data.token, {
+        audio: false,
+        video: false,
+      });
+
+      setRoom(twRoom);
+
+      console.log("Viewer connected to room:", twRoom.sid);
+
+      // Check existing participants
+      twRoom.participants.forEach((participant) => {
+        attachParticipantTracks(participant);
+      });
+
+      // On participant connect
+      twRoom.on("participantConnected", (participant: RemoteParticipant) => {
+        attachParticipantTracks(participant);
+      });
+
+      // On participant disconnect
+      twRoom.on("participantDisconnected", (participant) => {
+        setRemoteVideoTrack(null);
+        setVideoStatus("offline");
+      });
+
+      twRoom.on("disconnected", () => {
+        console.log("Viewer disconnected from room");
+        setVideoStatus("ended");
+
+        // Filter out data tracks before stopping/detaching
+        twRoom.localParticipant.tracks.forEach((trackPub) => {
+          if (trackPub.track.kind === "audio" || trackPub.track.kind === "video") {
+            stopAndDetachTrack(trackPub.track);
+          }
+        });
+      });
+
+    } catch (error) {
+      console.error("Viewer join error:", error);
+    }
   };
 
-  // if (!isLoggedIn) {
-  //   return <div className="p-4 text-brandWhite">Please log in first.</div>;
-  // }
+  const attachParticipantTracks = (participant: RemoteParticipant) => {
+    participant.tracks.forEach((pub: RemoteTrackPublication) => {
+      if (pub.isSubscribed && pub.track?.kind === "video") {
+        setRemoteVideoTrack(pub.track as RemoteVideoTrack);
+        setVideoStatus("active");
+      }
+    });
+
+    participant.on("trackSubscribed", (track) => {
+      if (track.kind === "video") {
+        setRemoteVideoTrack(track as RemoteVideoTrack);
+        setVideoStatus("active");
+      }
+    });
+    participant.on("trackUnsubscribed", (track) => {
+      if (track.kind === "video") {
+        setRemoteVideoTrack(null);
+        setVideoStatus("paused");
+      }
+    });
+  };
 
   return (
-    <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite">
-      {/* Video Section */}
-      <div className="flex flex-1">
-        <div className="flex-1 p-4 relative">
-          <div className="relative bg-black w-full h-64 md:h-full rounded-lg shadow-lg overflow-hidden">
-            <RemoteVideoPlayer track={remoteVideoTrack} />
-            {videoStatus === "waiting" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+      <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite">
+        <div className="flex flex-1">
+          <div className="flex-1 p-4 relative">
+            <div className="relative bg-black w-full h-64 md:h-full rounded-lg shadow-lg overflow-hidden">
+              <RemoteVideoPlayer track={remoteVideoTrack} />
+              {videoStatus === "waiting" && !hasStarted && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
                 <span className="text-xl text-brandOrange font-bold">
                   Stream hasn&apos;t started yet
                 </span>
-              </div>
-            )}
-            {videoStatus === "paused" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                  </div>
+              )}
+              {videoStatus === "paused" && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
                 <span className="text-xl text-brandOrange font-bold">
-                  Streamer Paused Their Video
+                  Streamer Paused Video
                 </span>
-              </div>
-            )}
-            {videoStatus === "offline" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                  </div>
+              )}
+              {videoStatus === "offline" && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
                 <span className="text-xl text-brandOrange font-bold">
                   Streamer is Offline
                 </span>
-              </div>
-            )}
-            {videoStatus === "ended" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                  </div>
+              )}
+              {videoStatus === "ended" && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
                 <span className="text-xl text-brandOrange font-bold">
                   Stream has Ended
                 </span>
-              </div>
-            )}
+                  </div>
+              )}
+            </div>
           </div>
-          <div ref={audioContainerRef} style={{ display: "none" }} />
-        </div>
 
-        {/* Chat Panel with Share Button */}
-        <div className="w-full md:w-80 bg-brandGray border-l border-brandOrange flex flex-col relative">
-          {/* Chat Panel Header with Share Button */}
-          <div className="flex items-center justify-end p-2 border-b border-brandOrange">
-            <ShareButton
-              streamLink={
-                typeof window !== "undefined" ? window.location.href : ""
-              }
-            />
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {messages.map((msg, index) => (
-              <div
-                key={msg.id || index}
-                className="bg-brandBlack p-2 rounded-md text-sm"
-              >
-                <strong className="text-brandOrange">{msg.userName}:</strong>{" "}
-                {msg.content}
-              </div>
-            ))}
-          </div>
-          <div className="relative p-2 border-t border-brandOrange flex items-center">
-            <Input
-              className="flex-1 border border-brandOrange mr-2 bg-brandBlack text-brandWhite"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type your message..."
-            />
-            <Button
-              type="button"
-              onClick={() => setShowEmojiPicker((prev) => !prev)}
-              className="px-2 py-1 bg-brandGray rounded"
-            >
-              😊
-            </Button>
-            <Button
-              type="submit"
-              onClick={handleSendMessage}
-              className="bg-brandOrange text-brandBlack ml-2"
-            >
-              Send
-            </Button>
-            {showEmojiPicker && (
-              <div className="absolute bottom-full mb-2 right-0 z-50">
-                <EmojiPicker
-                  onEmojiClick={(emojiData) =>
-                    setNewMessage((prev) => prev + emojiData.emoji)
-                  }
-                  theme={"dark" as Theme}
-                  width={320}
-                />
-              </div>
-            )}
+          {/* Chat Panel */}
+          <div className="w-full md:w-80 bg-brandGray border-l border-brandOrange flex flex-col relative">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {messages.map((msg, index) => (
+                  <div key={index} className="bg-brandBlack p-2 rounded-md text-sm">
+                    <strong className="text-brandOrange">{msg.userName}:</strong> {msg.content}
+                  </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </div>
   );
 }

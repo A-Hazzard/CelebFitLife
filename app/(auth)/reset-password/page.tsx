@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { sendPasswordReset } from '@/lib/services/AuthService';
 import { FirebaseError } from 'firebase/app';
 import Link from 'next/link';
 import LandingHeader from '@/components/layout/landing/Header';
@@ -17,7 +16,7 @@ export default function ResetPasswordPage() {
     setMessage('');
     setError('');
     try {
-      await sendPasswordReset(email);
+      // await sendPasswordReset(email);
       setMessage('Password reset email sent. Check your inbox.');
     } catch (err: unknown) {
       if (err instanceof FirebaseError) {

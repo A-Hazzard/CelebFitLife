@@ -5,7 +5,6 @@ import { UserData } from "@/app/api/models/userData";
 
 type AuthState = {
   currentUser: UserData | null;
-  isLoggedIn: boolean;
   setUser: (userData: UserData) => void;
   clearUser: () => void;
 };
@@ -14,7 +13,6 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       currentUser: null,
-      isLoggedIn: false,
 
       /**
        * Save a plain object in store
@@ -22,7 +20,6 @@ export const useAuthStore = create<AuthState>()(
       setUser: (userData: UserData) =>
         set(() => ({
           currentUser: userData,
-          isLoggedIn: true,
         })),
 
       /**
@@ -31,7 +28,6 @@ export const useAuthStore = create<AuthState>()(
       clearUser: () =>
         set(() => ({
           currentUser: null,
-          isLoggedIn: false,
         })),
     }),
     {

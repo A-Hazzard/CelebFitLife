@@ -1,4 +1,3 @@
-// lib/models/userData.ts
 
 /**
  * A plain TS type for storing user info.
