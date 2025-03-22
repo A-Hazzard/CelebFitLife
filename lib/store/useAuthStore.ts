@@ -1,4 +1,3 @@
-// store/useAuthStore.ts
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { UserData } from "@/app/api/models/userData";

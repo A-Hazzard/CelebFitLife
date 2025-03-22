@@ -69,7 +69,7 @@ export default function DashboardPage() {
       <div className="min-h-screen bg-brandBlack text-brandWhite p-8 space-y-8">
         <div className="flex justify-between items-center">
           <h1 className="text-4xl font-bold text-brandOrange">
-            Welcome, {currentUser?.displayName || "Streamer"}
+            Welcome, {currentUser?.username || "Streamer"}
           </h1>
           <button
               onClick={handleGoLive}

@@ -5,7 +5,6 @@ import { SessionManager } from "@/lib/session";
 import { z } from "zod";
 import { UserData } from "@/app/api/models/userData";
 
-// Zod Schema for input validation
 const loginSchema = z.object({
   email: z.string().email("Invalid email format"),
   password: z.string().min(6, "Password must be at least 6 characters"),
@@ -54,7 +53,7 @@ export async function POST(request: Request) {
     const user: UserData = {
       uid: userDoc.id,
       email: userData.email,
-      displayName: userData.displayName || "",
+      username: userData.username || "",
       phone: userData.phone || "",
       country: userData.country || "",
       city: userData.city || "",
@@ -74,10 +73,17 @@ export async function POST(request: Request) {
       maxAge: 60 * 60 * 24 * 7, // 7 days
     });
     return response;
-  } catch (error: any) {
-    console.error("Login error:", error);
+  } catch (error: unknown) {
+    // Type assertion or type checking to handle specific error shape
+    if (error instanceof Error) {
+      console.error("Login error:", error.message);
+      return NextResponse.json(
+          { success: false, error: "Internal Server Error. Please try again later." },
+          { status: 500 }
+      );
+    }
     return NextResponse.json(
-        { success: false, error: "Internal Server Error. Please try again later." },
+        { success: false, error: "An unexpected error occurred." },
         { status: 500 }
     );
   }

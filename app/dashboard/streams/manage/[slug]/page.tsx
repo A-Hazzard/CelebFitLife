@@ -1,38 +1,30 @@
 "use client";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import React, {useCallback, useEffect, useRef, useState} from "react";
+import {usePathname, useRouter} from "next/navigation";
 import {
     connect,
-    createLocalVideoTrack,
     createLocalAudioTrack,
+    createLocalVideoTrack,
     LocalAudioTrack,
-    LocalTrackPublication,
     LocalVideoTrack,
     Room,
 } from "twilio-video";
-import { listenToMessages, sendChatMessage } from "@/lib/services/ChatService";
-import { useAuthStore } from "@/lib/store/useAuthStore";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
-import EmojiPicker, { Theme } from "emoji-picker-react";
+import {listenToMessages, sendChatMessage} from "@/lib/services/ChatService";
+import {useAuthStore} from "@/lib/store/useAuthStore";
+import {Button} from "@/components/ui/button";
+import {Input} from "@/components/ui/input";
+import {doc, onSnapshot, updateDoc} from "firebase/firestore";
+import {db} from "@/lib/config/firebase";
+import EmojiPicker, {Theme} from "emoji-picker-react";
 import ShareButton from "@/components/ui/ShareButton";
-import { Camera, Mic, MicOff, Video, VideoOff } from "lucide-react";
+import {Camera, Mic, MicOff, Video, VideoOff} from "lucide-react";
 
-interface ChatMessage {
-    id: string;
-    userName: string;
-    content: string;
-}
-
-// Updated clearVideoContainer: if a track is provided, detach its elements safely.
+/** Helper to safely detach a video track's DOM elements. */
 const clearVideoContainer = (
     container: HTMLDivElement,
     track?: LocalVideoTrack
 ) => {
     if (track) {
-        // Detach all elements attached by the track and remove them if they're still in the container.
         const attachedElements = track.detach();
         attachedElements.forEach((el) => {
             if (el.parentNode === container) {
@@ -40,12 +32,17 @@ const clearVideoContainer = (
             }
         });
     } else {
-        // Fallback: safely remove all children
         while (container.firstChild) {
             container.removeChild(container.firstChild);
         }
     }
 };
+
+interface ChatMessage {
+    id: string;
+    userName: string;
+    content: string;
+}
 
 const ManageStreamPage: React.FC = () => {
     const pathname = usePathname();
@@ -68,15 +65,13 @@ const ManageStreamPage: React.FC = () => {
     const [showMicOptions, setShowMicOptions] = useState(false);
     const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
     const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
-    const [currentVideoTrack, setCurrentVideoTrack] = useState<LocalVideoTrack | null>(
-        null
-    );
-    const [currentAudioTrack, setCurrentAudioTrack] = useState<LocalAudioTrack | null>(
-        null
-    );
+    const [currentVideoTrack, setCurrentVideoTrack] = useState<LocalVideoTrack | null>(null);
+    const [currentAudioTrack, setCurrentAudioTrack] = useState<LocalAudioTrack | null>(null);
     const [showEndConfirmation, setShowEndConfirmation] = useState(false);
     const [modalOpacity, setModalOpacity] = useState(false);
     const [loading, setLoading] = useState(true);
+
+    // This is the status overlay for mic/camera states
     const [streamerStatus, setStreamerStatus] = useState({
         audioMuted: false,
         cameraOff: false,
@@ -93,19 +88,26 @@ const ManageStreamPage: React.FC = () => {
 
     // Listen for chat messages
     useEffect(() => {
-        if (!slug) return;
-        const unsubscribe = listenToMessages(slug, (msgs: ChatMessage[]) =>
-            setMessages(msgs)
-        );
+        if (!slug) {
+            return;
+        }
+        const unsubscribe = listenToMessages(slug, (msgs: ChatMessage[]) => {
+            setMessages(msgs);
+        });
+
         return () => {
             unsubscribe();
-            roomRef.current && roomRef.current.disconnect();
+            if (roomRef.current) {
+                roomRef.current.disconnect();
+            }
         };
     }, [slug]);
 
     // Listen for stream status changes in Firestore
     useEffect(() => {
-        if (!slug) return;
+        if (!slug) {
+            return;
+        }
         const streamDocRef = doc(db, "streams", slug);
         const unsubscribe = onSnapshot(streamDocRef, (snap) => {
             if (snap.exists()) {
@@ -118,25 +120,25 @@ const ManageStreamPage: React.FC = () => {
 
     // Get camera and mic devices
     useEffect(() => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            return;
+        }
         navigator.mediaDevices
             .enumerateDevices()
             .then((devices) => {
-                const videoInputs = devices.filter(
-                    (device) => device.kind === "videoinput"
-                );
-                const audioInputs = devices.filter(
-                    (device) => device.kind === "audioinput"
-                );
+                const videoInputs = devices.filter((d) => d.kind === "videoinput");
+                const audioInputs = devices.filter((d) => d.kind === "audioinput");
                 setCameraDevices(videoInputs);
                 setMicDevices(audioInputs);
             })
             .catch((err) => console.error("Error enumerating devices:", err));
     }, [currentUser]);
 
-    // Automatically start the stream if it's active
+    // Automatically start the stream if it’s active
     useEffect(() => {
-        if (!slug || !currentUser || !isStreamStarted) return;
+        if (!slug || !currentUser || !isStreamStarted) {
+            return;
+        }
         const startStreamOnLoad = async () => {
             setIsRoomConnecting(true);
             try {
@@ -145,13 +147,15 @@ const ManageStreamPage: React.FC = () => {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         roomName: slug,
-                        userName: currentUser.displayName || currentUser.email,
+                        userName: currentUser.username || currentUser.email,
                     }),
                 });
                 const data = await res.json();
-                if (!data.token) throw new Error("No Twilio token returned");
+                if (!data.token) {
+                    throw new Error("No Twilio token returned");
+                }
 
-                // Request mic and camera permissions
+                // Request mic & camera
                 const audioTrack = await createLocalAudioTrack();
                 const videoTrack = await createLocalVideoTrack({ width: 640, height: 360 });
 
@@ -160,13 +164,13 @@ const ManageStreamPage: React.FC = () => {
                 });
                 roomRef.current = twRoom;
 
+                // Attach video
                 if (videoContainerRef.current) {
                     const videoEl = videoTrack.attach() as HTMLVideoElement;
                     videoEl.style.width = "100%";
                     videoEl.style.height = "100%";
                     videoEl.style.objectFit = "cover";
 
-                    // Safely detach any previously attached elements for this track.
                     clearVideoContainer(videoContainerRef.current, videoTrack);
                     videoContainerRef.current.appendChild(videoEl);
                     setCurrentVideoTrack(videoTrack);
@@ -175,6 +179,7 @@ const ManageStreamPage: React.FC = () => {
                 setCurrentAudioTrack(audioTrack);
                 setIsConnected(true);
                 setIsRoomConnecting(false);
+
                 twRoom.on("disconnected", () => {
                     setIsConnected(false);
                     setIsStreamStarted(false);
@@ -187,7 +192,7 @@ const ManageStreamPage: React.FC = () => {
         startStreamOnLoad();
     }, [slug, currentUser, isStreamStarted]);
 
-    // Start stream manually
+    /** START STREAM (manually) */
     const startStream = useCallback(async () => {
         if (!slug || !currentUser) {
             console.error("Missing slug or current user");
@@ -200,13 +205,15 @@ const ManageStreamPage: React.FC = () => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     roomName: slug,
-                    userName: currentUser.displayName || currentUser.email,
+                    userName: currentUser.username || currentUser.email,
                 }),
             });
             const data = await res.json();
-            if (!data.token) throw new Error("No Twilio token returned");
+            if (!data.token) {
+                throw new Error("No Twilio token returned");
+            }
 
-            // Request mic and camera permissions
+            // Request mic & camera
             const audioTrack = await createLocalAudioTrack();
             const videoTrack = await createLocalVideoTrack({ width: 640, height: 360 });
 
@@ -232,6 +239,7 @@ const ManageStreamPage: React.FC = () => {
             setIsConnected(true);
             setIsStreamStarted(true);
             setIsRoomConnecting(false);
+
             twRoom.on("disconnected", () => {
                 setIsConnected(false);
                 setIsStreamStarted(false);
@@ -243,7 +251,7 @@ const ManageStreamPage: React.FC = () => {
         }
     }, [slug, currentUser]);
 
-    // End stream
+    /** END STREAM */
     const endStream = useCallback(async () => {
         if (roomRef.current) {
             roomRef.current.disconnect();
@@ -257,34 +265,59 @@ const ManageStreamPage: React.FC = () => {
         }
     }, [router, slug]);
 
-    // Toggle audio
+    /** TOGGLE AUDIO */
     const handleToggleAudio = useCallback(() => {
         if (currentAudioTrack) {
-            currentAudioTrack.enable(!currentAudioTrack.isEnabled);
-            setIsAudioEnabled((prev) => !prev);
-            const userName = currentUser?.displayName || currentUser?.email || "Unknown User";
-            sendChatMessage(slug, userName, currentAudioTrack.isEnabled ? "Microphone muted" : "Microphone enabled");
+            // Enable or disable the local track
+            const wasEnabled = currentAudioTrack.isEnabled;
+            currentAudioTrack.enable(!wasEnabled);
+
+            // Update state
+            setIsAudioEnabled(!wasEnabled);
+            setStreamerStatus((prev) => ({
+                ...prev,
+                audioMuted: wasEnabled, // If it WAS enabled, now it's muted
+            }));
+
+            // Send a quick chat message to indicate the mic state
+            const userName = currentUser?.username || currentUser?.email || "Unknown User";
+            sendChatMessage(
+                slug,
+                userName,
+                !wasEnabled ? "Microphone enabled" : "Microphone muted"
+            );
         }
     }, [currentAudioTrack, currentUser, slug]);
 
-    // Toggle video
+    /** TOGGLE VIDEO */
     const handleToggleVideo = useCallback(() => {
         if (currentVideoTrack) {
-            currentVideoTrack.enable(!currentVideoTrack.isEnabled);
-            setIsVideoEnabled((prev) => !prev);
-            const userName = currentUser?.displayName || currentUser?.email || "Unknown User";
-            sendChatMessage(slug, userName, currentVideoTrack.isEnabled ? "Camera turned OFF" : "Camera turned ON");
+            const wasEnabled = currentVideoTrack.isEnabled;
+            currentVideoTrack.enable(!wasEnabled);
+
+            setIsVideoEnabled(!wasEnabled);
+            setStreamerStatus((prev) => ({
+                ...prev,
+                cameraOff: wasEnabled,
+            }));
+
+            const userName = currentUser?.username || currentUser?.email || "Unknown User";
+            sendChatMessage(
+                slug,
+                userName,
+                !wasEnabled ? "Camera turned ON" : "Camera turned OFF"
+            );
         }
     }, [currentVideoTrack, currentUser, slug]);
 
-    // Switch camera
+    /** SWITCH CAMERA */
     const switchCamera = useCallback(async (deviceId: string) => {
         if (!isConnected) {
-            alert("Still connecting or no stream. Please wait until fully connected.");
+            alert("Please wait until fully connected.");
             return;
         }
 
-        // Stop and unpublish the current video track if it exists
+        // Stop and unpublish the current video track
         if (currentVideoTrack && roomRef.current) {
             currentVideoTrack.stop();
             roomRef.current.localParticipant.unpublishTrack(currentVideoTrack);
@@ -310,14 +343,14 @@ const ManageStreamPage: React.FC = () => {
         setShowCameraOptions(false);
     }, [currentVideoTrack, isConnected]);
 
-    // Switch mic
+    /** SWITCH MIC */
     const switchMic = useCallback(async (deviceId: string) => {
         if (!isConnected) {
-            alert("Still connecting or no stream. Please wait until fully connected.");
+            alert("Please wait until fully connected.");
             return;
         }
 
-        // Stop and unpublish the current audio track if it exists
+        // Stop and unpublish the current audio track
         if (currentAudioTrack && roomRef.current) {
             currentAudioTrack.stop();
             roomRef.current.localParticipant.unpublishTrack(currentAudioTrack);
@@ -335,13 +368,15 @@ const ManageStreamPage: React.FC = () => {
         setShowMicOptions(false);
     }, [currentAudioTrack, isConnected]);
 
-    // Handle sending a chat message
+    /** SEND CHAT MESSAGE */
     const handleSendMessage = useCallback(
         async (e: React.FormEvent) => {
             e.preventDefault();
-            if (!newMessage.trim() || !currentUser) return;
-            const userName = currentUser.displayName || currentUser.email;
-            await sendChatMessage(slug, userName, newMessage.trim());
+            if (!newMessage.trim() || !currentUser) {
+                return;
+            }
+            const userName = currentUser.username || currentUser.email;
+            await sendChatMessage(slug, userName || "User", newMessage.trim());
             setNewMessage("");
         },
         [newMessage, currentUser, slug]
@@ -358,7 +393,9 @@ const ManageStreamPage: React.FC = () => {
         setTimeout(() => setShowEndConfirmation(false), 300);
     };
 
-    if (loading) return null;
+    if (loading) {
+        return null;
+    }
 
     return (
         <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite relative">
@@ -429,11 +466,20 @@ const ManageStreamPage: React.FC = () => {
                         {isStreamStarted && !isRoomConnecting && (
                             <div className="mt-2 space-x-2 flex items-center justify-center flex-wrap gap-2">
                                 <div className="relative">
+                                    {/* Toggle Mic */}
                                     <Button
-                                        onClick={() => setShowMicOptions((prev) => !prev)}
+                                        onClick={handleToggleAudio}
                                         className="rounded-full bg-brandOrange text-white shadow-lg px-6 py-2 transition duration-200 hover:scale-105"
                                     >
                                         {isAudioEnabled ? <Mic /> : <MicOff />}
+                                    </Button>
+
+                                    {/* Option to switch mic device */}
+                                    <Button
+                                        onClick={() => setShowMicOptions((prev) => !prev)}
+                                        className="ml-2 rounded-full bg-brandOrange text-white shadow-lg px-4 py-2 transition duration-200 hover:scale-105"
+                                    >
+                                        Devices
                                     </Button>
                                     {showMicOptions && (
                                         <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-brandBlack border border-brandOrange rounded-xl shadow-xl z-50">
@@ -449,12 +495,16 @@ const ManageStreamPage: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Toggle Video */}
                                 <Button
                                     onClick={handleToggleVideo}
                                     className="rounded-full bg-brandOrange text-white shadow-lg px-6 py-2 transition duration-200 hover:scale-105"
                                 >
                                     {isVideoEnabled ? <Video /> : <VideoOff />}
                                 </Button>
+
+                                {/* Switch Camera */}
                                 <div className="relative">
                                     <Button
                                         onClick={() => setShowCameraOptions((prev) => !prev)}
@@ -476,6 +526,7 @@ const ManageStreamPage: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
+
                                 <Button
                                     onClick={openModal}
                                     className="rounded-full bg-red-500 text-white shadow-lg px-6 py-2 transition duration-200 hover:scale-105"
@@ -498,11 +549,15 @@ const ManageStreamPage: React.FC = () => {
                         <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-[300px] md:max-h-none">
                             {messages.map((msg) => (
                                 <div key={msg.id} className="bg-brandBlack p-2 rounded-md text-sm">
-                                    <strong className="text-brandOrange">{msg.userName}:</strong> {msg.content}
+                                    <strong className="text-brandOrange">{msg.userName}:</strong>{" "}
+                                    {msg.content}
                                 </div>
                             ))}
                         </div>
-                        <div className="relative p-2 border-t border-brandOrange flex items-center">
+                        <form
+                            onSubmit={handleSendMessage}
+                            className="relative p-2 border-t border-brandOrange flex items-center"
+                        >
                             <Input
                                 className="flex-1 border border-brandOrange mr-2 bg-brandBlack text-brandWhite"
                                 value={newMessage}
@@ -518,7 +573,6 @@ const ManageStreamPage: React.FC = () => {
                             </Button>
                             <Button
                                 type="submit"
-                                onClick={handleSendMessage}
                                 className="bg-brandOrange text-brandBlack ml-2"
                             >
                                 Send
@@ -534,7 +588,7 @@ const ManageStreamPage: React.FC = () => {
                                     />
                                 </div>
                             )}
-                        </div>
+                        </form>
                     </div>
                 </main>
             </div>
@@ -564,7 +618,10 @@ const ManageStreamPage: React.FC = () => {
                             >
                                 Yes, End Stream
                             </Button>
-                            <Button onClick={closeModal} className="bg-brandGray text-brandBlack rounded px-4 py-2">
+                            <Button
+                                onClick={closeModal}
+                                className="bg-brandGray text-brandBlack rounded px-4 py-2"
+                            >
                                 Cancel
                             </Button>
                         </div>

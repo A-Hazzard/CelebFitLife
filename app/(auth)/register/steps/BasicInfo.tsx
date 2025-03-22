@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSignupStore } from "@/lib/store/useSignupStore";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import {FormEvent, useState} from "react";
 import { registerUser } from "@/lib/helpers/auth";
 import { RegistrationData } from "@/lib/types/auth";
 
@@ -23,7 +23,7 @@ export default function BasicInfo() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
@@ -52,7 +52,6 @@ export default function BasicInfo() {
         age: ageNum,
       });
 
-      // Redirect to login (or next step) after successful registration
       router.push("/login");
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";

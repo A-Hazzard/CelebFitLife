@@ -1,9 +1,7 @@
-// app/api/auth/register/route.ts
-import { adminDb } from "@/lib/config/firebaseAdmin";
-import { SessionManager } from "@/lib/session";
+import {adminDb} from "@/lib/config/firebaseAdmin";
+import {SessionManager} from "@/lib/session";
 import bcrypt from "bcryptjs";
-import { NextRequest, NextResponse } from "next/server";
-import type { SignOptions } from "jsonwebtoken"; // for reference if needed
+import {NextRequest, NextResponse} from "next/server";
 
 const SALT_ROUNDS = 10;
 
@@ -12,7 +10,7 @@ const SALT_ROUNDS = 10;
  * Returns a NextResponse error if validation fails, or true if everything is okay.
  */
 function validateInput(
-  input: Record<string, any>,
+  input: Record<string, string>,
   acceptedTnC: boolean
 ): NextResponse | true {
   const requiredFields = [
@@ -133,10 +131,10 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Registration error:", error);
     const errorMessage =
-      error instanceof Error ? error.message : "Internal Server Error";
+        error instanceof Error ? error.message : "Internal Server Error";
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
