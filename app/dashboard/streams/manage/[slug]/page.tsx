@@ -1,24 +1,24 @@
 "use client";
-
-import React, {useEffect, useRef, useState} from "react";
-import {usePathname, useRouter} from "next/navigation";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
     connect,
     createLocalVideoTrack,
+    createLocalAudioTrack,
     LocalAudioTrack,
     LocalTrackPublication,
     LocalVideoTrack,
     Room,
 } from "twilio-video";
-import {listenToMessages, sendChatMessage} from "@/lib/services/ChatService";
-import {useAuthStore} from "@/lib/store/useAuthStore";
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
-import {doc, onSnapshot, updateDoc} from "firebase/firestore";
-import {db} from "@/lib/config/firebase";
-import EmojiPicker, {Theme} from "emoji-picker-react";
+import { listenToMessages, sendChatMessage } from "@/lib/services/ChatService";
+import { useAuthStore } from "@/lib/store/useAuthStore";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/config/firebase";
+import EmojiPicker, { Theme } from "emoji-picker-react";
 import ShareButton from "@/components/ui/ShareButton";
-import {Camera, ChevronUp} from "lucide-react";
+import { Camera, Mic, MicOff, Video, VideoOff } from "lucide-react";
 
 interface ChatMessage {
     id: string;
@@ -26,7 +26,28 @@ interface ChatMessage {
     content: string;
 }
 
-export default function ManageStreamPage() {
+// Updated clearVideoContainer: if a track is provided, detach its elements safely.
+const clearVideoContainer = (
+    container: HTMLDivElement,
+    track?: LocalVideoTrack
+) => {
+    if (track) {
+        // Detach all elements attached by the track and remove them if they're still in the container.
+        const attachedElements = track.detach();
+        attachedElements.forEach((el) => {
+            if (el.parentNode === container) {
+                container.removeChild(el);
+            }
+        });
+    } else {
+        // Fallback: safely remove all children
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+    }
+};
+
+const ManageStreamPage: React.FC = () => {
     const pathname = usePathname();
     const router = useRouter();
     const slug = pathname?.split("/").pop() || "";
@@ -34,218 +55,299 @@ export default function ManageStreamPage() {
     const videoContainerRef = useRef<HTMLDivElement>(null);
     const roomRef = useRef<Room | null>(null);
 
+    // State declarations
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [newMessage, setNewMessage] = useState("");
     const [isAudioEnabled, setIsAudioEnabled] = useState(true);
     const [isVideoEnabled, setIsVideoEnabled] = useState(true);
     const [isStreamStarted, setIsStreamStarted] = useState(false);
+    const [isConnected, setIsConnected] = useState(false);
+    const [isRoomConnecting, setIsRoomConnecting] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showCameraOptions, setShowCameraOptions] = useState(false);
+    const [showMicOptions, setShowMicOptions] = useState(false);
     const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
-    const [currentVideoTrack, setCurrentVideoTrack] = useState<LocalVideoTrack | null>(null);
-
+    const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
+    const [currentVideoTrack, setCurrentVideoTrack] = useState<LocalVideoTrack | null>(
+        null
+    );
+    const [currentAudioTrack, setCurrentAudioTrack] = useState<LocalAudioTrack | null>(
+        null
+    );
     const [showEndConfirmation, setShowEndConfirmation] = useState(false);
     const [modalOpacity, setModalOpacity] = useState(false);
-
     const [loading, setLoading] = useState(true);
+    const [streamerStatus, setStreamerStatus] = useState({
+        audioMuted: false,
+        cameraOff: false,
+    });
+
     const { currentUser } = useAuthStore();
 
+    // Wait for user data to load
     useEffect(() => {
-        if (!currentUser) {
-            router.push("/login");
-            return;
+        if (currentUser) {
+            setLoading(false);
         }
-        setLoading(false);
-    }, [currentUser, router]);
+    }, [currentUser]);
 
-    // Chat subscription
+    // Listen for chat messages
     useEffect(() => {
         if (!slug) return;
-        const unsub = listenToMessages(slug, (msgs: ChatMessage[]) => setMessages(msgs));
+        const unsubscribe = listenToMessages(slug, (msgs: ChatMessage[]) =>
+            setMessages(msgs)
+        );
         return () => {
-            unsub();
-            if (roomRef.current) roomRef.current.disconnect();
+            unsubscribe();
+            roomRef.current && roomRef.current.disconnect();
         };
     }, [slug]);
 
-    // Check Firestore for `hasStarted` changes
+    // Listen for stream status changes in Firestore
     useEffect(() => {
         if (!slug) return;
-        const streamRef = doc(db, "streams", slug);
-        const unsub = onSnapshot(streamRef, (snap) => {
+        const streamDocRef = doc(db, "streams", slug);
+        const unsubscribe = onSnapshot(streamDocRef, (snap) => {
             if (snap.exists()) {
                 const data = snap.data();
-                // If hasStarted is already true (maybe a re-connect scenario)
                 setIsStreamStarted(Boolean(data.hasStarted));
             }
         });
-        return () => unsub();
+        return () => unsubscribe();
     }, [slug]);
 
-    // Get camera devices
+    // Get camera and mic devices
     useEffect(() => {
         if (!currentUser) return;
-        navigator.mediaDevices.enumerateDevices().then((devices) => {
-            const cams = devices.filter((d) => d.kind === "videoinput");
-            setCameraDevices(cams);
-        });
+        navigator.mediaDevices
+            .enumerateDevices()
+            .then((devices) => {
+                const videoInputs = devices.filter(
+                    (device) => device.kind === "videoinput"
+                );
+                const audioInputs = devices.filter(
+                    (device) => device.kind === "audioinput"
+                );
+                setCameraDevices(videoInputs);
+                setMicDevices(audioInputs);
+            })
+            .catch((err) => console.error("Error enumerating devices:", err));
     }, [currentUser]);
 
-    // Streamer starts the stream
-    const startStream = async () => {
+    // Automatically start the stream if it's active
+    useEffect(() => {
+        if (!slug || !currentUser || !isStreamStarted) return;
+        const startStreamOnLoad = async () => {
+            setIsRoomConnecting(true);
+            try {
+                const res = await fetch("/api/twilio/token", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        roomName: slug,
+                        userName: currentUser.displayName || currentUser.email,
+                    }),
+                });
+                const data = await res.json();
+                if (!data.token) throw new Error("No Twilio token returned");
+
+                // Request mic and camera permissions
+                const audioTrack = await createLocalAudioTrack();
+                const videoTrack = await createLocalVideoTrack({ width: 640, height: 360 });
+
+                const twRoom = await connect(data.token, {
+                    tracks: [audioTrack, videoTrack],
+                });
+                roomRef.current = twRoom;
+
+                if (videoContainerRef.current) {
+                    const videoEl = videoTrack.attach() as HTMLVideoElement;
+                    videoEl.style.width = "100%";
+                    videoEl.style.height = "100%";
+                    videoEl.style.objectFit = "cover";
+
+                    // Safely detach any previously attached elements for this track.
+                    clearVideoContainer(videoContainerRef.current, videoTrack);
+                    videoContainerRef.current.appendChild(videoEl);
+                    setCurrentVideoTrack(videoTrack);
+                }
+
+                setCurrentAudioTrack(audioTrack);
+                setIsConnected(true);
+                setIsRoomConnecting(false);
+                twRoom.on("disconnected", () => {
+                    setIsConnected(false);
+                    setIsStreamStarted(false);
+                });
+            } catch (error) {
+                console.error("Error starting stream on load:", error);
+                setIsRoomConnecting(false);
+            }
+        };
+        startStreamOnLoad();
+    }, [slug, currentUser, isStreamStarted]);
+
+    // Start stream manually
+    const startStream = useCallback(async () => {
         if (!slug || !currentUser) {
-            console.error("❌ Missing slug or current user. Cannot start stream.");
+            console.error("Missing slug or current user");
             return;
         }
+        setIsRoomConnecting(true);
+        try {
+            const res = await fetch("/api/twilio/token", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    roomName: slug,
+                    userName: currentUser.displayName || currentUser.email,
+                }),
+            });
+            const data = await res.json();
+            if (!data.token) throw new Error("No Twilio token returned");
 
-        console.log("🚀 Streamer starting the stream with slug:", slug);
-        const res = await fetch("/api/twilio/token", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                roomName: slug,
-                userName: currentUser.displayName || currentUser.email,
-            }),
-        });
+            // Request mic and camera permissions
+            const audioTrack = await createLocalAudioTrack();
+            const videoTrack = await createLocalVideoTrack({ width: 640, height: 360 });
 
-        const data = await res.json();
-        if (!data.token) {
-            console.error("❌ No token returned from Twilio API.");
-            return;
-        }
+            const twRoom = await connect(data.token, {
+                tracks: [audioTrack, videoTrack],
+            });
+            roomRef.current = twRoom;
 
-        const twRoom = await connect(data.token, {
-            video: { width: 640, height: 360 },
-            audio: true,
-        });
+            await updateDoc(doc(db, "streams", slug), { hasStarted: true });
 
-        roomRef.current = twRoom;
-
-        // Set hasStarted to true in Firestore
-        await updateDoc(doc(db, "streams", slug), {
-            hasStarted: true,
-        });
-        console.log("✅ Firestore: hasStarted = true");
-
-        // Attach local video track
-        twRoom.localParticipant.tracks.forEach((pub: LocalTrackPublication) => {
-            if (pub.track.kind === "video" && videoContainerRef.current) {
-                console.log("🎥 Streamer publishing video track");
-                const videoEl = pub.track.attach() as HTMLVideoElement;
+            if (videoContainerRef.current) {
+                const videoEl = videoTrack.attach() as HTMLVideoElement;
                 videoEl.style.width = "100%";
                 videoEl.style.height = "100%";
                 videoEl.style.objectFit = "cover";
 
-                videoContainerRef.current.innerHTML = "";
+                clearVideoContainer(videoContainerRef.current, videoTrack);
                 videoContainerRef.current.appendChild(videoEl);
-
-                setCurrentVideoTrack(pub.track as LocalVideoTrack);
+                setCurrentVideoTrack(videoTrack);
             }
-        });
 
-        setIsStreamStarted(true);
+            setCurrentAudioTrack(audioTrack);
+            setIsConnected(true);
+            setIsStreamStarted(true);
+            setIsRoomConnecting(false);
+            twRoom.on("disconnected", () => {
+                setIsConnected(false);
+                setIsStreamStarted(false);
+            });
+        } catch (error) {
+            console.error("Error starting stream:", error);
+            alert(`Error starting stream: ${error}`);
+            setIsRoomConnecting(false);
+        }
+    }, [slug, currentUser]);
 
-        twRoom.on("disconnected", () => {
-            console.log("🚫 Streamer disconnected from room");
-            setIsStreamStarted(false);
-        });
-    };
-
-    // End Stream
-    const endStream = async () => {
+    // End stream
+    const endStream = useCallback(async () => {
         if (roomRef.current) {
             roomRef.current.disconnect();
+            setIsConnected(false);
         }
         try {
-            await updateDoc(doc(db, "streams", slug), {
-                hasStarted: false,
-            });
-            console.log("✅ Firestore: hasStarted = false");
+            await updateDoc(doc(db, "streams", slug), { hasStarted: false });
             router.push("/dashboard");
-        } catch (err) {
-            console.error("❌ Error ending stream:", err);
+        } catch (error) {
+            console.error("Error ending stream:", error);
         }
-    };
+    }, [router, slug]);
 
     // Toggle audio
-    const handleToggleAudio = () => {
-        if (!roomRef.current) return;
-        roomRef.current.localParticipant.audioTracks.forEach((pub: LocalTrackPublication) => {
-            if (pub.track.kind === "audio") {
-                const audioTrack = pub.track as LocalAudioTrack;
-                const newStatus = !audioTrack.isEnabled;
-                audioTrack.enable(newStatus);
-                console.log(`🎙 Audio toggled. Now enabled? ${audioTrack.isEnabled}`);
-            }
-        });
-        setIsAudioEnabled((prev) => !prev);
-    };
+    const handleToggleAudio = useCallback(() => {
+        if (currentAudioTrack) {
+            currentAudioTrack.enable(!currentAudioTrack.isEnabled);
+            setIsAudioEnabled((prev) => !prev);
+            const userName = currentUser?.displayName || currentUser?.email || "Unknown User";
+            sendChatMessage(slug, userName, currentAudioTrack.isEnabled ? "Microphone muted" : "Microphone enabled");
+        }
+    }, [currentAudioTrack, currentUser, slug]);
 
     // Toggle video
-    const handleToggleVideo = () => {
-        if (!roomRef.current) return;
-        roomRef.current.localParticipant.videoTracks.forEach((pub: LocalTrackPublication) => {
-            if (pub.track.kind === "video") {
-                const videoTrack = pub.track as LocalVideoTrack;
-                const newStatus = !videoTrack.isEnabled;
-                videoTrack.enable(newStatus);
-                console.log(`📹 Video toggled. Now enabled? ${videoTrack.isEnabled}`);
-
-                // Send an in-chat notification
-                if (currentUser) {
-                    const userName = currentUser.displayName || currentUser.email;
-                    const cameraMsg = newStatus ? "Camera turned ON" : "Camera turned OFF";
-                    sendChatMessage(slug, userName, cameraMsg);
-                }
-            }
-        });
-        setIsVideoEnabled((prev) => !prev);
-    };
-
+    const handleToggleVideo = useCallback(() => {
+        if (currentVideoTrack) {
+            currentVideoTrack.enable(!currentVideoTrack.isEnabled);
+            setIsVideoEnabled((prev) => !prev);
+            const userName = currentUser?.displayName || currentUser?.email || "Unknown User";
+            sendChatMessage(slug, userName, currentVideoTrack.isEnabled ? "Camera turned OFF" : "Camera turned ON");
+        }
+    }, [currentVideoTrack, currentUser, slug]);
 
     // Switch camera
-    const switchCamera = async (deviceId: string) => {
-        if (!currentVideoTrack || !roomRef.current) return;
-        console.log("🔄 Switching camera to:", deviceId);
-
-        // Stop & unpublish the old video track
-        currentVideoTrack.stop();
-        currentVideoTrack.detach();
-
-        roomRef.current.localParticipant.videoTracks.forEach((pub) => {
-            pub.unpublish();
-        });
-
-        // Create new local video track from the selected device
-        const newVideoTrack = await createLocalVideoTrack({ deviceId });
-
-        // Publish the new track to Twilio
-        await roomRef.current.localParticipant.publishTrack(newVideoTrack);
-
-        // Attach the new track to container
-        const videoEl = newVideoTrack.attach();
-        videoEl.style.width = "100%";
-        videoEl.style.height = "100%";
-        videoEl.style.objectFit = "cover";
-        if (videoContainerRef.current) {
-            videoContainerRef.current.innerHTML = "";
-            videoContainerRef.current.appendChild(videoEl);
+    const switchCamera = useCallback(async (deviceId: string) => {
+        if (!isConnected) {
+            alert("Still connecting or no stream. Please wait until fully connected.");
+            return;
         }
 
-        setCurrentVideoTrack(newVideoTrack);
+        // Stop and unpublish the current video track if it exists
+        if (currentVideoTrack && roomRef.current) {
+            currentVideoTrack.stop();
+            roomRef.current.localParticipant.unpublishTrack(currentVideoTrack);
+        }
+
+        try {
+            const newVideoTrack = await createLocalVideoTrack({ deviceId });
+            if (roomRef.current) {
+                await roomRef.current.localParticipant.publishTrack(newVideoTrack);
+            }
+            if (videoContainerRef.current) {
+                clearVideoContainer(videoContainerRef.current);
+                const videoEl = newVideoTrack.attach() as HTMLVideoElement;
+                videoEl.style.width = "100%";
+                videoEl.style.height = "100%";
+                videoEl.style.objectFit = "cover";
+                videoContainerRef.current.appendChild(videoEl);
+            }
+            setCurrentVideoTrack(newVideoTrack);
+        } catch (error) {
+            console.error("Error switching camera:", error);
+        }
         setShowCameraOptions(false);
-        console.log("✅ Camera switched successfully:", deviceId);
-    };
+    }, [currentVideoTrack, isConnected]);
 
-    // Chat send
-    const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newMessage.trim() || !currentUser) return;
-        const userName = currentUser.displayName || currentUser.email;
-        await sendChatMessage(slug, userName, newMessage.trim());
-        setNewMessage("");
-    };
+    // Switch mic
+    const switchMic = useCallback(async (deviceId: string) => {
+        if (!isConnected) {
+            alert("Still connecting or no stream. Please wait until fully connected.");
+            return;
+        }
 
+        // Stop and unpublish the current audio track if it exists
+        if (currentAudioTrack && roomRef.current) {
+            currentAudioTrack.stop();
+            roomRef.current.localParticipant.unpublishTrack(currentAudioTrack);
+        }
+
+        try {
+            const newAudioTrack = await createLocalAudioTrack({ deviceId });
+            if (roomRef.current) {
+                await roomRef.current.localParticipant.publishTrack(newAudioTrack);
+            }
+            setCurrentAudioTrack(newAudioTrack);
+        } catch (error) {
+            console.error("Error switching mic:", error);
+        }
+        setShowMicOptions(false);
+    }, [currentAudioTrack, isConnected]);
+
+    // Handle sending a chat message
+    const handleSendMessage = useCallback(
+        async (e: React.FormEvent) => {
+            e.preventDefault();
+            if (!newMessage.trim() || !currentUser) return;
+            const userName = currentUser.displayName || currentUser.email;
+            await sendChatMessage(slug, userName, newMessage.trim());
+            setNewMessage("");
+        },
+        [newMessage, currentUser, slug]
+    );
+
+    // Modal controls
     const openModal = () => {
         setShowEndConfirmation(true);
         setTimeout(() => setModalOpacity(true), 10);
@@ -256,9 +358,7 @@ export default function ManageStreamPage() {
         setTimeout(() => setShowEndConfirmation(false), 300);
     };
 
-    if (loading) {
-        return null;
-    }
+    if (loading) return null;
 
     return (
         <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite relative">
@@ -280,7 +380,7 @@ export default function ManageStreamPage() {
             </header>
 
             <div className="flex flex-1">
-                {/* Side Nav */}
+                {/* Side Navigation */}
                 <nav className="w-20 bg-brandBlack border-r border-brandOrange flex flex-col items-center py-4 space-y-4">
                     <div className="w-12 h-12 rounded-full bg-brandWhite"></div>
                     <div className="w-12 h-12 rounded-full bg-brandWhite opacity-50"></div>
@@ -305,59 +405,99 @@ export default function ManageStreamPage() {
                         )}
                         <div
                             ref={videoContainerRef}
-                            className="bg-black w-full h-64 md:h-full rounded-lg shadow-lg overflow-hidden"
-                        ></div>
+                            className="bg-black w-full h-[60vh] md:h-[75vh] rounded-lg shadow-lg overflow-hidden relative flex items-center justify-center"
+                        >
+                            {isRoomConnecting && (
+                                <p className="absolute text-brandOrange text-xl font-bold">
+                                    Connecting...
+                                </p>
+                            )}
+                            {streamerStatus.audioMuted && (
+                                <div className="absolute bottom-2 right-2 bg-black/80 p-1 rounded-full">
+                                    <MicOff className="h-6 w-6 text-red-500" />
+                                </div>
+                            )}
+                            {streamerStatus.cameraOff && (
+                                <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+                                    <p className="text-brandOrange text-xl font-bold">
+                                        Camera is currently off
+                                    </p>
+                                </div>
+                            )}
+                        </div>
 
-                        {isStreamStarted && (
-                            <div className="mt-2 space-x-2 flex items-center relative">
-                                <Button onClick={handleToggleAudio} className="bg-brandOrange text-brandBlack">
-                                    {isAudioEnabled ? "Mute" : "Unmute"}
-                                </Button>
-
-                                <Button onClick={handleToggleVideo} className="bg-brandOrange text-brandBlack">
-                                    {isVideoEnabled ? "Stop Cam" : "Start Cam"}
-                                </Button>
-
-                                {/* Camera Switch Button */}
+                        {isStreamStarted && !isRoomConnecting && (
+                            <div className="mt-2 space-x-2 flex items-center justify-center flex-wrap gap-2">
+                                <div className="relative">
+                                    <Button
+                                        onClick={() => setShowMicOptions((prev) => !prev)}
+                                        className="rounded-full bg-brandOrange text-white shadow-lg px-6 py-2 transition duration-200 hover:scale-105"
+                                    >
+                                        {isAudioEnabled ? <Mic /> : <MicOff />}
+                                    </Button>
+                                    {showMicOptions && (
+                                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-brandBlack border border-brandOrange rounded-xl shadow-xl z-50">
+                                            {micDevices.map((device) => (
+                                                <Button
+                                                    key={device.deviceId}
+                                                    onClick={() => switchMic(device.deviceId)}
+                                                    className="w-full justify-start text-sm bg-transparent hover:bg-brandOrange hover:text-white rounded-xl px-3 py-2"
+                                                >
+                                                    🎤 {device.label || "Unnamed Mic"}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                                 <Button
-                                    onClick={() => setShowCameraOptions(!showCameraOptions)}
-                                    className="bg-brandOrange flex items-center gap-1 relative"
+                                    onClick={handleToggleVideo}
+                                    className="rounded-full bg-brandOrange text-white shadow-lg px-6 py-2 transition duration-200 hover:scale-105"
                                 >
-                                    <Camera />
-                                    <ChevronUp />
+                                    {isVideoEnabled ? <Video /> : <VideoOff />}
                                 </Button>
-
-                                {/* Slide-up camera options */}
-                                {showCameraOptions && (
-                                    <div className="absolute bottom-full mb-2 bg-gray-700 p-2 rounded shadow-lg transition-all">
-                                        {cameraDevices.map((device) => (
-                                            <Button
-                                                key={device.deviceId}
-                                                className="w-full text-left bg-transparent hover:bg-gray-600 mb-1"
-                                                onClick={() => switchCamera(device.deviceId)}
-                                            >
-                                                {device.label || "Camera"}
-                                            </Button>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <Button onClick={openModal} className="bg-red-600 text-white rounded px-4 py-2">
+                                <div className="relative">
+                                    <Button
+                                        onClick={() => setShowCameraOptions((prev) => !prev)}
+                                        className="rounded-full bg-brandOrange text-white shadow-lg p-3 transition duration-200 hover:scale-110"
+                                    >
+                                        <Camera />
+                                    </Button>
+                                    {showCameraOptions && (
+                                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-brandBlack border border-brandOrange rounded-xl shadow-xl z-50">
+                                            {cameraDevices.map((device) => (
+                                                <Button
+                                                    key={device.deviceId}
+                                                    onClick={() => switchCamera(device.deviceId)}
+                                                    className="w-full justify-start text-sm bg-transparent hover:bg-brandOrange hover:text-white rounded-xl px-3 py-2"
+                                                >
+                                                    📷 {device.label || "Unnamed Camera"}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <Button
+                                    onClick={openModal}
+                                    className="rounded-full bg-red-500 text-white shadow-lg px-6 py-2 transition duration-200 hover:scale-105"
+                                >
                                     End Stream
                                 </Button>
                             </div>
                         )}
                     </div>
 
-                    {/* Chat Panel with Share Button */}
-                    <div className="w-full md:w-80 bg-brandGray border-l border-brandOrange flex flex-col relative">
-                        {/* Chat Panel Header with Share Button */}
+                    {/* Chat Panel */}
+                    <div className="w-full md:w-96 lg:w-80 bg-brandGray border-l border-brandOrange flex flex-col">
                         <div className="flex items-center justify-end p-2 border-b border-brandOrange">
-                            <ShareButton streamLink={typeof window !== "undefined" ? window.location.href : ""} />
+                            <ShareButton
+                                streamLink={
+                                    typeof window !== "undefined" ? window.location.href : ""
+                                }
+                            />
                         </div>
-                        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                            {messages.map((msg, index) => (
-                                <div key={msg.id || index} className="bg-brandBlack p-2 rounded-md text-sm">
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-[300px] md:max-h-none">
+                            {messages.map((msg) => (
+                                <div key={msg.id} className="bg-brandBlack p-2 rounded-md text-sm">
                                     <strong className="text-brandOrange">{msg.userName}:</strong> {msg.content}
                                 </div>
                             ))}
@@ -376,13 +516,19 @@ export default function ManageStreamPage() {
                             >
                                 😊
                             </Button>
-                            <Button type="submit" onClick={handleSendMessage} className="bg-brandOrange text-brandBlack ml-2">
+                            <Button
+                                type="submit"
+                                onClick={handleSendMessage}
+                                className="bg-brandOrange text-brandBlack ml-2"
+                            >
                                 Send
                             </Button>
                             {showEmojiPicker && (
                                 <div className="absolute bottom-full mb-2 right-0 z-50">
                                     <EmojiPicker
-                                        onEmojiClick={(emojiData) => setNewMessage((prev) => prev + emojiData.emoji)}
+                                        onEmojiClick={(emojiData) =>
+                                            setNewMessage((prev) => prev + emojiData.emoji)
+                                        }
                                         theme={"dark" as Theme}
                                         width={320}
                                     />
@@ -427,4 +573,6 @@ export default function ManageStreamPage() {
             )}
         </div>
     );
-}
+};
+
+export default ManageStreamPage;

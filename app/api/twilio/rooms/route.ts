@@ -1,11 +1,11 @@
-import { NextResponse } from 'next/server';
-import twilio from 'twilio';
+import { NextResponse } from "next/server";
+import twilio from "twilio";
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 
 if (!accountSid || !authToken) {
-  console.error('❌ Missing Twilio credentials!');
+  console.error("❌ Missing Twilio credentials in environment variables!");
 }
 
 const client = twilio(accountSid, authToken);
@@ -24,6 +24,7 @@ export async function POST(req: Request) {
       console.log("✅ Room already exists:", existingRoom.uniqueName);
       return NextResponse.json({ room: existingRoom });
     } catch (err) {
+      // If fetch fails, the room doesn't exist. We'll create it below
       console.log("🚀 Creating new Twilio room:", roomName);
     }
 
@@ -44,4 +45,3 @@ export async function POST(req: Request) {
     }
   }
 }
-
