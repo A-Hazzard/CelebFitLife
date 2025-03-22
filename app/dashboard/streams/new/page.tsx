@@ -13,6 +13,7 @@ export default function CreateStreamPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [thumbnailUrl, setThumbnailUrl] = useState("");
 
   useEffect(() => {
     if (!currentUser) {
@@ -29,14 +30,18 @@ export default function CreateStreamPage() {
     const slug = `${title.trim().replace(/\s+/g, "-").toLowerCase()}-${uuidv4()}`;
 
     // Store stream details in Firestore
-    await setDoc(doc(db, "streams", slug), {
+    const streamData = {
       title,
       description,
+      thumbnail: thumbnailUrl,
       slug,
       createdAt: new Date().toISOString(),
       createdBy: currentUser.uid, // Associate stream with user
       hasStarted: false, // Stream hasn't started yet
-    });
+      hasEnded: false,
+    };
+
+    await setDoc(doc(db, "streams", slug), streamData);
 
     // Redirect to manage page
     router.push(`/dashboard/streams/manage/${slug}`);
@@ -71,6 +76,16 @@ export default function CreateStreamPage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Optional details about the workout, difficulty level, etc."
+              />
+            </div>
+            <div>
+              <label className="block mb-1 text-gray-400">Thumbnail URL</label>
+              <input
+                  className="w-full border border-gray-700 rounded p-2 bg-black text-white"
+                  type="text"
+                  value={thumbnailUrl}
+                  onChange={(e) => setThumbnailUrl(e.target.value)}
+                  placeholder="Optional thumbnail URL"
               />
             </div>
             <button

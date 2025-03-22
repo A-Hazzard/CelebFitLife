@@ -1,26 +1,32 @@
 "use client";
+"use client";
 import LandingHeader from "@/components/layout/landing/Header";
 import Link from "next/link";
 import { useRef, useState, useEffect } from "react";
 import emailjs from "@emailjs/browser";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/lib/store/useAuthStore"; // Import the useAuthStore
+import { useAuthStore } from "@/lib/store/useAuthStore";
 
 export default function LandingPage() {
   const formRef = useRef<HTMLFormElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<{
-    type: "success" | "error" | null;
-    message: string;
-  }>({ type: null, message: "" });
+  const [submitStatus, setSubmitStatus] = useState<{ type: "success" | "error" | null; message: string }>({ type: null, message: "" });
 
   const router = useRouter();
-  const { currentUser } = useAuthStore(); // Get the currentUser from the store
+  const { currentUser } = useAuthStore();
 
-  // Redirect to dashboard if user is authenticated
+  // NEW: local loading state
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    if (currentUser) {
-      router.push("/dashboard");
+    // Once currentUser is anything but undefined, we know auth check is done
+    if (currentUser !== undefined) {
+      setLoading(false);
+
+      // Redirect logged-in users
+      if (currentUser) {
+        router.push("/dashboard");
+      }
     }
   }, [currentUser, router]);
 
@@ -28,7 +34,6 @@ export default function LandingPage() {
     e.preventDefault();
     setIsSubmitting(true);
     setSubmitStatus({ type: null, message: "" });
-
     try {
       const result = await emailjs.sendForm(
           process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID!,
@@ -36,33 +41,32 @@ export default function LandingPage() {
           formRef.current!,
           process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY
       );
-
       if (result.text === "OK") {
-        setSubmitStatus({
-          type: "success",
-          message: "Message sent successfully! We'll get back to you soon.",
-        });
+        setSubmitStatus({ type: "success", message: "Message sent successfully! We'll get back to you soon." });
         formRef.current?.reset();
       }
     } catch (error) {
-      if (error instanceof Error) {
-        setSubmitStatus({
-          type: "error",
-          message: `Failed to send message: ${error.message}`,
-        });
-      } else {
-        setSubmitStatus({
-          type: "error",
-          message: "Failed to send message. Please try again later.",
-        });
-      }
+      setSubmitStatus({
+        type: "error",
+        message: error instanceof Error ? `Failed to send message: ${error.message}` : "Failed to send message. Please try again later.",
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Show spinner while loading auth
+  if (loading) {
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-brandBlack">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-t-brandOrange border-brandGray"></div>
+        </div>
+    );
+  }
 
-  if(!currentUser) return null;
+  // If user is logged in, we already pushed → render nothing
+  if (currentUser) return null;
+
   else return (
       <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite">
         <LandingHeader />

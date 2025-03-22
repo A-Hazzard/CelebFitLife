@@ -7,6 +7,7 @@ import {
     createLocalVideoTrack,
     LocalAudioTrack,
     LocalVideoTrack,
+    LocalTrack,
     Room,
 } from "twilio-video";
 import {listenToMessages, sendChatMessage} from "@/lib/services/ChatService";
@@ -17,7 +18,8 @@ import {doc, onSnapshot, updateDoc} from "firebase/firestore";
 import {db} from "@/lib/config/firebase";
 import EmojiPicker, {Theme} from "emoji-picker-react";
 import ShareButton from "@/components/ui/ShareButton";
-import {Camera, Mic, MicOff, Video, VideoOff} from "lucide-react";
+import {Camera, Check, ChevronUp, Mic, MicOff, Video, VideoOff} from "lucide-react";
+import axios from "axios";
 
 /** Helper to safely detach a video track's DOM elements. */
 const clearVideoContainer = (
@@ -70,6 +72,8 @@ const ManageStreamPage: React.FC = () => {
     const [showEndConfirmation, setShowEndConfirmation] = useState(false);
     const [modalOpacity, setModalOpacity] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [currentMicId, setCurrentMicId] = useState<string>("");
+    const [currentCameraId, setCurrentCameraId] = useState<string>("");
 
     // This is the status overlay for mic/camera states
     const [streamerStatus, setStreamerStatus] = useState({
@@ -77,7 +81,27 @@ const ManageStreamPage: React.FC = () => {
         cameraOff: false,
     });
 
+    const [streamData, setStreamData] = useState<{
+        hasStarted: boolean;
+        hasEnded: boolean;
+        thumbnailUrl: string;
+    } | null>(null);
+
     const { currentUser } = useAuthStore();
+
+    useEffect(() => {
+        let hasCheckedPermissions = false;
+        
+        if (!hasCheckedPermissions) {
+            navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+                .then(() => {
+                    hasCheckedPermissions = true;
+                })
+                .catch((err) => {
+                    console.error("Media permissions error:", err);
+                });
+        }
+    }, []);
 
     // Wait for user data to load
     useEffect(() => {
@@ -103,20 +127,151 @@ const ManageStreamPage: React.FC = () => {
         };
     }, [slug]);
 
-    // Listen for stream status changes in Firestore
+    // Update Firestore with stream status
     useEffect(() => {
-        if (!slug) {
-            return;
-        }
+        if (!slug || !isConnected) return;
         const streamDocRef = doc(db, "streams", slug);
-        const unsubscribe = onSnapshot(streamDocRef, (snap) => {
-            if (snap.exists()) {
-                const data = snap.data();
-                setIsStreamStarted(Boolean(data.hasStarted));
+        updateDoc(streamDocRef, {
+            isMuted: !isAudioEnabled,
+            isCameraOff: !isVideoEnabled,
+            currentMicId,
+            currentCameraId,
+            lastUpdated: new Date().toISOString()
+        }).catch(console.error);
+    }, [slug, isAudioEnabled, isVideoEnabled, currentMicId, currentCameraId, isConnected]);
+
+    // Load saved device preferences and status from Firestore
+    useEffect(() => {
+        if (!slug) return;
+        
+        let isSubscribed = true;
+        const streamDocRef = doc(db, "streams", slug);
+        
+        const unsubscribe = onSnapshot(streamDocRef, async (snapshot) => {
+            if (!isSubscribed) return;
+            
+            if (snapshot.exists()) {
+                const data = snapshot.data();
+                setStreamData({
+                    hasStarted: data.hasStarted || false,
+                    hasEnded: data.hasEnded || false,
+                    thumbnailUrl: data.thumbnailUrl || "",
+                });
+                setIsStreamStarted(data.hasStarted || false);
+                
+                // Only load device preferences if stream hasn't started yet
+                if (!data.hasStarted) {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    
+                    if (data.currentMicId) {
+                        const savedMic = devices.find((d: MediaDeviceInfo) => d.deviceId === data.currentMicId && d.kind === "audioinput");
+                        if (savedMic) {
+                            setCurrentMicId(data.currentMicId);
+                            await switchMic(data.currentMicId);
+                        } else {
+                            const defaultMic = devices.find((d: MediaDeviceInfo) => d.kind === "audioinput");
+                            if (defaultMic) {
+                                setCurrentMicId(defaultMic.deviceId);
+                                await switchMic(defaultMic.deviceId);
+                            }
+                        }
+                    }
+                    
+                    if (data.currentCameraId) {
+                        const savedCamera = devices.find((d: MediaDeviceInfo) => d.deviceId === data.currentCameraId && d.kind === "videoinput");
+                        if (savedCamera) {
+                            setCurrentCameraId(data.currentCameraId);
+                            await switchCamera(data.currentCameraId);
+                        } else {
+                            const defaultCamera = devices.find((d: MediaDeviceInfo) => d.kind === "videoinput");
+                            if (defaultCamera) {
+                                setCurrentCameraId(defaultCamera.deviceId);
+                                await switchCamera(defaultCamera.deviceId);
+                            }
+                        }
+                    }
+                }
             }
         });
-        return () => unsubscribe();
+
+        return () => {
+            isSubscribed = false;
+            unsubscribe();
+        };
     }, [slug]);
+
+    useEffect(() => {
+        if (!currentUser || !slug) return;
+
+        const setupStream = async () => {
+            try {
+                console.log('Setting up stream...');
+                const { data } = await axios.post("/api/twilio/token", {
+                    roomName: slug,
+                    userName: currentUser.username || currentUser.email,
+                });
+
+                // Create video track
+                const videoTrack = await createLocalVideoTrack({
+                    width: 1280,
+                    height: 720,
+                    deviceId: currentCameraId,
+                    name: `camera-${currentCameraId?.substring(0, 8) || 'default'}-${Date.now()}`
+                });
+
+                console.log('Initial video track created with name:', videoTrack.name);
+
+                // Create audio track
+                const audioTrack = await createLocalAudioTrack({
+                    deviceId: currentMicId,
+                    name: 'microphone'
+                });
+
+                // Connect to room
+                console.log('Connecting to room with tracks...');
+                const twRoom = await connect(data.token, {
+                    name: slug,
+                    tracks: [videoTrack, audioTrack]
+                });
+
+                console.log('Connected to room, publishing tracks...');
+                roomRef.current = twRoom;
+
+                // Attach local video
+                if (videoContainerRef.current) {
+                    clearVideoContainer(videoContainerRef.current);
+                    const videoEl = videoTrack.attach();
+                    videoEl.style.width = "100%";
+                    videoEl.style.height = "100%";
+                    videoEl.style.objectFit = "cover";
+                    videoContainerRef.current.appendChild(videoEl);
+                }
+
+                setCurrentVideoTrack(videoTrack);
+                setCurrentAudioTrack(audioTrack);
+                setIsVideoEnabled(true);
+                setIsAudioEnabled(true);
+
+                // Update Firestore with initial state
+                const streamRef = doc(db, "streams", slug);
+                await updateDoc(streamRef, {
+                    hasStarted: true,
+                    cameraOff: false,
+                    audioMuted: false
+                });
+
+                // Handle room events
+                twRoom.on("disconnected", () => {
+                    console.log('Room disconnected event triggered');
+                    setIsConnected(false);
+                });
+            } catch (error) {
+                console.error("Error setting up stream:", error);
+            }
+        };
+
+        setupStream();
+    }, [currentUser, slug, currentCameraId, currentMicId]);
 
     // Get camera and mic devices
     useEffect(() => {
@@ -130,6 +285,10 @@ const ManageStreamPage: React.FC = () => {
                 const audioInputs = devices.filter((d) => d.kind === "audioinput");
                 setCameraDevices(videoInputs);
                 setMicDevices(audioInputs);
+                const defaultMic = devices.find(d => d.kind === "audioinput");
+                const defaultCamera = devices.find(d => d.kind === "videoinput");
+                if (defaultMic) setCurrentMicId(defaultMic.deviceId);
+                if (defaultCamera) setCurrentCameraId(defaultCamera.deviceId);
             })
             .catch((err) => console.error("Error enumerating devices:", err));
     }, [currentUser]);
@@ -140,8 +299,8 @@ const ManageStreamPage: React.FC = () => {
             return;
         }
         const startStreamOnLoad = async () => {
-            setIsRoomConnecting(true);
             try {
+                setIsRoomConnecting(true);
                 const res = await fetch("/api/twilio/token", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -155,34 +314,67 @@ const ManageStreamPage: React.FC = () => {
                     throw new Error("No Twilio token returned");
                 }
 
-                // Request mic & camera
-                const audioTrack = await createLocalAudioTrack();
-                const videoTrack = await createLocalVideoTrack({ width: 640, height: 360 });
+                // Create tracks silently without showing alerts
+                const audioTrack = await createLocalAudioTrack({
+                    deviceId: currentMicId,
+                    name: 'microphone'
+                });
+                const videoTrack = await createLocalVideoTrack({ 
+                    width: 1280,  
+                    height: 720,
+                    deviceId: currentCameraId,
+                    name: 'camera'
+                });
+                const tracks = [audioTrack, videoTrack];
+
+                console.log('Created video track:', videoTrack.name, 'enabled:', (videoTrack as any).isEnabled);
+                console.log('Created audio track:', audioTrack.name, 'enabled:', (audioTrack as any).isEnabled);
 
                 const twRoom = await connect(data.token, {
-                    tracks: [audioTrack, videoTrack],
+                    tracks,
+                    bandwidthProfile: {
+                        video: {
+                            mode: 'collaboration',
+                            maxTracks: 2,
+                            dominantSpeakerPriority: 'high'
+                        }
+                    },
+                    dominantSpeaker: true
                 });
                 roomRef.current = twRoom;
+                
+                console.log('Connected to room:', twRoom.name);
+                console.log('Local participant:', twRoom.localParticipant.identity);
+                console.log('Local participant tracks:', twRoom.localParticipant.tracks.size);
+                
+                // Verify tracks are published
+                twRoom.localParticipant.tracks.forEach(publication => {
+                    console.log('Published track:', publication.trackName, 'kind:', publication.track?.kind, 'enabled:', publication.track ? (publication.track as any).isEnabled : 'N/A');
+                });
 
-                // Attach video
-                if (videoContainerRef.current) {
-                    const videoEl = videoTrack.attach() as HTMLVideoElement;
+                // Attach video if available
+                if (videoTrack && videoContainerRef.current) {
+                    clearVideoContainer(videoContainerRef.current);
+                    const videoEl = videoTrack.attach();
                     videoEl.style.width = "100%";
                     videoEl.style.height = "100%";
                     videoEl.style.objectFit = "cover";
-
-                    clearVideoContainer(videoContainerRef.current, videoTrack);
                     videoContainerRef.current.appendChild(videoEl);
                     setCurrentVideoTrack(videoTrack);
+                    console.log('Video track attached to local container');
                 }
 
-                setCurrentAudioTrack(audioTrack);
+                if (audioTrack) {
+                    setCurrentAudioTrack(audioTrack);
+                }
+                
                 setIsConnected(true);
+                setIsStreamStarted(true);
                 setIsRoomConnecting(false);
 
                 twRoom.on("disconnected", () => {
+                    console.log('Room disconnected event triggered');
                     setIsConnected(false);
-                    setIsStreamStarted(false);
                 });
             } catch (error) {
                 console.error("Error starting stream on load:", error);
@@ -195,11 +387,20 @@ const ManageStreamPage: React.FC = () => {
     /** START STREAM (manually) */
     const startStream = useCallback(async () => {
         if (!slug || !currentUser) {
-            console.error("Missing slug or current user");
             return;
         }
-        setIsRoomConnecting(true);
+
         try {
+            setIsRoomConnecting(true);
+            
+            // Update Firestore immediately when starting
+            const streamDocRef = doc(db, "streams", slug);
+            await updateDoc(streamDocRef, {
+                hasStarted: true,
+                hasEnded: false,
+                startedAt: new Date().toISOString()
+            });
+
             const res = await fetch("/api/twilio/token", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -208,46 +409,83 @@ const ManageStreamPage: React.FC = () => {
                     userName: currentUser.username || currentUser.email,
                 }),
             });
+
             const data = await res.json();
             if (!data.token) {
                 throw new Error("No Twilio token returned");
             }
 
-            // Request mic & camera
-            const audioTrack = await createLocalAudioTrack();
-            const videoTrack = await createLocalVideoTrack({ width: 640, height: 360 });
+            // Create tracks silently without showing alerts
+            const audioTrack = await createLocalAudioTrack({
+                deviceId: currentMicId,
+                name: 'microphone'
+            });
+            const videoTrack = await createLocalVideoTrack({ 
+                width: 1280,  
+                height: 720,
+                deviceId: currentCameraId,
+                name: `camera-${currentCameraId?.substring(0, 8) || 'default'}-${Date.now()}`
+            });
+            const tracks = [audioTrack, videoTrack];
+
+            console.log('Created video track:', videoTrack.name, 'enabled:', (videoTrack as any).isEnabled);
+            console.log('Created audio track:', audioTrack.name, 'enabled:', (audioTrack as any).isEnabled);
 
             const twRoom = await connect(data.token, {
-                tracks: [audioTrack, videoTrack],
+                tracks,
+                bandwidthProfile: {
+                    video: {
+                        mode: 'collaboration',
+                        maxTracks: 2,
+                        dominantSpeakerPriority: 'high'
+                    }
+                },
+                dominantSpeaker: true
             });
             roomRef.current = twRoom;
+            
+            console.log('Connected to room:', twRoom.name);
+            console.log('Local participant:', twRoom.localParticipant.identity);
+            console.log('Local participant tracks:', twRoom.localParticipant.tracks.size);
+            
+            // Verify tracks are published
+            twRoom.localParticipant.tracks.forEach(publication => {
+                console.log('Published track:', publication.trackName, 'kind:', publication.track?.kind, 'enabled:', publication.track ? (publication.track as any).isEnabled : 'N/A');
+            });
 
-            await updateDoc(doc(db, "streams", slug), { hasStarted: true });
-
-            if (videoContainerRef.current) {
-                const videoEl = videoTrack.attach() as HTMLVideoElement;
+            // Attach video if available
+            if (videoTrack && videoContainerRef.current) {
+                clearVideoContainer(videoContainerRef.current);
+                const videoEl = videoTrack.attach();
                 videoEl.style.width = "100%";
                 videoEl.style.height = "100%";
                 videoEl.style.objectFit = "cover";
-
-                clearVideoContainer(videoContainerRef.current, videoTrack);
                 videoContainerRef.current.appendChild(videoEl);
                 setCurrentVideoTrack(videoTrack);
+                console.log('Video track attached to local container');
             }
 
-            setCurrentAudioTrack(audioTrack);
+            if (audioTrack) {
+                setCurrentAudioTrack(audioTrack);
+            }
+            
             setIsConnected(true);
             setIsStreamStarted(true);
             setIsRoomConnecting(false);
 
             twRoom.on("disconnected", () => {
+                console.log('Room disconnected event triggered');
                 setIsConnected(false);
-                setIsStreamStarted(false);
             });
         } catch (error) {
             console.error("Error starting stream:", error);
-            alert(`Error starting stream: ${error}`);
             setIsRoomConnecting(false);
+            // Reset Firestore if stream fails to start
+            const streamDocRef = doc(db, "streams", slug);
+            await updateDoc(streamDocRef, {
+                hasStarted: false,
+                hasEnded: false
+            }).catch(console.error);
         }
     }, [slug, currentUser]);
 
@@ -258,7 +496,11 @@ const ManageStreamPage: React.FC = () => {
             setIsConnected(false);
         }
         try {
-            await updateDoc(doc(db, "streams", slug), { hasStarted: false });
+            await updateDoc(doc(db, "streams", slug), {
+                hasStarted: false,
+                hasEnded: true,
+                endedAt: new Date().toISOString()
+            });
             router.push("/dashboard");
         } catch (error) {
             console.error("Error ending stream:", error);
@@ -266,107 +508,158 @@ const ManageStreamPage: React.FC = () => {
     }, [router, slug]);
 
     /** TOGGLE AUDIO */
-    const handleToggleAudio = useCallback(() => {
-        if (currentAudioTrack) {
-            // Enable or disable the local track
-            const wasEnabled = currentAudioTrack.isEnabled;
-            currentAudioTrack.enable(!wasEnabled);
-
-            // Update state
-            setIsAudioEnabled(!wasEnabled);
-            setStreamerStatus((prev) => ({
-                ...prev,
-                audioMuted: wasEnabled, // If it WAS enabled, now it's muted
-            }));
-
-            // Send a quick chat message to indicate the mic state
-            const userName = currentUser?.username || currentUser?.email || "Unknown User";
-            sendChatMessage(
-                slug,
-                userName,
-                !wasEnabled ? "Microphone enabled" : "Microphone muted"
-            );
+    const toggleAudio = useCallback(async () => {
+        if (!currentAudioTrack) return;
+        
+        if (isAudioEnabled) {
+            currentAudioTrack.disable();
+            // Update Firestore
+            const streamRef = doc(db, "streams", slug);
+            await updateDoc(streamRef, {
+                audioMuted: true
+            });
+        } else {
+            currentAudioTrack.enable();
+            // Update Firestore
+            const streamRef = doc(db, "streams", slug);
+            await updateDoc(streamRef, {
+                audioMuted: false
+            });
         }
-    }, [currentAudioTrack, currentUser, slug]);
+        setIsAudioEnabled(!isAudioEnabled);
+    }, [currentAudioTrack, isAudioEnabled, slug]);
 
     /** TOGGLE VIDEO */
-    const handleToggleVideo = useCallback(() => {
-        if (currentVideoTrack) {
-            const wasEnabled = currentVideoTrack.isEnabled;
-            currentVideoTrack.enable(!wasEnabled);
-
-            setIsVideoEnabled(!wasEnabled);
-            setStreamerStatus((prev) => ({
-                ...prev,
-                cameraOff: wasEnabled,
-            }));
-
-            const userName = currentUser?.username || currentUser?.email || "Unknown User";
-            sendChatMessage(
-                slug,
-                userName,
-                !wasEnabled ? "Camera turned ON" : "Camera turned OFF"
-            );
+    const toggleVideo = useCallback(async () => {
+        if (!currentVideoTrack) return;
+        
+        if (isVideoEnabled) {
+            currentVideoTrack.disable();
+            // Update Firestore
+            const streamRef = doc(db, "streams", slug);
+            await updateDoc(streamRef, {
+                cameraOff: true
+            });
+        } else {
+            currentVideoTrack.enable();
+            // Update Firestore
+            const streamRef = doc(db, "streams", slug);
+            await updateDoc(streamRef, {
+                cameraOff: false
+            });
         }
-    }, [currentVideoTrack, currentUser, slug]);
+        setIsVideoEnabled(!isVideoEnabled);
+    }, [currentVideoTrack, isVideoEnabled, slug]);
 
     /** SWITCH CAMERA */
     const switchCamera = useCallback(async (deviceId: string) => {
-        if (!isConnected) {
-            alert("Please wait until fully connected.");
-            return;
-        }
-
-        // Stop and unpublish the current video track
-        if (currentVideoTrack && roomRef.current) {
-            currentVideoTrack.stop();
-            roomRef.current.localParticipant.unpublishTrack(currentVideoTrack);
-        }
-
         try {
-            const newVideoTrack = await createLocalVideoTrack({ deviceId });
-            if (roomRef.current) {
-                await roomRef.current.localParticipant.publishTrack(newVideoTrack);
-            }
+            console.log('Switching camera to device:', deviceId);
+            
+            // Create new video track first to ensure it's ready
+            const newVideoTrack = await createLocalVideoTrack({ 
+                deviceId,
+                width: 1280,
+                height: 720,
+                name: `camera-${deviceId.substring(0, 8)}-${Date.now()}` 
+            });
+            
+            console.log('New video track created successfully with name:', newVideoTrack.name);
+            
+            // Attach to video container first
             if (videoContainerRef.current) {
                 clearVideoContainer(videoContainerRef.current);
-                const videoEl = newVideoTrack.attach() as HTMLVideoElement;
+                const videoEl = newVideoTrack.attach();
                 videoEl.style.width = "100%";
                 videoEl.style.height = "100%";
                 videoEl.style.objectFit = "cover";
                 videoContainerRef.current.appendChild(videoEl);
+                console.log('New video track attached to local container');
             }
+            
+            // Publish new track BEFORE unpublishing old track to minimize gap
+            if (roomRef.current && roomRef.current.localParticipant) {
+                console.log('Publishing new video track to room');
+                
+                // First, check if we need to unpublish any old tracks with the same name pattern
+                const publications = Array.from(roomRef.current.localParticipant.tracks.values());
+                for (const publication of publications) {
+                    if (publication.track && publication.track.kind === 'video' && publication.track !== currentVideoTrack) {
+                        console.log(`Found old video track that wasn't properly cleaned up: ${publication.trackName}`);
+                        await roomRef.current.localParticipant.unpublishTrack(publication.track);
+                        publication.track.stop();
+                    }
+                }
+                
+                // Now publish the new track
+                await roomRef.current.localParticipant.publishTrack(newVideoTrack);
+                console.log('New video track published successfully');
+                
+                // Small delay before unpublishing old track
+                if (currentVideoTrack) {
+                    console.log('Waiting briefly before unpublishing old track');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    console.log('Unpublishing old video track:', currentVideoTrack.name);
+                    await roomRef.current.localParticipant.unpublishTrack(currentVideoTrack);
+                    currentVideoTrack.stop();
+                    console.log('Old video track unpublished and stopped');
+                }
+            }
+
             setCurrentVideoTrack(newVideoTrack);
+            setCurrentCameraId(deviceId);
+            setShowCameraOptions(false);
+
+            // Save preference to Firestore
+            const streamRef = doc(db, "streams", slug);
+            await updateDoc(streamRef, {
+                currentCameraId: deviceId
+            });
+            
+            console.log('Camera switch completed successfully');
+
         } catch (error) {
             console.error("Error switching camera:", error);
         }
-        setShowCameraOptions(false);
-    }, [currentVideoTrack, isConnected]);
+    }, [currentVideoTrack, slug]);
 
     /** SWITCH MIC */
     const switchMic = useCallback(async (deviceId: string) => {
-        if (!isConnected) {
-            alert("Please wait until fully connected.");
-            return;
-        }
-
-        // Stop and unpublish the current audio track
-        if (currentAudioTrack && roomRef.current) {
-            currentAudioTrack.stop();
-            roomRef.current.localParticipant.unpublishTrack(currentAudioTrack);
-        }
-
         try {
-            const newAudioTrack = await createLocalAudioTrack({ deviceId });
-            if (roomRef.current) {
+            // Create new audio track first
+            const newAudioTrack = await createLocalAudioTrack({
+                deviceId,
+                name: 'microphone'
+            });
+
+            // Only after new track is ready, stop and unpublish the old one
+            if (currentAudioTrack) {
+                if (roomRef.current && roomRef.current.localParticipant) {
+                    await roomRef.current.localParticipant.unpublishTrack(currentAudioTrack);
+                }
+                currentAudioTrack.stop();
+            }
+
+            // Publish to room if connected
+            if (roomRef.current && roomRef.current.localParticipant) {
                 await roomRef.current.localParticipant.publishTrack(newAudioTrack);
             }
+
             setCurrentAudioTrack(newAudioTrack);
+            setCurrentMicId(deviceId);
+            setShowMicOptions(false);
+
+            // Save preference to Firestore
+            const streamRef = doc(db, "streams", slug);
+            await updateDoc(streamRef, {
+                currentMicId: deviceId
+            });
+
         } catch (error) {
-            console.error("Error switching mic:", error);
+            console.error("Error switching microphone:", error);
         }
-        setShowMicOptions(false);
-    }, [currentAudioTrack, isConnected]);
+    }, [currentAudioTrack, slug]);
 
     /** SEND CHAT MESSAGE */
     const handleSendMessage = useCallback(
@@ -393,6 +686,65 @@ const ManageStreamPage: React.FC = () => {
         setTimeout(() => setShowEndConfirmation(false), 300);
     };
 
+    // Add track status handlers
+    useEffect(() => {
+        if (!currentVideoTrack && !currentAudioTrack) return;
+
+        const handleTrackStatus = (track: LocalTrack) => {
+            if (track.kind === 'video') {
+                setStreamerStatus(prev => ({
+                    ...prev,
+                    cameraOff: !track.isEnabled
+                }));
+            } else if (track.kind === 'audio') {
+                setStreamerStatus(prev => ({
+                    ...prev,
+                    audioMuted: !track.isEnabled
+                }));
+            }
+        };
+
+        const handleVideoDisabled = () => {
+            if (currentVideoTrack) handleTrackStatus(currentVideoTrack);
+        };
+        
+        const handleAudioDisabled = () => {
+            if (currentAudioTrack) handleTrackStatus(currentAudioTrack);
+        };
+
+        currentVideoTrack?.on('disabled', handleVideoDisabled);
+        currentVideoTrack?.on('enabled', handleVideoDisabled);
+        currentAudioTrack?.on('disabled', handleAudioDisabled);
+        currentAudioTrack?.on('enabled', handleAudioDisabled);
+
+        return () => {
+            currentVideoTrack?.off('disabled', handleVideoDisabled);
+            currentVideoTrack?.off('enabled', handleVideoDisabled);
+            currentAudioTrack?.off('disabled', handleAudioDisabled);
+            currentAudioTrack?.off('enabled', handleAudioDisabled);
+        };
+    }, [currentVideoTrack, currentAudioTrack]);
+
+    // Add track quality management
+    useEffect(() => {
+        if (!roomRef.current || !currentVideoTrack) return;
+        
+        try {
+            // Set encoding parameters for better quality
+            if ('setParameters' in currentVideoTrack) {
+                (currentVideoTrack as any).setParameters({
+                    encodingMode: "auto",
+                    renderDimensions: {
+                        width: 1280,
+                        height: 720
+                    }
+                });
+            }
+        } catch (error) {
+            console.error("Error setting track parameters:", error);
+        }
+    }, [currentVideoTrack]);
+
     if (loading) {
         return null;
     }
@@ -416,10 +768,12 @@ const ManageStreamPage: React.FC = () => {
                 </div>
             </header>
 
-            <div className="flex flex-1">
+            <div className="flex flex-1 h-[calc(100vh-4rem)]">
                 {/* Side Navigation */}
                 <nav className="w-20 bg-brandBlack border-r border-brandOrange flex flex-col items-center py-4 space-y-4">
-                    <div className="w-12 h-12 rounded-full bg-brandWhite"></div>
+                    <div className="w-12 h-12 rounded-full bg-brandWhite overflow-hidden">
+                        <img src={streamData?.thumbnailUrl || ""} alt="Stream Thumbnail" className="w-full h-full object-cover" />
+                    </div>
                     <div className="w-12 h-12 rounded-full bg-brandWhite opacity-50"></div>
                     <div className="w-12 h-12 rounded-full bg-brandWhite opacity-75"></div>
                     <div className="w-12 h-12 rounded-full bg-brandWhite opacity-50"></div>
@@ -429,112 +783,113 @@ const ManageStreamPage: React.FC = () => {
                 <main className="flex-1 flex flex-col md:flex-row">
                     {/* Video Section */}
                     <div className="flex-1 p-4 relative">
-                        {!isStreamStarted && (
-                            <div className="mb-4">
-                                <Button
-                                    type="button"
-                                    onClick={startStream}
-                                    className="bg-brandOrange text-brandBlack"
-                                >
-                                    Start Stream (Enable Mic/Camera)
-                                </Button>
-                            </div>
-                        )}
-                        <div
-                            ref={videoContainerRef}
-                            className="bg-black w-full h-[60vh] md:h-[75vh] rounded-lg shadow-lg overflow-hidden relative flex items-center justify-center"
-                        >
-                            {isRoomConnecting && (
-                                <p className="absolute text-brandOrange text-xl font-bold">
-                                    Connecting...
-                                </p>
-                            )}
-                            {streamerStatus.audioMuted && (
-                                <div className="absolute bottom-2 right-2 bg-black/80 p-1 rounded-full">
-                                    <MicOff className="h-6 w-6 text-red-500" />
+                        <div className="relative bg-black w-full h-full rounded-lg overflow-hidden">
+                            <div ref={videoContainerRef} className="w-full h-full" />
+
+                            {/* Stream Controls - Only show if stream has started */}
+                            {isStreamStarted && !isRoomConnecting && (
+                                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-black/50 p-3 rounded-lg">
+                                    <div className="relative">
+                                        <button
+                                            onClick={toggleAudio}
+                                            className="p-3 rounded-full bg-brandOrange hover:bg-brandOrange/80 transition-colors"
+                                        >
+                                            {isAudioEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+                                        </button>
+                                        <button
+                                            onClick={() => setShowMicOptions(!showMicOptions)}
+                                            className="absolute -right-1 -top-1 p-1 rounded-md bg-orange-100 hover:bg-orange-200 transition-colors"
+                                        >
+                                            <ChevronUp className="w-3 h-3 text-orange-600" />
+                                        </button>
+                                        {showMicOptions && (
+                                            <div className="absolute bottom-full left-0 mb-2 w-48 bg-neutral-800 rounded-lg shadow-lg overflow-hidden z-50">
+                                                {micDevices.map((device) => (
+                                                    <button
+                                                        key={device.deviceId}
+                                                        onClick={() => {
+                                                            switchMic(device.deviceId);
+                                                            setShowMicOptions(false);
+                                                        }}
+                                                        className={`w-full px-4 py-2 text-left text-sm hover:bg-brandOrange/20 flex items-center justify-between ${
+                                                            currentMicId === device.deviceId ? 'bg-brandOrange/10' : ''
+                                                        }`}
+                                                    >
+                                                        <span className="truncate">{device.label}</span>
+                                                        {currentMicId === device.deviceId && (
+                                                            <Check className="w-4 h-4 text-brandOrange flex-shrink-0 ml-2" />
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="relative">
+                                        <button
+                                            onClick={toggleVideo}
+                                            className="p-3 rounded-full bg-brandOrange hover:bg-brandOrange/80 transition-colors"
+                                        >
+                                            {isVideoEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+                                        </button>
+                                        <button
+                                            onClick={() => setShowCameraOptions(!showCameraOptions)}
+                                            className="absolute -right-1 -top-1 p-1 rounded-md bg-orange-100 hover:bg-orange-200 transition-colors"
+                                        >
+                                            <ChevronUp className="w-3 h-3 text-orange-600" />
+                                        </button>
+                                        {showCameraOptions && (
+                                            <div className="absolute bottom-full left-0 mb-2 w-48 bg-neutral-800 rounded-lg shadow-lg overflow-hidden z-50">
+                                                {cameraDevices.map((device) => (
+                                                    <button
+                                                        key={device.deviceId}
+                                                        onClick={() => {
+                                                            switchCamera(device.deviceId);
+                                                            setShowCameraOptions(false);
+                                                        }}
+                                                        className={`w-full px-4 py-2 text-left text-sm hover:bg-brandOrange/20 flex items-center justify-between ${
+                                                            currentCameraId === device.deviceId ? 'bg-brandOrange/10' : ''
+                                                        }`}
+                                                    >
+                                                        <span className="truncate">{device.label}</span>
+                                                        {currentCameraId === device.deviceId && (
+                                                            <Check className="w-4 h-4 text-brandOrange flex-shrink-0 ml-2" />
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <Button
+                                        onClick={openModal}
+                                        className="rounded-full bg-red-500 text-white shadow-lg px-6 py-2"
+                                    >
+                                        End Stream
+                                    </Button>
                                 </div>
                             )}
-                            {streamerStatus.cameraOff && (
-                                <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
-                                    <p className="text-brandOrange text-xl font-bold">
-                                        Camera is currently off
-                                    </p>
+
+                            {/* Start Stream Button - Only show if stream hasn't started */}
+                            {!isStreamStarted && !isRoomConnecting && (
+                                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+                                    <Button
+                                        onClick={startStream}
+                                        className="bg-brandOrange text-white px-6 py-2 rounded-full"
+                                    >
+                                        Start Stream
+                                    </Button>
                                 </div>
                             )}
                         </div>
 
-                        {isStreamStarted && !isRoomConnecting && (
-                            <div className="mt-2 space-x-2 flex items-center justify-center flex-wrap gap-2">
-                                <div className="relative">
-                                    {/* Toggle Mic */}
-                                    <Button
-                                        onClick={handleToggleAudio}
-                                        className="rounded-full bg-brandOrange text-white shadow-lg px-6 py-2 transition duration-200 hover:scale-105"
-                                    >
-                                        {isAudioEnabled ? <Mic /> : <MicOff />}
-                                    </Button>
-
-                                    {/* Option to switch mic device */}
-                                    <Button
-                                        onClick={() => setShowMicOptions((prev) => !prev)}
-                                        className="ml-2 rounded-full bg-brandOrange text-white shadow-lg px-4 py-2 transition duration-200 hover:scale-105"
-                                    >
-                                        Devices
-                                    </Button>
-                                    {showMicOptions && (
-                                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-brandBlack border border-brandOrange rounded-xl shadow-xl z-50">
-                                            {micDevices.map((device) => (
-                                                <Button
-                                                    key={device.deviceId}
-                                                    onClick={() => switchMic(device.deviceId)}
-                                                    className="w-full justify-start text-sm bg-transparent hover:bg-brandOrange hover:text-white rounded-xl px-3 py-2"
-                                                >
-                                                    🎤 {device.label || "Unnamed Mic"}
-                                                </Button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Toggle Video */}
-                                <Button
-                                    onClick={handleToggleVideo}
-                                    className="rounded-full bg-brandOrange text-white shadow-lg px-6 py-2 transition duration-200 hover:scale-105"
-                                >
-                                    {isVideoEnabled ? <Video /> : <VideoOff />}
-                                </Button>
-
-                                {/* Switch Camera */}
-                                <div className="relative">
-                                    <Button
-                                        onClick={() => setShowCameraOptions((prev) => !prev)}
-                                        className="rounded-full bg-brandOrange text-white shadow-lg p-3 transition duration-200 hover:scale-110"
-                                    >
-                                        <Camera />
-                                    </Button>
-                                    {showCameraOptions && (
-                                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-brandBlack border border-brandOrange rounded-xl shadow-xl z-50">
-                                            {cameraDevices.map((device) => (
-                                                <Button
-                                                    key={device.deviceId}
-                                                    onClick={() => switchCamera(device.deviceId)}
-                                                    className="w-full justify-start text-sm bg-transparent hover:bg-brandOrange hover:text-white rounded-xl px-3 py-2"
-                                                >
-                                                    📷 {device.label || "Unnamed Camera"}
-                                                </Button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <Button
-                                    onClick={openModal}
-                                    className="rounded-full bg-red-500 text-white shadow-lg px-6 py-2 transition duration-200 hover:scale-105"
-                                >
-                                    End Stream
-                                </Button>
-                            </div>
+                        {isRoomConnecting && (
+                            <p className="absolute text-brandOrange text-xl font-bold">
+                                Connecting...
+                            </p>
                         )}
+
+                        {/* Removing the camera off overlay as requested */}
                     </div>
 
                     {/* Chat Panel */}
@@ -546,7 +901,8 @@ const ManageStreamPage: React.FC = () => {
                                 }
                             />
                         </div>
-                        <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-[300px] md:max-h-none">
+
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2">
                             {messages.map((msg) => (
                                 <div key={msg.id} className="bg-brandBlack p-2 rounded-md text-sm">
                                     <strong className="text-brandOrange">{msg.userName}:</strong>{" "}
@@ -554,75 +910,59 @@ const ManageStreamPage: React.FC = () => {
                                 </div>
                             ))}
                         </div>
-                        <form
-                            onSubmit={handleSendMessage}
-                            className="relative p-2 border-t border-brandOrange flex items-center"
-                        >
-                            <Input
-                                className="flex-1 border border-brandOrange mr-2 bg-brandBlack text-brandWhite"
-                                value={newMessage}
-                                onChange={(e) => setNewMessage(e.target.value)}
-                                placeholder="Type your message..."
-                            />
-                            <Button
-                                type="button"
-                                onClick={() => setShowEmojiPicker((prev) => !prev)}
-                                className="px-2 py-1 bg-brandGray rounded"
-                            >
-                                😊
-                            </Button>
-                            <Button
-                                type="submit"
-                                className="bg-brandOrange text-brandBlack ml-2"
-                            >
-                                Send
-                            </Button>
+
+                        <div className="p-4 border-t border-brandOrange">
+                            <form onSubmit={handleSendMessage} className="relative">
+                                <Input
+                                    value={newMessage}
+                                    onChange={(e) => setNewMessage(e.target.value)}
+                                    placeholder="Type a message..."
+                                    className="pr-10"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2"
+                                >
+                                    😊
+                                </button>
+                            </form>
                             {showEmojiPicker && (
-                                <div className="absolute bottom-full mb-2 right-0 z-50">
+                                <div className="absolute bottom-full right-4 mb-2">
                                     <EmojiPicker
-                                        onEmojiClick={(emojiData) =>
-                                            setNewMessage((prev) => prev + emojiData.emoji)
-                                        }
-                                        theme={"dark" as Theme}
-                                        width={320}
+                                        theme={Theme.DARK}
+                                        onEmojiClick={(emoji) => {
+                                            setNewMessage((prev) => prev + emoji.emoji);
+                                            setShowEmojiPicker(false);
+                                        }}
                                     />
                                 </div>
                             )}
-                        </form>
+                        </div>
                     </div>
                 </main>
             </div>
 
             {/* End Stream Confirmation Modal */}
             {showEndConfirmation && (
-                <div
-                    className={`fixed inset-0 z-50 flex items-center justify-center bg-black transition-all duration-300 ${
-                        modalOpacity ? "bg-opacity-50 opacity-100" : "bg-opacity-0 opacity-0"
-                    }`}
-                >
-                    <div
-                        className={`bg-white p-6 rounded-md shadow-lg text-center transform transition-all duration-300 ${
-                            modalOpacity ? "scale-100 opacity-100" : "scale-95 opacity-0"
-                        }`}
-                    >
-                        <p className="text-2xl font-bold text-brandBlack mb-4">
-                            Are you sure you want to end the stream?
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+                    <div className="bg-brandGray p-6 rounded-lg max-w-md w-full mx-4">
+                        <h2 className="text-xl font-semibold mb-4">End Stream?</h2>
+                        <p className="text-gray-300 mb-6">
+                            Are you sure you want to end the stream? This cannot be undone.
                         </p>
-                        <div className="space-x-4">
-                            <Button
-                                onClick={() => {
-                                    closeModal();
-                                    endStream();
-                                }}
-                                className="bg-brandOrange text-white rounded px-4 py-2"
-                            >
-                                Yes, End Stream
-                            </Button>
+                        <div className="flex justify-end gap-4">
                             <Button
                                 onClick={closeModal}
-                                className="bg-brandGray text-brandBlack rounded px-4 py-2"
+                                className="bg-gray-600 hover:bg-gray-700"
                             >
                                 Cancel
+                            </Button>
+                            <Button
+                                onClick={endStream}
+                                className="bg-red-500 hover:bg-red-600"
+                            >
+                                End Stream
                             </Button>
                         </div>
                     </div>
