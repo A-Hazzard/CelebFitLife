@@ -125,16 +125,20 @@ const ManageStreamPage: React.FC = () => {
   // Listen for chat messages
   useEffect(() => {
     if (!slug) return;
-    const unsubscribe = listenToMessages(slug, (msgs: ChatMessage[]) => {
-      setMessages(msgs);
-    });
-    return () => {
-      unsubscribe();
-      if (roomRef.current) {
-        roomRef.current.disconnect();
+  
+    const unsub = onSnapshot(doc(db, "streams", slug), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setStreamerStatus({
+          audioMuted: data.audioMuted ?? false,
+          cameraOff: data.cameraOff ?? false,
+        });
       }
-    };
+    });
+  
+    return () => unsub();
   }, [slug]);
+  
 
   // Update Firestore with stream status
   useEffect(() => {
@@ -270,7 +274,7 @@ const ManageStreamPage: React.FC = () => {
     const setupStream = async () => {
         try {
             console.log('Setting up stream...');
-            const { data } = await axios.post("/api/twilio/token", {
+            const { data } = await axios.post("/api/twilio/connect", {
                 roomName: slug,
                 userName: currentUser.username || currentUser.email,
             });
@@ -388,7 +392,7 @@ const ManageStreamPage: React.FC = () => {
     const startStreamOnLoad = async () => {
       try {
         setIsRoomConnecting(true);
-        const res = await fetch("/api/twilio/token", {
+        const res = await fetch("/api/twilio/connect", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -467,7 +471,7 @@ const ManageStreamPage: React.FC = () => {
         startedAt: new Date().toISOString(),
       });
 
-      const res = await fetch("/api/twilio/token", {
+      const res = await fetch("/api/twilio/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -777,120 +781,136 @@ const ManageStreamPage: React.FC = () => {
       <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-4rem)]">
         {/* Video Section */}
         <div className="flex-1 p-4 relative">
-          <div className="relative bg-black w-full h-full rounded-lg overflow-hidden">
-            <div ref={videoContainerRef} className="w-full h-full" />
+        <div className="relative bg-black w-full h-full rounded-lg overflow-hidden">
+  <div ref={videoContainerRef} className="w-full h-full" />
 
-            {/* Stream Controls */}
-            {isStreamStarted && !isRoomConnecting && (
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-black/50 p-3 rounded-lg">
-                {/* Audio Controls */}
-                <div className="relative">
-                  <button
-                    onClick={toggleAudio}
-                    className="p-3 rounded-full bg-brandOrange hover:bg-brandOrange/80 transition-colors"
-                  >
-                    {isAudioEnabled ? (
-                      <Mic className="w-5 h-5" />
-                    ) : (
-                      <MicOff className="w-5 h-5" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setShowMicOptions(!showMicOptions)}
-                    className="absolute -right-1 -top-1 p-1 rounded-md bg-orange-100 hover:bg-orange-200 transition-colors"
-                  >
-                    <ChevronUp className="w-3 h-3 text-orange-600" />
-                  </button>
-                  {showMicOptions && (
-                    <div className="absolute bottom-full left-0 mb-2 w-48 bg-neutral-800 rounded-lg shadow-lg overflow-hidden z-50">
-                      {micDevices.map((device) => (
-                        <button
-                          key={device.deviceId}
-                          onClick={() => {
-                            switchMic(device.deviceId);
-                            setShowMicOptions(false);
-                          }}
-                          className={`w-full px-4 py-2 text-left text-sm hover:bg-brandOrange/20 flex items-center justify-between ${
-                            currentMicId === device.deviceId
-                              ? "bg-brandOrange/10"
-                              : ""
-                          }`}
-                        >
-                          <span className="truncate">{device.label}</span>
-                          {currentMicId === device.deviceId && (
-                            <Check className="w-4 h-4 text-brandOrange flex-shrink-0 ml-2" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+  {/* 🔥 Overlays for streamer status */}
+  {streamerStatus?.cameraOff && (
+    <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-20">
+      <VideoOff className="w-10 h-10 text-brandOrange mb-2" />
+      <p className="text-brandOrange text-xl font-semibold">Camera is Off</p>
+    </div>
+  )}
 
-                {/* Video Controls */}
-                <div className="relative">
-                  <button
-                    onClick={toggleVideo}
-                    className="p-3 rounded-full bg-brandOrange hover:bg-brandOrange/80 transition-colors"
-                  >
-                    {isVideoEnabled ? (
-                      <Video className="w-5 h-5" />
-                    ) : (
-                      <VideoOff className="w-5 h-5" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setShowCameraOptions(!showCameraOptions)}
-                    className="absolute -right-1 -top-1 p-1 rounded-md bg-orange-100 hover:bg-orange-200 transition-colors"
-                  >
-                    <ChevronUp className="w-3 h-3 text-orange-600" />
-                  </button>
-                  {showCameraOptions && (
-                    <div className="absolute bottom-full left-0 mb-2 w-48 bg-neutral-800 rounded-lg shadow-lg overflow-hidden z-50">
-                      {cameraDevices.map((device) => (
-                        <button
-                          key={device.deviceId}
-                          onClick={() => {
-                            switchCamera(device.deviceId);
-                            setShowCameraOptions(false);
-                          }}
-                          className={`w-full px-4 py-2 text-left text-sm hover:bg-brandOrange/20 flex items-center justify-between ${
-                            currentCameraId === device.deviceId
-                              ? "bg-brandOrange/10"
-                              : ""
-                          }`}
-                        >
-                          <span className="truncate">{device.label}</span>
-                          {currentCameraId === device.deviceId && (
-                            <Check className="w-4 h-4 text-brandOrange flex-shrink-0 ml-2" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+  {streamerStatus?.audioMuted && (
+    <div className="absolute top-4 left-4 bg-black/60 px-3 py-1 rounded-full flex items-center gap-2 z-30">
+      <MicOff className="text-brandOrange w-4 h-4" />
+      <span className="text-sm text-brandOrange">Audio Muted</span>
+    </div>
+  )}
 
-                {/* End Stream Button */}
-                <Button
-                  onClick={openModal}
-                  className="rounded-full bg-red-500 text-white shadow-lg px-6 py-2"
-                >
-                  End Stream
-                </Button>
-              </div>
-            )}
-
-            {/* Start Stream Button */}
-            {!isStreamStarted && !isRoomConnecting && (
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-                <Button
-                  onClick={startStream}
-                  className="bg-brandOrange text-white px-6 py-2 rounded-full"
-                >
-                  Start Stream
-                </Button>
-              </div>
-            )}
+  {/* 🔧 Stream Controls (Streamer only) */}
+  {isStreamStarted && !isRoomConnecting && (
+    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-black/50 p-3 rounded-lg z-40">
+      {/* 🎤 Audio Toggle */}
+      <div className="relative">
+        <button
+          onClick={toggleAudio}
+          className="p-3 rounded-full bg-brandOrange hover:bg-brandOrange/80 transition-colors"
+        >
+          {isAudioEnabled ? (
+            <Mic className="w-5 h-5" />
+          ) : (
+            <MicOff className="w-5 h-5" />
+          )}
+        </button>
+        <button
+          onClick={() => setShowMicOptions(!showMicOptions)}
+          className="absolute -right-1 -top-1 p-1 rounded-md bg-orange-100 hover:bg-orange-200 transition-colors"
+        >
+          <ChevronUp className="w-3 h-3 text-orange-600" />
+        </button>
+        {showMicOptions && (
+          <div className="absolute bottom-full left-0 mb-2 w-48 bg-neutral-800 rounded-lg shadow-lg overflow-hidden z-50">
+            {micDevices.map((device) => (
+              <button
+                key={device.deviceId}
+                onClick={() => {
+                  switchMic(device.deviceId);
+                  setShowMicOptions(false);
+                }}
+                className={`w-full px-4 py-2 text-left text-sm hover:bg-brandOrange/20 flex items-center justify-between ${
+                  currentMicId === device.deviceId
+                    ? "bg-brandOrange/10"
+                    : ""
+                }`}
+              >
+                <span className="truncate">{device.label}</span>
+                {currentMicId === device.deviceId && (
+                  <Check className="w-4 h-4 text-brandOrange flex-shrink-0 ml-2" />
+                )}
+              </button>
+            ))}
           </div>
+        )}
+      </div>
+
+      {/* 📷 Video Toggle */}
+      <div className="relative">
+        <button
+          onClick={toggleVideo}
+          className="p-3 rounded-full bg-brandOrange hover:bg-brandOrange/80 transition-colors"
+        >
+          {isVideoEnabled ? (
+            <Video className="w-5 h-5" />
+          ) : (
+            <VideoOff className="w-5 h-5" />
+          )}
+        </button>
+        <button
+          onClick={() => setShowCameraOptions(!showCameraOptions)}
+          className="absolute -right-1 -top-1 p-1 rounded-md bg-orange-100 hover:bg-orange-200 transition-colors"
+        >
+          <ChevronUp className="w-3 h-3 text-orange-600" />
+        </button>
+        {showCameraOptions && (
+          <div className="absolute bottom-full left-0 mb-2 w-48 bg-neutral-800 rounded-lg shadow-lg overflow-hidden z-50">
+            {cameraDevices.map((device) => (
+              <button
+                key={device.deviceId}
+                onClick={() => {
+                  switchCamera(device.deviceId);
+                  setShowCameraOptions(false);
+                }}
+                className={`w-full px-4 py-2 text-left text-sm hover:bg-brandOrange/20 flex items-center justify-between ${
+                  currentCameraId === device.deviceId
+                    ? "bg-brandOrange/10"
+                    : ""
+                }`}
+              >
+                <span className="truncate">{device.label}</span>
+                {currentCameraId === device.deviceId && (
+                  <Check className="w-4 h-4 text-brandOrange flex-shrink-0 ml-2" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 🔴 End Stream Button */}
+      <Button
+        onClick={openModal}
+        className="rounded-full bg-red-500 text-white shadow-lg px-6 py-2"
+      >
+        End Stream
+      </Button>
+    </div>
+  )}
+
+  {/* ▶️ Start Stream Button */}
+  {!isStreamStarted && !isRoomConnecting && (
+    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-40">
+      <Button
+        onClick={startStream}
+        className="bg-brandOrange text-white px-6 py-2 rounded-full"
+      >
+        Start Stream
+      </Button>
+    </div>
+  )}
+</div>
+
 
           {/* Buffering Indicator */}
           {isBuffering && (

@@ -215,7 +215,8 @@ export default function LiveViewPage() {
                     element.setAttribute('data-track-sid', track.sid);
                     element.setAttribute('autoplay', 'true');
                     element.setAttribute('playsinline', 'true');
-                    
+                    element.muted = true; // 👈🏽 Add this bad boy here
+
                     // Attach the track to the element
                     videoTrack.attach(element);
                     
@@ -225,9 +226,16 @@ export default function LiveViewPage() {
                     
                     // Force play if needed
                     try {
-                        element.play().catch(playError => {
-                            console.warn('Error auto-playing video:', playError);
-                        });
+                        if (element.muted) {
+                            // Safe to auto-play if muted
+                            element.play().catch((err) => {
+                              console.warn("Autoplay blocked even while muted:", err);
+                            });
+                          } else {
+                            // Wait for user gesture (e.g., on click)
+                            console.warn("Not auto-playing video with audio. Waiting for interaction.");
+                          }
+                          
                     } catch (playError) {
                         console.warn('Error calling play():', playError);
                     }
@@ -577,7 +585,7 @@ export default function LiveViewPage() {
                 }
 
                 console.log(`Connecting to room (attempt ${connectAttempts}):`, slug);
-                const response = await fetch('/api/twilio/token', {
+                const response = await fetch('/api/twilio/connect', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -693,10 +701,13 @@ export default function LiveViewPage() {
         };
 
         const handleSubscribed = (track: RemoteTrack, publication: RemoteTrackPublication) => {
-            if (!publication || !track) {
-                console.warn('handleSubscribed called with undefined publication or track');
+            if (!track || !publication) {
+                console.warn('[🔇] handleSubscribed called with undefined track or publication:', {
+                  track,
+                  publication
+                });
                 return;
-            }
+              }
 
             console.log('Track subscribed event:', publication.trackName || 'unknown');
             handleTrackStatus(publication);
