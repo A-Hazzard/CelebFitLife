@@ -61,13 +61,9 @@ function RemoteAudioPlayer({ track }: { track: RemoteAudioTrack | null }) {
 }
 
 // Type guards
-function isRemoteVideoTrack(track: RemoteTrack): track is RemoteVideoTrack {
-    return track.kind === "video";
-}
+function isRemoteVideoTrack(track: RemoteTrack): track is RemoteVideoTrack { return track.kind === "video";}
 
-function isRemoteAudioTrack(track: RemoteTrack): track is RemoteAudioTrack {
-    return track.kind === "audio";
-}
+function isRemoteAudioTrack(track: RemoteTrack): track is RemoteAudioTrack { return track.kind === "audio";}
 
 export default function LiveViewPage() {
     const pathname = usePathname();
