@@ -82,13 +82,9 @@ export async function signUpUser({
  * Once verified, fetch user doc from Firestore, create a User instance, and store in Zustand.
  */
 export async function loginWithEmailPassword(email: string, password: string) {
+  // Alternative implementation without email verification
   const userCred = await signInWithEmailAndPassword(auth, email, password);
   console.log('logging in');
-  if (!userCred.user.emailVerified) {
-    await signOut(auth);
-    throw new Error('Your email is not verified. Please check your inbox.');
-  }
-  console.log('verified')
 
   // Fetch user doc from Firestore for additional profile info
   const docRef = doc(db, 'users', userCred.user.uid);
@@ -109,6 +105,7 @@ export async function loginWithEmailPassword(email: string, password: string) {
     country: userData.country,
     city: userData.city,
     age: userData.age,
+    isStreamer: userData.isStreamer,
     // add more fields if needed
   });
 

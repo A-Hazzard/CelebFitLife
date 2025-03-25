@@ -12,6 +12,6 @@ export type UserData = {
     country?: string;
     city?: string;
     age?: number;
+    isStreamer?: boolean;
     // Add any extra fields you want for the user's profile
   };
-  

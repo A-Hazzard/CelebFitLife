@@ -9,6 +9,7 @@ import { useState } from "react";
 
 export default function BasicInfo() {
   const { nextStep } = useSignupStore();
+  const router = useRouter();
 
   // Local state for form fields
   const [username, setUsername] = useState('');
@@ -70,8 +71,6 @@ export default function BasicInfo() {
           age: ageNum,
         });
 
-        // ✅ Redirect to login after successful signup
-        router.push("/login?verification=sent");
       } catch (error: unknown) {
         console.error('Registration error:', error);
         const message = error instanceof Error ? error.message : 'Failed to register. Please try again.';
@@ -90,7 +89,7 @@ export default function BasicInfo() {
   };
 
   return (
-    <div>
+    <div className="max-w-md mx-auto">
       <h1 className="text-4xl font-edo text-brandOrange mb-6 text-center">Sign Up</h1>
       {error && <p className="text-brandOrange mb-2">{error}</p>}
 
@@ -156,7 +155,7 @@ export default function BasicInfo() {
 
         <Button
           type="submit"
-          className="bg-brandOrange text-brandBlack font-semibold py-2 mt-4 rounded disabled:bg-opacity-50"
+          className="w-full bg-brandOrange text-brandBlack font-semibold py-2 mt-4 rounded disabled:bg-opacity-50"
           disabled={loading}
         >
           {loading ? 'Signing Up...' : 'Next'}

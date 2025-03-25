@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Dumbbell, Clock, Calendar, Flame } from 'lucide-react';
+import { searchUserByUsername } from '@/lib/services/UserService';
 
 // Sample workout history data
 const workoutHistoryData = [
@@ -32,12 +33,24 @@ const workoutHistoryData = [
   }
 ];
 
-export default function WorkoutHistory() {
+interface WorkoutHistoryProps {
+  searchedUser?: {
+    displayName: string;
+    isStreamer: boolean;
+  };
+}
+
+const WorkoutHistoryComponent = ({ searchedUser }: WorkoutHistoryProps) => {
   return (
     <div className="bg-brandGray/10 rounded-lg p-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-brandWhite flex items-center">
           <Dumbbell className="mr-2" /> Workout History
+          {searchedUser && (
+            <span className="ml-2 text-sm text-brandGray">
+              for {searchedUser.displayName}
+            </span>
+          )}
         </h2>
         <span className="text-sm text-brandGray">
           Total Workouts: {workoutHistoryData.length}
@@ -104,6 +117,80 @@ export default function WorkoutHistory() {
           View More Workouts
         </button>
       </div>
+    </div>
+  );
+};
+
+export default function WorkoutHistory() {
+  const [searchUsername, setSearchUsername] = useState('');
+  const [searchedUser, setSearchedUser] = useState<any>(null);
+  const [searchError, setSearchError] = useState('');
+
+  const handleUserSearch = async () => {
+    try {
+      setSearchError('');
+      const user = await searchUserByUsername(searchUsername);
+      
+      if (user) {
+        setSearchedUser(user);
+      } else {
+        setSearchError('No user found with that username');
+        setSearchedUser(null);
+      }
+    } catch (error) {
+      setSearchError('Error searching for user');
+      setSearchedUser(null);
+    }
+  };
+
+  return (
+    <div>
+      {/* User Search Bar */}
+      <div className="mb-6 flex">
+        <input 
+          type="text" 
+          value={searchUsername}
+          onChange={(e) => setSearchUsername(e.target.value)}
+          placeholder="Search user by username"
+          className="flex-grow p-2 mr-2 bg-brandBlack/50 text-brandWhite rounded"
+        />
+        <button 
+          onClick={handleUserSearch}
+          className="bg-brandOrange hover:bg-brandOrange/80 text-brandWhite p-2 rounded"
+        >
+          Search
+        </button>
+      </div>
+
+      {/* Search Error */}
+      {searchError && (
+        <div className="text-red-500 mb-4">{searchError}</div>
+      )}
+
+      {/* Searched User Info */}
+      {searchedUser && (
+        <div className="mb-6 bg-brandBlack/50 p-4 rounded-lg">
+          <h2 className="text-xl font-bold text-brandWhite mb-4">Searched User Profile</h2>
+          <div className="flex items-center">
+            <div className="mr-4">
+              <img 
+                src="/default-profile.jpg" 
+                alt={`${searchedUser.displayName}'s profile`} 
+                className="w-16 h-16 rounded-full object-cover"
+              />
+            </div>
+            <div>
+              <h3 className="text-brandWhite font-semibold">{searchedUser.displayName}</h3>
+              <p className="text-brandGray text-sm">{searchedUser.email}</p>
+              <span className="text-sm text-brandOrange">
+                {searchedUser.isStreamer ? 'Streamer' : 'Viewer'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <WorkoutHistoryComponent searchedUser={searchedUser} />
     </div>
   );
 }

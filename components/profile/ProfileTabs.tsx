@@ -4,16 +4,25 @@ import StreamList from '@/components/profile/StreamList';
 import ViewHistory from '@/components/profile/History';
 import { StreamerProfileOverview, ViewerProfileOverview } from '@/components/profile/Overview';
 import { Button } from '@/components/ui/button';
+import { UserData } from '@/lib/models/userData';
 
 const tabs = ['Overview', 'Subscription', 'Watch History', 'My Streams'];
 
 interface ProfileTabsProps {
   initialProfileType?: 'streamer' | 'viewer';
+  searchedUser?: UserData;
 }
 
-export default function ProfileTabs({ initialProfileType = 'streamer' }: ProfileTabsProps) {
+export default function ProfileTabs({ 
+  initialProfileType = 'streamer', 
+  searchedUser 
+}: ProfileTabsProps) {
   const [activeTab, setActiveTab] = useState('Overview');
-  const [isStreamerProfile, setIsStreamerProfile] = useState(initialProfileType === 'streamer');
+  const [isStreamerProfile, setIsStreamerProfile] = useState(
+    searchedUser 
+      ? searchedUser.isStreamer === true 
+      : initialProfileType === 'streamer'
+  );
 
   // Toggle profile function
   const toggleProfile = () => {
@@ -38,19 +47,18 @@ export default function ProfileTabs({ initialProfileType = 'streamer' }: Profile
       {/* Content */}
       <div className="mt-4">
         {activeTab === 'My Streams' && <StreamList />}
-        {activeTab === 'Subscription' && <SubscriptionCard />}
         {activeTab === 'Watch History' && <ViewHistory />}
-        
         {activeTab === 'Overview' && (
           <div>
             {/* Profile Type Toggle */}
             <div className="flex justify-center mb-4">
               <Button 
                 onClick={toggleProfile} 
-                variant="outline" 
-                className="text-brandWhite border-brandOrange hover:bg-brandOrange/20"
+                variant="ghost" 
+                size="sm"
+                className="text-xs text-brandGray hover:text-brandWhite hover:bg-brandOrange/10"
               >
-                Switch to {isStreamerProfile ? 'Viewer' : 'Streamer'} Profile
+                Switch Profile View
               </Button>
             </div>
 

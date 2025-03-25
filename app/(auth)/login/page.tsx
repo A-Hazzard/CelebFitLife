@@ -27,7 +27,7 @@ function LoginPageContent() {
     completeSignInWithEmailLink()
       .then((result) => {
         if (result) {
-          router.push("/dashboard");
+          router.push("/profile");
         }
       })
       .catch((err) => {
@@ -40,7 +40,7 @@ function LoginPageContent() {
     setError("");
     try {
       await loginWithEmailPassword(email, password);
-      router.push("/dashboard");
+      router.push("/profile");
     } catch (err: unknown) {
       if (err instanceof FirebaseError) {
         setError(err.message);
