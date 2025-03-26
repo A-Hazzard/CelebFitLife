@@ -7,7 +7,6 @@ const apiSecret = process.env.TWILIO_API_KEY_SECRET;
 
 // Validate Twilio credentials
 const validateTwilioCredentials = () => {
-  console.log(accountSid, apiKey, apiSecret)
   if (!accountSid || !apiKey || !apiSecret) {
     throw new Error("Missing required Twilio credentials");
   }
