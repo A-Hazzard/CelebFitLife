@@ -10,6 +10,7 @@ const validateTwilioCredentials = () => {
   if (!accountSid || !apiKey || !apiSecret) {
     throw new Error("Missing required Twilio credentials");
   }
+  console.log("✓ Twilio credentials validated");
 
   // Validate SID format
   const sidPattern = /^[A-Z]{2}[a-f0-9]{32}$/i;
