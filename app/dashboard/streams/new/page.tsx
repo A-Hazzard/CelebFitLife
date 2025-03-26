@@ -10,7 +10,7 @@ import { useAuthStore } from "@/lib/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { TimePicker } from "@/components/ui/time-picker";
+import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { format } from "date-fns";
 
 export default function CreateStreamPage() {
@@ -20,7 +20,7 @@ export default function CreateStreamPage() {
   const [description, setDescription] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [showSchedule, setShowSchedule] = useState(false);
-  const [selectedTime, setSelectedTime] = useState("");
+  const [selectedTime, setSelectedTime] = useState(new Date());
 
   useEffect(() => {
     if (!currentUser) {
@@ -44,7 +44,7 @@ export default function CreateStreamPage() {
       createdBy: currentUser.uid,
       hasStarted: false,
       hasEnded: false,
-      scheduledAt: isScheduled ? selectedTime : null,
+      scheduledAt: isScheduled ? selectedTime.toISOString() : null,
     };
 
     await setDoc(doc(db, "streams", slug), streamData);
@@ -94,13 +94,7 @@ export default function CreateStreamPage() {
           {showSchedule && (
             <div>
               <label className="block mb-1 text-gray-400">Schedule Time</label>
-              <Input
-                type="time"
-                className="w-full border border-gray-700 rounded p-2 bg-black text-white"
-                value={selectedTime}
-                onChange={(e) => setSelectedTime(e.target.value)}
-                required={showSchedule}
-              />
+              <TimePickerDialog date={selectedTime} setDate={setSelectedTime} />
             </div>
           )}
           <div className="flex gap-4">
