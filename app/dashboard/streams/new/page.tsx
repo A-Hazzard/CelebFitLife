@@ -22,9 +22,7 @@ export default function CreateStreamPage() {
   const [selectedTime, setSelectedTime] = useState(new Date());
 
   useEffect(() => {
-    if (!currentUser) {
-      router.push("/login");
-    }
+    if (!currentUser) router.push("/login");
   }, [currentUser, router]);
 
   const handleCreate = async (e: React.FormEvent) => {
