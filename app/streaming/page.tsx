@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
@@ -16,7 +16,7 @@ export default function StreamingPage() {
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
       referrerPolicy="strict-origin-when-cross-origin"
       allowFullScreen
-    ></iframe>
+    ></iframe>,
   );
 
   return (
@@ -26,7 +26,9 @@ export default function StreamingPage() {
         <Sidebar />
         <div className="flex-1 p-6 flex justify-center">
           <div className="w-full ">
-            <h1 className="text-3xl font-edo text-brandOrange mb-6 text-center">Live Streams</h1>
+            <h1 className="text-3xl font-edo text-brandOrange mb-6 text-center">
+              Live Streams
+            </h1>
             <StreamGrid iframes={iframes} />
           </div>
         </div>

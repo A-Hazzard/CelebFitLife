@@ -15,4 +15,5 @@ export type RegistrationData = {
     city: string;
     age: number;
     acceptedTnC: boolean;
+    
 }

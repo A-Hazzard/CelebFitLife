@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     if (!roomName || !userName) {
       return NextResponse.json(
         { error: "roomName and userName are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       console.error("❌ Twilio credentials error:", error);
       return NextResponse.json(
         { error: "Invalid Twilio configuration" },
-        { status: 500 }
+        { status: 500 },
       );
     }
     // Create an Access Token with the API Key as the issuer
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     console.error("Token generation error:", error);
     return NextResponse.json(
       { error: "Failed to generate access token" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

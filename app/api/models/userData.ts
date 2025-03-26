@@ -16,4 +16,9 @@ export type UserData = {
         maxStreamers: number;
     }
     selectedPlan?: string;
+    role: {
+        streamer: boolean;
+        admin: boolean;
+        viewer: boolean;
+    }
 };
