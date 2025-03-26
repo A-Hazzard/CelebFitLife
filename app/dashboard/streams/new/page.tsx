@@ -28,7 +28,7 @@ export default function CreateStreamPage() {
     }
   }, [currentUser, router]);
 
-  const handleCreate = async (e: React.FormEvent, isScheduled = false) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!currentUser) return;
@@ -44,7 +44,7 @@ export default function CreateStreamPage() {
       createdBy: currentUser.uid,
       hasStarted: false,
       hasEnded: false,
-      scheduledAt: isScheduled ? selectedTime.toISOString() : null,
+      scheduledAt: showSchedule ? selectedTime.toISOString() : null,
     };
 
     await setDoc(doc(db, "streams", slug), streamData);

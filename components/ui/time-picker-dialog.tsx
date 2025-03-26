@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -11,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogClose,
 } from "@/components/ui/dialog"
 import { format } from "date-fns"
 
@@ -55,12 +55,20 @@ export function TimePickerDialog({ date, setDate }: TimePickerDialogProps) {
                   setSelectedTime(time)
                   setDate(time)
                 }}
+                className="hover:bg-brandOrange hover:text-black"
               >
                 {format(time, "h:mm a")}
               </Button>
             ))}
           </div>
         </ScrollArea>
+        <div className="flex justify-end gap-2 mt-4 px-4 pb-4">
+          <DialogClose asChild>
+            <Button variant="outline" className="bg-brandOrange text-black hover:bg-brandWhite">
+              Close
+            </Button>
+          </DialogClose>
+        </div>
       </DialogContent>
     </Dialog>
   )
