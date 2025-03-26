@@ -3,7 +3,7 @@ import { db } from "@/lib/config/firebase";
 import { listenToMessages, sendChatMessage } from "@/lib/services/ChatService";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { ChatMessage } from "@/lib/types/stream";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, getDoc } from "firebase/firestore";
 import { MicOff, VideoOff, Volume2, VolumeX } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -34,11 +34,19 @@ interface WithDetach {
   detach: () => HTMLElement[];
 }
 
+// Placeholder Countdown component - needs actual implementation
+const Countdown = ({ scheduledTime }: { scheduledTime: string }) => {
+  // Implement countdown logic here using scheduledTime
+  return <div>Countdown to: {scheduledTime}</div>;
+};
+
+
 export default function LiveViewPage() {
   const pathname = usePathname();
   const router = useRouter();
   const slug = pathname?.split("/").pop() || "";
   const { currentUser } = useAuthStore();
+  const [isStreamStarted, setIsStreamStarted] = useState(false); // Added state
 
   const [hasStarted, setHasStarted] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
@@ -122,8 +130,10 @@ export default function LiveViewPage() {
           }
         } else if (data.hasStarted) {
           setVideoStatus("active");
+          setIsStreamStarted(true); // Update isStreamStarted
         } else {
           setVideoStatus("waiting");
+          setIsStreamStarted(false); // Update isStreamStarted
         }
       }
     });
@@ -1078,6 +1088,26 @@ export default function LiveViewPage() {
     }
   };
 
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState("");
+
+  useEffect(() => {
+    const checkScheduledTime = async () => {
+      if (slug) {
+        const streamDoc = await getDoc(doc(db, "streams", slug));
+        if (streamDoc.exists()) {
+          const data = streamDoc.data();
+          if (data.scheduledAt) {
+            setIsScheduled(true);
+            setScheduledTime(data.scheduledAt);
+          }
+        }
+      }
+    };
+
+    checkScheduledTime();
+  }, [slug]);
+
   if (!hasHydrated || !currentUser) return null;
 
   return (
@@ -1153,6 +1183,11 @@ export default function LiveViewPage() {
                 )}
               </button>
             </div>
+            {isScheduled && !isStreamStarted && (
+              <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/50">
+                <Countdown scheduledTime={scheduledTime} />
+              </div>
+            )}
           </div>
         </div>
 
