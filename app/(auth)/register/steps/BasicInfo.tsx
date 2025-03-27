@@ -50,6 +50,11 @@ export default function BasicInfo() {
         country,
         city,
         age: ageNum,
+        role: {
+          viewer: true,
+          streamer: false,
+          admin: false
+        }
       });
 
       router.push("/login");

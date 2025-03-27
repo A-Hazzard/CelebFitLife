@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -37,7 +36,7 @@ export function TimePickerDialog({ date, setDate }: TimePickerDialogProps) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline">
+        <Button variant="outline" className="text-black">
           {format(date, "h:mm a")}
         </Button>
       </DialogTrigger>
