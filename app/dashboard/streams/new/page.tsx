@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { Play, Calendar } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function CreateStreamPage() {
   const router = useRouter();
@@ -30,22 +31,48 @@ export default function CreateStreamPage() {
 
     if (!currentUser) return;
 
-    const slug = `${title.trim().replace(/\s+/g, "-").toLowerCase()}-${uuidv4()}`;
-    
+    const slug = `${title
+      .trim()
+      .replace(/\s+/g, "-")
+      .toLowerCase()}-${uuidv4()}`;
+
+    // Log the raw selected time
+    console.log("Selected time object:", selectedTime);
+    console.log("Selected time is valid:", !isNaN(selectedTime.getTime()));
+    console.log("Time in ISO format:", selectedTime.toISOString());
+    console.log("Time in local format:", selectedTime.toString());
+    console.log("Scheduling enabled:", showSchedule);
+
     const streamData = {
       title,
       description,
-      thumbnail: thumbnailUrl,
+      thumbnail:
+        thumbnailUrl ||
+        "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg",
       slug,
       createdAt: new Date().toISOString(),
       createdBy: currentUser.uid,
-      hasStarted: false,
+      hasStarted: false, // Never automatically start the stream
       hasEnded: false,
       scheduledAt: showSchedule ? selectedTime.toISOString() : null,
+      audioMuted: false,
+      cameraOff: false,
     };
+
+    console.log("Creating stream with scheduledAt:", streamData.scheduledAt);
 
     await setDoc(doc(db, "streams", slug), streamData);
     router.push(`/dashboard/streams/manage/${slug}`);
+  };
+
+  const handleScheduleChange = (checked: boolean) => {
+    setShowSchedule(checked);
+    if (checked) {
+      // Set default scheduled time to 10 minutes from now
+      const newDate = new Date();
+      newDate.setMinutes(newDate.getMinutes() + 10);
+      setSelectedTime(newDate);
+    }
   };
 
   if (!currentUser) {
@@ -58,7 +85,7 @@ export default function CreateStreamPage() {
         <h2 className="text-3xl font-bold text-brandOrange text-center mb-6">
           Create New Stream
         </h2>
-        
+
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
             <label className="block text-brandWhite mb-2">Stream Title</label>
@@ -72,7 +99,7 @@ export default function CreateStreamPage() {
               placeholder="E.g. Morning Yoga Session"
             />
           </div>
-          
+
           <div>
             <label className="block text-brandWhite mb-2">Description</label>
             <Textarea
@@ -84,7 +111,7 @@ export default function CreateStreamPage() {
               placeholder="Optional details about the workout, difficulty level, etc."
             />
           </div>
-          
+
           <div>
             <label className="block text-brandWhite mb-2">Thumbnail URL</label>
             <Input
@@ -96,37 +123,39 @@ export default function CreateStreamPage() {
               placeholder="Optional thumbnail URL"
             />
           </div>
-          
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="schedule"
+              checked={showSchedule}
+              onCheckedChange={handleScheduleChange}
+            />
+            <label
+              htmlFor="schedule"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center"
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              Schedule for later
+            </label>
+          </div>
+
           {showSchedule && (
             <div>
-              <label className="block text-brandWhite mb-2">Schedule Time</label>
-              <TimePickerDialog 
-                date={selectedTime} 
-                setDate={setSelectedTime}  
-              />
+              <label className="block text-brandWhite mb-2">
+                Schedule Time
+              </label>
+              <TimePickerDialog date={selectedTime} setDate={setSelectedTime} />
             </div>
           )}
-          
-          <div className="flex space-x-4">
-            <Button
-              type="submit"
-              className="flex-1 bg-brandOrange text-brandBlack hover:bg-brandOrange/90 
-              transition-colors duration-300 flex items-center justify-center gap-2"
-            >
-              <Play className="w-5 h-5" />
-              Create Stream
-            </Button>
-            
-            <Button
-              type="button"
-              onClick={() => setShowSchedule(!showSchedule)}
-              className="flex-1 bg-brandBlack border border-brandOrange/30 text-brandWhite 
-              hover:bg-brandOrange/10 transition-colors duration-300 flex items-center justify-center gap-2"
-            >
-              <Calendar className="w-5 h-5" />
-              {showSchedule ? "Go Live Now" : "Schedule"}
-            </Button>
-          </div>
+
+          <Button
+            type="submit"
+            className="w-full bg-brandOrange text-brandBlack hover:bg-brandOrange/90 
+            transition-colors duration-300 flex items-center justify-center gap-2"
+          >
+            <Play className="w-5 h-5" />
+            Create Stream
+          </Button>
         </form>
       </div>
     </div>

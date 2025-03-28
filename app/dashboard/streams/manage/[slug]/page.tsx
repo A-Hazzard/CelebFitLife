@@ -7,10 +7,11 @@ import { sendChatMessage } from "@/lib/services/ChatService";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import axios from "axios";
 import EmojiPicker, { Theme } from "emoji-picker-react";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, getDoc } from "firebase/firestore";
 import { Check, ChevronUp, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import {
   connect,
   createLocalAudioTrack,
@@ -67,6 +68,10 @@ const ManageStreamPage = () => {
   const [loading, setLoading] = useState(true);
   const [currentMicId, setCurrentMicId] = useState<string>("");
   const [currentCameraId, setCurrentCameraId] = useState<string>("");
+  const [streamTitle, setStreamTitle] = useState("");
+  const [thumbnailUrl, setThumbnailUrl] = useState(
+    "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg"
+  );
 
   // Function declarations
   const switchVideoQuality = useCallback(
@@ -469,7 +474,7 @@ const ManageStreamPage = () => {
     isVideoEnabled,
     currentMicId,
     currentCameraId,
-    isConnected
+    isConnected,
   ]);
 
   useEffect(() => {
@@ -481,7 +486,7 @@ const ManageStreamPage = () => {
     currentMicId,
     currentCameraId,
     isConnected,
-    updateStreamStatus
+    updateStreamStatus,
   ]);
 
   useEffect(() => {
@@ -495,7 +500,8 @@ const ManageStreamPage = () => {
         networkQualityLevel?: number;
       }
 
-      const quality = (localParticipant as NetworkQualityStats).networkQualityLevel;
+      const quality = (localParticipant as NetworkQualityStats)
+        .networkQualityLevel;
 
       if (quality !== undefined) {
         if (quality <= 2) {
@@ -599,10 +605,10 @@ const ManageStreamPage = () => {
         setIsVideoEnabled(true);
         setIsAudioEnabled(true);
 
-        // Update Firestore with initial state
+        // Update Firestore with initial state - DO NOT set hasStarted here!
         const streamRef = doc(db, "streams", slug);
         await updateDoc(streamRef, {
-          hasStarted: true,
+          // DO NOT set hasStarted to true here - only when Start Stream button is clicked
           cameraOff: false,
           audioMuted: false,
         });
@@ -648,8 +654,12 @@ const ManageStreamPage = () => {
             // Load device preferences if stream hasn't started
             if (!data.hasStarted) {
               const devices = await navigator.mediaDevices.enumerateDevices();
-              const videoInputs = devices.filter((d) => d.kind === "videoinput");
-              const audioInputs = devices.filter((d) => d.kind === "audioinput");
+              const videoInputs = devices.filter(
+                (d) => d.kind === "videoinput"
+              );
+              const audioInputs = devices.filter(
+                (d) => d.kind === "audioinput"
+              );
 
               if (videoInputs.length > 0 && !currentCameraId) {
                 setCurrentCameraId(videoInputs[0].deviceId);
@@ -668,7 +678,14 @@ const ManageStreamPage = () => {
       }
     };
     startStreamOnLoad();
-  }, [slug, currentUser, isStreamStarted, currentCameraId, currentMicId, router]);
+  }, [
+    slug,
+    currentUser,
+    isStreamStarted,
+    currentCameraId,
+    currentMicId,
+    router,
+  ]);
 
   // Streamer status overlay
   const [streamerStatus, setStreamerStatus] = useState({
@@ -685,6 +702,28 @@ const ManageStreamPage = () => {
     setShowEndConfirmation(false);
   };
 
+  // Add effect to fetch stream title and thumbnail
+  useEffect(() => {
+    if (!slug) return;
+
+    const fetchStreamInfo = async () => {
+      try {
+        const streamDoc = await getDoc(doc(db, "streams", slug));
+        if (streamDoc.exists()) {
+          const data = streamDoc.data();
+          setStreamTitle(data.title || "Untitled Stream");
+          if (data.thumbnail) {
+            setThumbnailUrl(data.thumbnail);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching stream info:", error);
+      }
+    };
+
+    fetchStreamInfo();
+  }, [slug]);
+
   if (loading) {
     return null;
   }
@@ -694,10 +733,21 @@ const ManageStreamPage = () => {
       {/* Header */}
       <header className="flex items-center justify-between p-4 border-b border-brandOrange">
         <div className="flex items-center space-x-4">
-          <Input
-            placeholder="Stream Title"
-            className="w-3/4 border border-brandOrange bg-brandBlack text-brandWhite rounded-md px-2 py-1"
-          />
+          <div className="h-10 w-10 rounded overflow-hidden flex-shrink-0 bg-brandGray">
+            <Image
+              src={thumbnailUrl}
+              alt="Stream thumbnail"
+              className="h-full w-full object-cover"
+              width={40}
+              height={40}
+              onError={() => {
+                setThumbnailUrl(
+                  "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg"
+                );
+              }}
+            />
+          </div>
+          <h1 className="text-xl font-bold text-brandWhite">{streamTitle}</h1>
         </div>
         <div className="flex items-center space-x-4">
           <Button className="px-4 py-2 bg-brandOrange text-brandBlack rounded hover:bg-brandWhite hover:text-brandBlack">

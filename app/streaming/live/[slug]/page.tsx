@@ -7,15 +7,17 @@ import { doc, onSnapshot, getDoc } from "firebase/firestore";
 import { MicOff, VideoOff, Volume2, VolumeX } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import {
-    connect,
-    RemoteAudioTrack,
-    RemoteParticipant,
-    RemoteTrack,
-    RemoteTrackPublication,
-    RemoteVideoTrack,
-    Room,
+  connect,
+  RemoteAudioTrack,
+  RemoteParticipant,
+  RemoteTrack,
+  RemoteTrackPublication,
+  RemoteVideoTrack,
+  Room,
 } from "twilio-video";
+import { Countdown } from "@/components/streaming/Countdown";
 
 interface HandlerRefs {
   trackSubscribed: (track: RemoteTrack) => void;
@@ -34,20 +36,13 @@ interface WithDetach {
   detach: () => HTMLElement[];
 }
 
-// Placeholder Countdown component - needs actual implementation
-const Countdown = ({ scheduledTime }: { scheduledTime: string }) => {
-  // Implement countdown logic here using scheduledTime
-  return <div>Countdown to: {scheduledTime}</div>;
-};
-
-
 export default function LiveViewPage() {
   const pathname = usePathname();
   const router = useRouter();
   const slug = pathname?.split("/").pop() || "";
   const { currentUser } = useAuthStore();
-  const [isStreamStarted, setIsStreamStarted] = useState(false); // Added state
 
+  // Using isStreamStarted to track if the stream is active
   const [hasStarted, setHasStarted] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [remoteParticipant, setRemoteParticipant] =
@@ -67,10 +62,16 @@ export default function LiveViewPage() {
     cameraOff: false,
   });
   const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState("");
+
+  // This state is used to detect browser autoplay restrictions
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const [offlineTimerId, setOfflineTimerId] = useState<NodeJS.Timeout | null>(
     null
   );
+  const [streamTitle, setStreamTitle] = useState("");
+  const [thumbnailUrl, setThumbnailUrl] = useState("");
 
   // Store stable references to handler functions to break circular dependencies
   const handlerRefs = useRef<HandlerRefs>({
@@ -130,10 +131,10 @@ export default function LiveViewPage() {
           }
         } else if (data.hasStarted) {
           setVideoStatus("active");
-          setIsStreamStarted(true); // Update isStreamStarted
+          setHasStarted(true);
         } else {
           setVideoStatus("waiting");
-          setIsStreamStarted(false); // Update isStreamStarted
+          setHasStarted(false);
         }
       }
     });
@@ -1088,19 +1089,71 @@ export default function LiveViewPage() {
     }
   };
 
-  const [isScheduled, setIsScheduled] = useState(false);
-  const [scheduledTime, setScheduledTime] = useState("");
-
+  // Add a useEffect hook to load the stream title and thumbnail
   useEffect(() => {
-    const checkScheduledTime = async () => {
-      if (slug) {
+    if (!slug) return;
+
+    const fetchStreamInfo = async () => {
+      try {
         const streamDoc = await getDoc(doc(db, "streams", slug));
         if (streamDoc.exists()) {
           const data = streamDoc.data();
-          if (data.scheduledAt) {
-            setIsScheduled(true);
-            setScheduledTime(data.scheduledAt);
+          setStreamTitle(data.title || "Untitled Stream");
+          setThumbnailUrl(
+            data.thumbnail ||
+              "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg"
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching stream info:", error);
+      }
+    };
+
+    fetchStreamInfo();
+  }, [slug]);
+
+  // Updated function to check for scheduled time
+  useEffect(() => {
+    const checkScheduledTime = async () => {
+      if (slug) {
+        try {
+          const streamDoc = await getDoc(doc(db, "streams", slug));
+          if (streamDoc.exists()) {
+            const data = streamDoc.data();
+            console.log("Stream data for scheduling:", data);
+
+            if (data.scheduledAt) {
+              console.log("Stream scheduled for:", data.scheduledAt);
+
+              // Parse and validate the date
+              const scheduledDate = new Date(data.scheduledAt);
+              if (!isNaN(scheduledDate.getTime())) {
+                console.log(
+                  "Valid scheduled date found:",
+                  scheduledDate.toString()
+                );
+                console.log(
+                  "Time until stream:",
+                  scheduledDate.getTime() - new Date().getTime(),
+                  "ms"
+                );
+
+                setIsScheduled(true);
+                setScheduledTime(data.scheduledAt);
+              } else {
+                console.error(
+                  "Invalid date format in scheduledAt:",
+                  data.scheduledAt
+                );
+                setIsScheduled(false);
+              }
+            } else {
+              console.log("No schedule time found in stream data");
+              setIsScheduled(false);
+            }
           }
+        } catch (error) {
+          console.error("Error checking scheduled time:", error);
         }
       }
     };
@@ -1112,7 +1165,24 @@ export default function LiveViewPage() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-brandBlack text-brandWhite overflow-hidden">
-      <div className="text-center py-2 border-b border-brandOrange">
+      <div className="flex items-center justify-between py-2 px-4 border-b border-brandOrange">
+        <div className="flex items-center space-x-4">
+          <div className="h-8 w-8 rounded overflow-hidden flex-shrink-0 bg-brandGray">
+            <Image
+              src={thumbnailUrl}
+              alt="Stream thumbnail"
+              className="h-full w-full object-cover"
+              width={32}
+              height={32}
+              onError={() => {
+                setThumbnailUrl(
+                  "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg"
+                );
+              }}
+            />
+          </div>
+          <h1 className="text-lg font-bold text-brandWhite">{streamTitle}</h1>
+        </div>
         <p>
           Stream Status:{" "}
           <span className="font-bold">
@@ -1143,7 +1213,7 @@ export default function LiveViewPage() {
             )}
 
             {/* Only show offline message if hasStarted is false */}
-            {!hasStarted && (
+            {!hasStarted && !isScheduled && (
               <div className="absolute inset-0 bg-black flex flex-col items-center justify-center">
                 <p className="text-brandOrange">Stream is Offline</p>
               </div>
@@ -1183,8 +1253,8 @@ export default function LiveViewPage() {
                 )}
               </button>
             </div>
-            {isScheduled && !isStreamStarted && (
-              <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/50">
+            {isScheduled && !hasStarted && scheduledTime && (
+              <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/80">
                 <Countdown scheduledTime={scheduledTime} />
               </div>
             )}
