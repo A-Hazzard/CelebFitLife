@@ -1,189 +1,214 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import {
-  loginWithEmailPassword,
-  sendSignInLink,
-  completeSignInWithEmailLink,
-} from "@/lib/services/AuthService";
-import { FirebaseError } from "firebase/app";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import LandingHeader from "@/components/layout/landing/Header";
+import { handleLogin } from "@/lib/helpers/auth";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/lib/store/useAuthStore";
+import Image from "next/image";
+import fitImage from "@/public/fitness.png";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 40 },
+  visible: (i = 1) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      delay: i * 0.2,
+      duration: 0.6,
+      ease: "easeOut",
+    },
+  }),
+};
 
 function LoginPageContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const verificationMsg = searchParams?.get("verification") ?? null;
-
+  const { currentUser, setUser } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [linkMode, setLinkMode] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    completeSignInWithEmailLink()
-      .then((result) => {
-        if (result) {
-          router.push("/dashboard");
-        }
-      })
-      .catch((err) => {
-        console.error("Email link login error:", err);
-      });
-  }, [router]);
+    if (currentUser) {
+      router.push("/dashboard");
+    }
+  }, [currentUser, router]);
 
-  const handleLoginPassword = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
-    try {
-      await loginWithEmailPassword(email, password);
-      router.push("/dashboard");
-    } catch (err: unknown) {
-      if (err instanceof FirebaseError) {
-        setError(err.message);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An unknown error occurred");
-      }
+    setLoading(true);
+
+    const result = await handleLogin({ email, password });
+
+    if (result.success && result.user) {
+      setUser(result.user);
+      if (result.user.role?.streamer) {
+        router.push("/dashboard");
+      } else router.push("/streaming");
+    } else {
+      setError(result.error || "Login failed. Please try again.");
     }
+
+    setLoading(false);
   };
 
-  const handleSendLink = async () => {
-    setError("");
-    try {
-      await sendSignInLink(email);
-      alert("Check your email for the sign-in link!");
-    } catch (err: unknown) {
-      if (err instanceof FirebaseError) {
-        setError(err.message);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An unknown error occurred");
-      }
-    }
-  };
+  if (currentUser) {
+    return <div className="text-center text-orange-500">Redirecting...</div>;
+  }
 
   return (
-    <>
-      <LandingHeader />
-      <div className="min-h-screen bg-gradient-to-b from-[#ff7f3017] to-brandBlack flex items-center justify-center text-brandWhite">
-        <div className="w-full max-w-md bg-opacity-80 bg-gray-800 shadow-xl rounded-lg px-8 py-10">
-          <h1 className="text-4xl font-extrabold text-brandOrange text-center mb-6">
-            Login
-          </h1>
+    <div className="h-screen w-screen flex overflow-hidden bg-black">
+      {/* Left Section */}
+      <div className="w-1/2 relative flex flex-col justify-center pl-32 pr-10 z-10 text-white">
+        {/* Vertical Text (Left-Aligned & Vertical) */}
+        <motion.div
+          initial={{ opacity: 0, y: 60 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="absolute left-16 top-[10%] -translate-y-1/2 transform -rotate-90 origin-left text-9xl font-extrabold tracking-widest z-0"
+        >
+          {['F', 'I', 'T', '\u00A0', 'G', 'E', 'T'].map((char, index) => (
+            <span 
+              key={index} 
+              className="block"
+              style={{
+                color: `rgba(255, 255, 255, ${1 - Math.abs(index - 3) * 0.15})`,
+                lineHeight: '0.8'
+              }}
+            >
+              {char}
+            </span>
+          ))}
+        </motion.div>
 
-          {verificationMsg === "sent" && (
-            <p className="text-brandOrange bg-gray-700 p-3 rounded mb-4 text-center">
-              We sent a verification link. Please check your email before
-              logging in.
-            </p>
-          )}
+        {/* Login Form */}
+        <motion.div
+          initial={{ opacity: 0, x: 60 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, delay: 0.3 }}
+          className="relative z-10 pl-24 pr-10"
+        >
+          <button
+            onClick={() => router.back()}
+            className="text-sm text-gray-400 hover:text-white mb-4"
+          >
+            ← Back
+          </button>
+
+          <h2 className="text-xl text-gray-400 mb-1">
+            Signing back into your account?
+          </h2>
+          <h1 className="text-5xl font-extrabold text-white mb-2 leading-tight">
+            Login<span className="text-orange-500">.</span>
+          </h1>
+          <p className="mb-2 text-gray-400 text-sm">
+            Don’t have an account?{" "}
+            <Link href="/register" className="text-orange-500 font-semibold">
+              Sign Up
+            </Link>
+          </p>
+          <p className="text-xs text-orange-400 mb-6">
+            Note: Free trial gets one celeb.
+          </p>
 
           {error && (
-            <p className="text-red-500 bg-gray-700 p-3 rounded mb-4 text-center font-semibold">
+            <p className="text-red-500 bg-gray-800 p-3 rounded mb-4 text-center font-semibold">
               {error}
             </p>
           )}
 
-          {!linkMode ? (
-            <form
-              onSubmit={handleLoginPassword}
-              className="flex flex-col space-y-4"
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <motion.div
+              variants={fadeUp}
+              initial="hidden"
+              animate="visible"
+              custom={1}
+            >
+              <div className="flex gap-4">
+                <Input
+                  placeholder="First Name"
+                  className="flex-1 bg-[#111827] text-white border border-gray-700 px-4 py-3 rounded"
+                />
+                <Input
+                  placeholder="Last Name"
+                  className="flex-1 bg-[#111827] text-white border border-gray-700 px-4 py-3 rounded"
+                />
+              </div>
+            </motion.div>
+
+            <motion.div
+              variants={fadeUp}
+              initial="hidden"
+              animate="visible"
+              custom={2}
             >
               <Input
-                className="bg-gray-900 text-white border border-gray-500 focus:outline-none focus:ring-2 focus:ring-brandOrange py-2 px-4 rounded"
                 type="email"
-                placeholder="Email"
+                placeholder="Email Address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
+                className="bg-[#111827] text-white border border-gray-700 px-4 py-3 rounded"
               />
+            </motion.div>
+
+            <motion.div
+              variants={fadeUp}
+              initial="hidden"
+              animate="visible"
+              custom={3}
+            >
               <Input
-                className="bg-gray-900 text-white border border-gray-500 focus:outline-none focus:ring-2 focus:ring-brandOrange py-2 px-4 rounded"
                 type="password"
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
+                className="bg-[#111827] text-white border border-gray-700 px-4 py-3 rounded"
               />
-              <Button
-                className="bg-brandOrange hover:bg-orange-600 text-brandBlack font-semibold py-2 rounded text-lg"
-                type="submit"
-              >
-                Login
-              </Button>
+            </motion.div>
 
-              <div className="flex items-center justify-between text-sm mt-2">
+            <motion.div
+              variants={fadeUp}
+              initial="hidden"
+              animate="visible"
+              custom={4}
+            >
+              <div className="flex gap-4 pt-2">
                 <Button
-                  className="text-brandGray underline hover:text-brandOrange"
-                  onClick={() => setLinkMode(true)}
+                  type="button"
+                  className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-full text-sm"
                 >
-                  Sign in with Email Link
+                  Change Method
                 </Button>
-                <Link
-                  href="/reset-password"
-                  className="text-brandGray underline hover:text-brandOrange"
-                >
-                  Forgot Password?
-                </Link>
-              </div>
-
-              <div className="mt-4 text-center">
-                <Link
-                  href="/register"
-                  className="text-brandOrange underline hover:text-orange-400 text-lg font-semibold"
-                >
-                  Don&apos;t have an account? Sign Up
-                </Link>
-              </div>
-            </form>
-          ) : (
-            <div className="flex flex-col space-y-4">
-              <Input
-                className="bg-gray-900 text-white border border-gray-500 focus:outline-none focus:ring-2 focus:ring-brandOrange py-2 px-4 rounded"
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <Button
-                onClick={handleSendLink}
-                className="bg-brandOrange hover:bg-orange-600 text-brandBlack font-semibold py-2 rounded text-lg"
-              >
-                Send Magic Link
-              </Button>
-
-              <div className="flex items-center justify-between text-sm mt-2">
                 <Button
-                  className="text-brandGray underline hover:text-brandOrange"
-                  onClick={() => setLinkMode(false)}
+                  type="submit"
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-full text-sm"
+                  disabled={loading}
                 >
-                  Login with Password
+                  {loading ? "Logging in..." : "Sign in"}
                 </Button>
-                <Link
-                  href="/reset-password"
-                  className="text-brandGray underline hover:text-brandOrange"
-                >
-                  Forgot Password?
-                </Link>
               </div>
-
-              <div className="mt-4 text-center">
-                <Link
-                  href="/register"
-                  className="text-brandOrange underline hover:text-orange-400 text-lg font-semibold"
-                >
-                  Don&apos;t have an account? Sign Up
-                </Link>
-              </div>
-            </div>
-          )}
-        </div>
+            </motion.div>
+          </form>
+        </motion.div>
       </div>
-    </>
+
+      {/* Right Section (Image) */}
+      <div className="w-1/2 h-full relative">
+        <Image
+          src={fitImage}
+          alt="Fitness woman"
+          fill
+          className="object-cover"
+        />
+      </div>
+    </div>
   );
 }
 
