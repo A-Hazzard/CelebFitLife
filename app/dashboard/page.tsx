@@ -6,9 +6,11 @@ import {
   Users, 
   DollarSign, 
   Play, 
-  X
+  X,
+  LogOut
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/lib/store/useAuthStore";
 import DashboardAreaChart from "@/components/dashboard/AreaChart";
 
 // Streaming Profile Modal
@@ -201,6 +203,7 @@ type StreamingProfileData = {
 export default function DashboardPage() {
   const router = useRouter();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const { clearUser } = useAuthStore();
 
   const handleGoLive = () => {
     router.push("/dashboard/streams/new");
@@ -209,6 +212,11 @@ export default function DashboardPage() {
   const handleStreamProfileSubmit = (data: StreamingProfileData) => {
     console.log("Stream Profile Submitted:", data);
     // TODO: Implement actual submission logic
+  };
+
+  const handleLogout = () => {
+    clearUser(); // Clear user from auth store
+    router.push("/login"); // Redirect to login page
   };
 
   // Mock metrics data
@@ -248,6 +256,14 @@ export default function DashboardPage() {
           Welcome, Streamer
         </h1>
         <div className="flex space-x-4">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-6 py-3 bg-brandGray text-brandWhite
+            rounded-full font-semibold hover:bg-opacity-90 transition-colors"
+          >
+            <LogOut className="w-5 h-5 mr-2" />
+            Logout
+          </button>
           <button
             onClick={() => setIsProfileModalOpen(true)}
             className="flex items-center gap-2 px-6 py-3 bg-brandWhite text-brandBlack

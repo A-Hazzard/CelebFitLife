@@ -3,9 +3,20 @@ import { Search, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
 import Slider from 'react-slick';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
-import React from 'react';
+import React, { useMemo } from 'react';
+import { fetchCategoriesWithTags } from '@/lib/store/categoriesStore';
+import { Category, Tag } from '@/lib/store/categoriesStore';
 
-const streamers = [
+interface Streamer {
+  name: string;
+  quote: string;
+  tags: string[];
+  followers: number;
+  specialty: string;
+  imageUrl: string;
+}
+
+const streamers: Streamer[] = [
   {
     name: 'Alex Fitness',
     quote: '&ldquo;Let&rsquo;s get burning guys!&rdquo;',
@@ -32,7 +43,7 @@ const streamers = [
   }
 ];
 
-const discoverStreamers = [
+const discoverStreamers: Streamer[] = [
   {
     name: 'Sarah Flex',
     quote: '&ldquo;Transform your body, transform your life!&rdquo;',
@@ -83,38 +94,82 @@ const discoverStreamers = [
   }
 ];
 
-const workoutCategories = [
-  {
-    name: 'HIIT',
-    subtags: ['Cardio', 'Full Body', 'Interval Training'],
-    description: 'High-Intensity Interval Training for maximum calorie burn'
-  },
-  {
-    name: 'Bodybuilding',
-    subtags: ['Muscle Growth', 'Strength', 'Weight Training', 'Legs', 'Arms', 'Back', 'Chest'],
-    description: 'Focused muscle development and strength training'
-  },
-  {
-    name: 'Yoga',
-    subtags: ['Flexibility', 'Core', 'Meditation', 'Power Yoga', 'Vinyasa'],
-    description: 'Mind-body connection and holistic wellness'
-  },
-  {
-    name: 'Cardio',
-    subtags: ['Running', 'Cycling', 'Swimming', 'Dance Fitness', 'Endurance'],
-    description: 'Cardiovascular health and stamina improvement'
-  },
-  {
-    name: 'Pilates',
-    subtags: ['Core Strength', 'Flexibility', 'Rehabilitation', 'Mat Pilates'],
-    description: 'Low-impact exercise focusing on core strength'
-  }
-];
+const StreamerCard: React.FC<{ streamer: Streamer }> = ({ streamer }) => {
+  return (
+    <div className="bg-brandBlack border border-brandOrange/30 p-4 md:p-5 rounded-xl shadow-lg hover:shadow-2xl">
+      <div className="flex items-center mb-4 space-x-3 md:space-x-4">
+        <div 
+          className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-cover bg-center border-2 border-brandOrange/30"
+          style={{ backgroundImage: `url(${streamer.imageUrl})` }}
+        />
+        <div>
+          <div className="flex items-center space-x-2">
+            <h3 className="text-base md:text-lg font-bold text-brandWhite">{streamer.name}</h3>
+            <span className="bg-brandOrange text-brandBlack text-xs px-2 py-1 rounded-full">
+              {streamer.specialty}
+            </span>
+          </div>
+          <p className="text-xs md:text-sm text-brandOrange/70">
+            {streamer.followers.toLocaleString()} Followers
+          </p>
+        </div>
+      </div>
+
+      <p className="text-xs md:text-sm text-brandWhite/70 italic mb-4">&ldquo;{streamer.quote}&rdquo;</p>
+
+      <div className="flex space-x-2 overflow-x-auto pb-1">
+        {streamer.tags.map((tag: string, tagIndex: number) => (
+          <span 
+            key={tagIndex} 
+            className="flex-shrink-0 bg-brandBlack border border-brandOrange/30 text-xs px-2 py-1 rounded-full text-brandOrange"
+          >
+            {tag}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export default function UserDashboard() {
   const [visibleDiscoverStreamers, setVisibleDiscoverStreamers] = React.useState(3);
   const [isTagsOpen, setIsTagsOpen] = React.useState(false);
+  const [categories, setCategories] = React.useState<(Category & { tags: Tag[] })[]>([]);
+  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [expandedCategory, setExpandedCategory] = React.useState<string | null>(null);
+  const [selectedCategories, setSelectedCategories] = React.useState<string[]>([]);
+
+  const filteredStreamers = useMemo(() => {
+    return streamers.filter(streamer => {
+      // If no categories are selected, show all streamers
+      if (selectedCategories.length === 0) return true;
+      
+      // Check if the streamer's specialty matches any selected category
+      return selectedCategories.includes(streamer.specialty);
+    }).filter(streamer => {
+      // If no tags are selected, show all streamers
+      if (selectedTags.length === 0) return true;
+      
+      // Check if any of the streamer's tags are in the selected tags
+      return streamer.tags.some(tag => selectedTags.includes(tag));
+    });
+  }, [selectedCategories, selectedTags]);
+
+  const filteredDiscoverStreamers = useMemo(() => {
+    return discoverStreamers.filter(streamer => {
+      // If no categories are selected, show all streamers
+      if (selectedCategories.length === 0) return true;
+      
+      // Check if the streamer's specialty matches any selected category
+      return selectedCategories.includes(streamer.specialty);
+    }).filter(streamer => {
+      // If no tags are selected, show all streamers
+      if (selectedTags.length === 0) return true;
+      
+      // Check if any of the streamer's tags are in the selected tags
+      return streamer.tags.some(tag => selectedTags.includes(tag));
+    });
+  }, [selectedCategories, selectedTags]);
 
   const settings = {
     infinite: true,
@@ -141,15 +196,67 @@ export default function UserDashboard() {
     ]
   };
 
+  React.useEffect(() => {
+    const loadCategoriesAndTags = async () => {
+      try {
+        const result = await fetchCategoriesWithTags();
+        if (result.success) {
+          setCategories(result.categoriesWithTags as (Category & { tags: Tag[] })[]);
+        } else {
+          console.error('Failed to fetch categories and tags');
+          alert('Failed to load categories and tags');
+        }
+      } catch (error) {
+        console.error('Error in loadCategoriesAndTags:', error);
+      }
+    };
+
+    loadCategoriesAndTags();
+  }, []);
+
   const loadMoreStreamers = () => {
     setVisibleDiscoverStreamers(prev => 
       Math.min(prev + 3, discoverStreamers.length)
     );
   };
 
+  const toggleCategory = (categoryName: string) => {
+    // If the category is already expanded, collapse it
+    if (expandedCategory === categoryName) {
+      setExpandedCategory(null);
+    } else {
+      // Set the new expanded category
+      setExpandedCategory(categoryName);
+    }
+
+    // Toggle category selection
+    setSelectedCategories(prev => 
+      prev.includes(categoryName)
+        ? prev.filter(cat => cat !== categoryName)
+        : [...prev, categoryName]
+    );
+  };
+
+  const toggleTagSelection = (tagName: string) => {
+    setSelectedTags(prevTags => 
+      prevTags.includes(tagName)
+        ? prevTags.filter(tag => tag !== tagName)
+        : [...prevTags, tagName]
+    );
+  };
+
+  React.useEffect(() => {
+    if (categories.length > 0) {
+      streamers[0].specialty = categories[0].name;
+      streamers[1].specialty = categories.length > 1 ? categories[1].name : 'Pilates';
+      streamers[2].specialty = categories.length > 2 ? categories[2].name : 'Bodybuilding';
+      discoverStreamers[0].specialty = categories.length > 3 ? categories[3].name : 'Flexibility';
+      discoverStreamers[1].specialty = categories.length > 4 ? categories[4].name : 'Bodybuilding';
+    }
+  }, [categories]);
+
   return (
     <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite font-inter">
-      {/* Header */}
       <header className="flex items-center justify-between p-4 md:p-6 bg-brandBlack border-b border-brandOrange/30">
         <div className="w-10 md:w-1/4"></div>
 
@@ -169,57 +276,22 @@ export default function UserDashboard() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex flex-col p-4 md:p-6 space-y-6">
-        {/* Streamers and Tags Container */}
         <div className="flex flex-col md:flex-row space-y-6 md:space-y-0 md:space-x-6">
-          {/* Streamers Section */}
           <section className="w-full md:w-3/4 space-y-6">
             <h2 className="text-xl md:text-2xl font-bold text-brandWhite">MY STREAMERS</h2>
             <Slider {...settings}>
-              {streamers.map((streamer, index) => (
+              {filteredStreamers.map((streamer, index) => (
                 <div 
                   key={index} 
                   className="p-2 md:p-4 transform transition-all duration-300 hover:scale-105"
                 >
-                  <div className="bg-brandBlack border border-brandOrange/30 p-4 md:p-5 rounded-xl shadow-lg hover:shadow-2xl">
-                    <div className="flex items-center mb-4 space-x-3 md:space-x-4">
-                      <div 
-                        className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-cover bg-center border-2 border-brandOrange/30"
-                        style={{ backgroundImage: `url(${streamer.imageUrl})` }}
-                      />
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h3 className="text-base md:text-lg font-bold text-brandWhite">{streamer.name}</h3>
-                          <span className="bg-brandOrange text-brandBlack text-xs px-2 py-1 rounded-full">
-                            {streamer.specialty}
-                          </span>
-                        </div>
-                        <p className="text-xs md:text-sm text-brandOrange/70">
-                          {streamer.followers.toLocaleString()} Followers
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="text-xs md:text-sm text-brandWhite/70 italic mb-4">&ldquo;{streamer.quote}&rdquo;</p>
-
-                    <div className="flex space-x-2 overflow-x-auto pb-1">
-                      {streamer.tags.map((tag, tagIndex) => (
-                        <span 
-                          key={tagIndex} 
-                          className="flex-shrink-0 bg-brandBlack border border-brandOrange/30 text-xs px-2 py-1 rounded-full text-brandOrange"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                  <StreamerCard streamer={streamer} />
                 </div>
               ))}
             </Slider>
           </section>
 
-          {/* Tags Sidebar */}
           <aside className="w-full md:w-1/5 bg-brandBlack border border-brandOrange/30 rounded-xl">
             <div 
               className="flex justify-between items-center p-3 cursor-pointer md:cursor-default"
@@ -236,11 +308,17 @@ export default function UserDashboard() {
               md:block 
               space-y-1 p-2 pt-0
             `}>
-              {workoutCategories.map((category) => (
+              {categories.map((category) => (
                 <div key={category.name} className="mb-1">
                   <div 
-                    className="flex justify-between items-center bg-brandBlack border border-brandOrange/30 p-2 rounded-lg hover:bg-brandOrange/10 transition-colors cursor-pointer"
-                    onClick={() => setExpandedCategory(expandedCategory === category.name ? null : category.name)}
+                    className={`
+                      flex justify-between items-center 
+                      bg-brandBlack border border-brandOrange/30 
+                      p-2 rounded-lg hover:bg-brandOrange/10 
+                      transition-colors cursor-pointer
+                      ${selectedCategories.includes(category.name) ? 'bg-brandOrange/20' : ''}
+                    `}
+                    onClick={() => toggleCategory(category.name)}
                   >
                     <div className="flex items-center space-x-1">
                       <span className="text-xs font-semibold text-brandWhite">{category.name}</span>
@@ -255,12 +333,21 @@ export default function UserDashboard() {
 
                   {expandedCategory === category.name && (
                     <div className="grid grid-cols-2 gap-1 mt-1 pl-1">
-                      {category.subtags.map((subtag) => (
+                      {category.tags.map((tag) => (
                         <button 
-                          key={subtag}
-                          className="bg-brandBlack border border-brandOrange/30 text-[10px] p-1 rounded-lg text-brandWhite hover:bg-brandOrange/20 transition-colors"
+                          key={tag.name}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTagSelection(tag.name);
+                          }}
+                          className={`
+                            bg-brandBlack border border-brandOrange/30 
+                            text-[10px] p-1 rounded-lg 
+                            hover:bg-brandOrange/20 transition-colors
+                            ${selectedTags.includes(tag.name) ? 'bg-brandOrange text-brandBlack' : 'text-brandWhite'}
+                          `}
                         >
-                          {subtag}
+                          {tag.name}
                         </button>
                       ))}
                     </div>
@@ -271,12 +358,11 @@ export default function UserDashboard() {
           </aside>
         </div>
 
-        {/* Discover Section */}
         <section className="space-y-6">
           <h2 className="text-xl md:text-2xl font-bold text-brandWhite">DISCOVER</h2>
           <p className="text-xs md:text-sm text-brandOrange/70">What fits your needs from your previous tags?</p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
-            {discoverStreamers.slice(0, visibleDiscoverStreamers).map((streamer, index) => (
+            {filteredDiscoverStreamers.slice(0, visibleDiscoverStreamers).map((streamer, index) => (
               <div 
                 key={index} 
                 className="transform transition-all duration-300 hover:scale-105"
