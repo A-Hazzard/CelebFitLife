@@ -1,172 +1,136 @@
 # CelebFitLife
-![CelebFitLife Logo](public/og-image.jpg)
 
-CelebFitLife is a live-streaming fitness platform that connects fans with their favorite celebrities and top fitness instructors in real time. Our mission is to make fitness fun, engaging, and interactive—allowing users to work out alongside the stars while enjoying exclusive content and community features.
-
-## Table of Contents
-
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Folder Structure](#folder-structure)
-- [Setup and Installation](#setup-and-installation)
-- [Environment Variables](#environment-variables)
-- [Scripts](#scripts)
-- [Future Improvements](#future-improvements)
+CelebFitLife is a live streaming platform that connects fitness influencers with fans through interactive workout sessions and training content.
 
 ## Features
 
-- **Live Streaming & Interaction:**  
-  - Streamers host live workout sessions using Twilio Video.
-  - Fans join live streams, participate in real‑time chat, polls, and reactions.
-  - Free 1‑minute preview for non‑subscribers, with full access for paid subscribers.
-
-- **Subscription Plans:**  
-  - **Basic:** $9.99/month – Access to 1 streamer, live workouts & replays, 1-minute free previews, basic chat access.
-  - **Plus:** $19.99/month – Access to 3 streamers, live workouts & replays, exclusive Q&A sessions, priority chat access.
-  - **Unlimited:** $29.99/month – Unlimited streamers, exclusive fitness challenges, one-to-one coaching sessions, VIP chat access & badges.
-  - 1‑day free trial is available.
-
-- **User Authentication & Registration:**  
-  - Multiple sign-in options including Email/Password, Magic Link, Google, and Facebook.
-  - Email verification is required before accessing the platform.
-
-- **Payment & Subscription Management:**  
-  - Recurring billing via Stripe.
-  - Subscription status tracked in Firestore.
-
-- **Moderation & Notifications:**  
-  - Moderators can ban/mute users, manage live polls, and enforce chat rules.
-  - Streamers can schedule sessions and send notifications to subscribers.
-
-- **Additional Interactive Features:**  
-  - Integrated emoji support in chat using **emoji-picker-react**.
-  - Responsive and modern UI for an engaging user experience.
+- **Live Streaming**: Broadcast high-quality workouts in real-time
+- **Interactive Chat**: Engage with viewers during live sessions
+- **Stream Scheduling**: Plan and promote upcoming sessions
+- **Stream Management**: Control camera, microphone, and stream settings
+- **Video Playback**: Watch recorded workout sessions
+- **Responsive Design**: Optimized for desktop and mobile devices
 
 ## Tech Stack
 
-- **Next.js 15**
-- **React 18**
-- **TypeScript**
-- **Tailwind CSS** (with tailwindcss-animate and tailwind-merge)
-- **Firebase** (Authentication & Firestore)
-- **Stripe** (for recurring payments)
-- **Twilio Video** (for live streaming)
-- **Zustand** (for state management)
-- **EmailJS** (for contact form handling)
-- **emoji-picker-react** (for chat emoji support)
+- **Frontend**: Next.js 13 with App Router, React 18, TypeScript, Tailwind CSS
+- **Backend**: Firebase (Authentication, Firestore, Storage)
+- **Real-time Communication**: Twilio Video and Chat APIs
+- **State Management**: React Context API and custom hooks
+- **Styling**: Tailwind CSS with shadcn/ui components
+- **Deployment**: Vercel
 
-## Folder Structure
+## Project Structure
 
 ```
-/CelebFitLife
-├── app/                  # Next.js pages and API routes (using App Router)
-│   ├── (auth)/          # Authentication-related pages (login, register, reset-password)
-│   ├── api/             # API routes (Twilio token, room creation, etc.)
-│   ├── dashboard/       # Dashboard for stream management and user interaction
-│   ├── features/        # Explore More / Features pages
-│   ├── learn-more/      # Informational pages about the platform
-│   ├── streaming/       # Live streaming pages (e.g., live/[slug])
-│   └── layout.tsx       # Global layout and metadata
-├── components/          # Reusable UI components
-│   ├── layout/         # Layout components (e.g., Header, Sidebar)
-│   │   └── landing/    # Landing-page-specific components (e.g., Header.tsx)
-│   └── ui/             # Custom UI elements (Button, Input, etc.)
-├── config/             # Global configuration files (Firebase, Twilio, etc.)
-├── lib/                # Business logic and utilities
-│   ├── models/         # Data models (User, userData)
-│   ├── services/       # Service layer (AuthService, ChatService, Twilio, etc.)
-│   ├── twilioTrackUtils.ts
-│   └── utils.ts
-├── store/             # Zustand state management (useAuthStore.ts)
-├── types/             # TypeScript type definitions (stream.ts, userData.ts)
-└── public/            # Static assets (images, icons, etc.)
+├── app/                      # Next.js app router
+│   ├── dashboard/            # Dashboard pages
+│   │   └── streams/          # Stream management
+│   ├── streaming/            # Viewer streaming pages
+│   │   └── live/             # Live stream viewing
+│   └── auth/                 # Authentication pages
+├── components/               # Reusable React components
+│   ├── ui/                   # UI components (from shadcn/ui)
+│   ├── dashboard/            # Dashboard-specific components
+│   └── streaming/            # Streaming-specific components
+├── lib/                      # Shared utilities and helpers
+│   ├── hooks/                # Custom React hooks
+│   ├── helpers/              # Business logic helpers
+│   └── utils/                # Utility functions
+├── public/                   # Static assets
+└── types/                    # TypeScript type definitions
 ```
 
-## Setup and Installation
+## Getting Started
 
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/A-Hazzard/CelebFitLife.git
-   cd CelebFitLife
+### Prerequisites
+
+- Node.js 16+ and npm/yarn
+- Firebase account
+- Twilio account (with Video and Programmable Chat)
+
+### Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/celebfitlife.git
+   cd celebfitlife
    ```
 
-2. **Install Dependencies:**
-   ```bash
-   pnpm install
+2. Install dependencies:
+   ```
+   npm install
+   # or
+   yarn install
    ```
 
-3. **Configure Environment Variables:**
-   Create a `.env` file in the project root with the following variables (update with your actual values):
-   ```env
-   NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
-   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_firebase_auth_domain
-   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_firebase_project_id
-   TWILIO_ACCOUNT_SID=your_twilio_account_sid
-   TWILIO_API_KEY_SID=your_twilio_api_key_sid
-   TWILIO_API_KEY_SECRET=your_twilio_api_key_secret
-   NEXT_PUBLIC_EMAILJS_SERVICE_ID=your_emailjs_service_id
-   NEXT_PUBLIC_EMAILJS_TEMPLATE_ID=your_emailjs_template_id
-   NEXT_PUBLIC_EMAILJS_PUBLIC_KEY=your_emailjs_public_key
+3. Set up environment variables:
+   Create a `.env.local` file with the following variables:
+   ```
+   # Firebase
+   NEXT_PUBLIC_FIREBASE_API_KEY=
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+   NEXT_PUBLIC_FIREBASE_APP_ID=
+   
+   # Twilio
+   TWILIO_ACCOUNT_SID=
+   TWILIO_API_KEY=
+   TWILIO_API_SECRET=
    ```
 
-4. **Run the Development Server:**
-   ```bash
-   pnpm dev
+4. Start the development server:
    ```
-   Open http://localhost:3000 in your browser.
+   npm run dev
+   # or
+   yarn dev
+   ```
 
-## Environment Variables
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-The application relies on several environment variables for Firebase, Twilio, and EmailJS. Ensure the following are set in your `.env` file:
+## Project Architecture
 
-- `NEXT_PUBLIC_FIREBASE_API_KEY`
-- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
-- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_API_KEY_SID`
-- `TWILIO_API_KEY_SECRET`
-- `NEXT_PUBLIC_EMAILJS_SERVICE_ID`
-- `NEXT_PUBLIC_EMAILJS_TEMPLATE_ID`
-- `NEXT_PUBLIC_EMAILJS_PUBLIC_KEY`
+### Module Organization
 
-## Scripts
+The project follows a modular architecture with clear separation of concerns:
 
-- **Development:**
-  ```bash
-  pnpm dev
-  ```
+1. **Pages (app directory)**: Defines routes and page components
+2. **Components**: Reusable UI elements
+3. **Hooks**: Encapsulates complex stateful logic
+4. **Helpers**: Handles business logic and external service interactions
+5. **Utils**: Provides utility functions for common operations
 
-- **Build:**
-  ```bash
-  pnpm build
-  ```
+### Data Flow
 
-- **Start:**
-  ```bash
-  pnpm start
-  ```
+1. **User Interface**: Components call hooks and helpers to perform actions
+2. **Custom Hooks**: Manage state and side effects for component logic
+3. **Helper Functions**: Handle external service interactions (Firebase, Twilio)
+4. **Firestore**: Stores and synchronizes data in real-time
+5. **Twilio**: Handles video and chat communication
 
-- **Lint:**
-  ```bash
-  pnpm lint
-  ```
+## Code Conventions
 
-## Future Improvements
+- **File Naming**: Use PascalCase for components, camelCase for hooks, helpers, and utilities
+- **Typing**: Use TypeScript interfaces and types for all components and functions
+- **Error Handling**: Consistent error handling with typed error responses
+- **Documentation**: JSDoc comments for functions and components
 
-- **Enhanced Moderation Tools:**
-  - Implement advanced chat moderation features such as auto-filtering and machine learning-based content analysis.
+## Contributing
 
-- **Stream Recording & Replays:**
-  - Integrate Twilio recording functionality to allow users to access past sessions and workout replays.
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature-name`
+3. Commit your changes: `git commit -m 'Add some feature'`
+4. Push to the branch: `git push origin feature/your-feature-name`
+5. Submit a pull request
 
-- **Real-Time Analytics:**
-  - Develop dashboards for streamers to monitor live engagement metrics and viewer statistics.
+## License
 
-- **Push Notifications:**
-  - Implement push notifications for upcoming streams, session reminders, and real-time updates.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-- **Advanced Payment Features:**
-  - Enhance Stripe integration to handle upgrades, downgrades, and cancellations more gracefully.
+## Acknowledgments
 
-- **Performance Optimizations:**
-  - Further optimize database queries and streaming performance as the user base scales.
+- Twilio for their excellent video and chat APIs
+- Firebase for their real-time database and authentication services
+- shadcn/ui for the beautiful component library

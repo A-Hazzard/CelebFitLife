@@ -3,46 +3,48 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ShareButton from "@/components/ui/ShareButton";
 import { db } from "@/lib/config/firebase";
-import { sendChatMessage } from "@/lib/services/ChatService";
+import { sendChatMessage, listenToMessages } from "@/lib/services/ChatService";
 import { useAuthStore } from "@/lib/store/useAuthStore";
-import axios from "axios";
-import EmojiPicker, { Theme } from "emoji-picker-react";
-import { doc, onSnapshot, updateDoc, getDoc } from "firebase/firestore";
+import {
+  clearVideoContainer,
+  setupDevices,
+  switchCamera,
+  switchMic,
+  switchVideoQuality,
+} from "@/lib/utils/streaming";
+import {
+  fetchStreamInfo,
+  updateStreamInfo,
+  prepareStreamStart,
+  endStream,
+  updateStreamDeviceStatus,
+  setupTwilioRoom,
+} from "@/lib/helpers/streaming";
+import EmojiPicker from "emoji-picker-react";
+import { doc, updateDoc } from "firebase/firestore";
 import { Check, ChevronUp, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import Image from "next/image";
 import {
-  connect,
-  createLocalAudioTrack,
-  createLocalVideoTrack,
   LocalAudioTrack,
-  LocalTrack,
   LocalVideoTrack,
   Room,
+  TwilioError,
 } from "twilio-video";
-
-/** Helper to safely detach a video track's DOM elements. */
-const clearVideoContainer = (
-  container: HTMLDivElement,
-  track?: LocalVideoTrack
-) => {
-  if (!container) return;
-
-  // Remove all elements
-  while (container.firstChild) {
-    const el = container.firstChild as HTMLVideoElement;
-    if (track) {
-      track.detach(el);
-    }
-    container.removeChild(el);
-  }
-};
+import { useStreamData } from "@/lib/hooks/useStreamData";
+import { useMediaDevices } from "@/lib/hooks/useMediaDevices";
+import {
+  useNetworkQualityMonitor,
+  useTwilioTrackEvents,
+} from "@/lib/hooks/useTwilioTrackEvents";
+import { StreamData } from "@/lib/types/streaming";
+import { ChatMessage } from "@/lib/types/stream";
 
 const ManageStreamPage = () => {
   const pathname = usePathname();
   const router = useRouter();
-  const slug = pathname?.split("/").pop() || "";
+  const slug = useMemo(() => pathname?.split("/").pop() || "", [pathname]);
   const { currentUser } = useAuthStore();
 
   const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -58,634 +60,264 @@ const ManageStreamPage = () => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showCameraOptions, setShowCameraOptions] = useState(false);
   const [showMicOptions, setShowMicOptions] = useState(false);
-  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
-  const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
   const [currentVideoTrack, setCurrentVideoTrack] =
     useState<LocalVideoTrack | null>(null);
   const [currentAudioTrack, setCurrentAudioTrack] =
     useState<LocalAudioTrack | null>(null);
   const [showEndConfirmation, setShowEndConfirmation] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [currentMicId, setCurrentMicId] = useState<string>("");
-  const [currentCameraId, setCurrentCameraId] = useState<string>("");
-  const [streamTitle, setStreamTitle] = useState("");
-  const [thumbnailUrl, setThumbnailUrl] = useState(
-    "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg"
+  const [shareUrl, setShareUrl] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  // Use custom hooks
+  const { streamData, loading, error: streamError } = useStreamData(slug);
+  const {
+    cameraDevices,
+    micDevices,
+    currentCameraId,
+    currentMicId,
+    setCurrentCameraId,
+    setCurrentMicId,
+    loadingDevices,
+  } = useMediaDevices(
+    streamData?.currentCameraId as string | undefined,
+    streamData?.currentMicId as string | undefined
   );
 
-  // Function declarations
-  const switchVideoQuality = useCallback(
-    async (quality: "low" | "medium" | "high") => {
-      try {
-        if (!currentCameraId || !roomRef.current?.localParticipant) return;
+  // Set state based on streamData
+  useEffect(() => {
+    if (streamData) {
+      setIsStreamStarted(streamData.hasStarted || false);
+      setIsAudioEnabled(!streamData.audioMuted);
+      setIsVideoEnabled(!streamData.cameraOff);
+    }
+  }, [streamData]);
 
-        const constraints = {
-          low: { width: 640, height: 480 },
-          medium: { width: 960, height: 540 },
-          high: { width: 1280, height: 720 },
-        };
+  // Update share URL
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setShareUrl(`${window.location.origin}/streaming/live/${slug}`);
+    }
+  }, [slug]);
 
-        const newVideoTrack = await createLocalVideoTrack({
-          deviceId: currentCameraId,
-          ...constraints[quality],
-        });
+  // Track status handlers
+  const handleTrackStatusChange = useCallback(
+    (trackType: "video" | "audio", isEnabled: boolean) => {
+      if (trackType === "video") {
+        setIsVideoEnabled(isEnabled);
+      } else if (trackType === "audio") {
+        setIsAudioEnabled(isEnabled);
+      }
+    },
+    []
+  );
 
-        // Publish new track BEFORE unpublishing old track
-        await roomRef.current.localParticipant.publishTrack(newVideoTrack);
+  // Use Twilio track events hook
+  useTwilioTrackEvents(
+    isConnected,
+    currentVideoTrack,
+    currentAudioTrack,
+    handleTrackStatusChange
+  );
 
-        if (currentVideoTrack) {
-          await roomRef.current.localParticipant.unpublishTrack(
-            currentVideoTrack
-          );
-          currentVideoTrack.stop();
+  // Handle video quality changes from network monitor
+  const handleQualityChange = useCallback(
+    async (
+      quality: "low" | "medium" | "high",
+      prevResult: { success: boolean; track: LocalVideoTrack | null }
+    ) => {
+      if (!prevResult.success) {
+        const result = await switchVideoQuality(
+          quality,
+          roomRef.current,
+          currentVideoTrack,
+          currentCameraId
+        );
+
+        if (result.success && result.track) {
+          setCurrentVideoTrack(result.track);
         }
-
-        setCurrentVideoTrack(newVideoTrack);
-        console.log(`Switched to ${quality} quality video track`);
-      } catch (error) {
-        console.error("Error switching video quality:", error);
       }
     },
     [currentCameraId, currentVideoTrack]
   );
 
-  const switchCamera = useCallback(
+  // Use network quality monitor
+  useNetworkQualityMonitor(
+    isConnected,
+    roomRef.current,
+    currentCameraId,
+    currentVideoTrack,
+    handleQualityChange
+  );
+
+  // Handle camera switch
+  const handleSwitchCamera = useCallback(
     async (deviceId: string) => {
-      try {
-        console.log("Switching camera to device:", deviceId);
+      const result = await switchCamera(
+        deviceId,
+        roomRef.current,
+        currentVideoTrack,
+        slug
+      );
 
-        const newVideoTrack = await createLocalVideoTrack({
-          deviceId,
-          width: 1280,
-          height: 720,
-          name: `camera-${deviceId.substring(0, 8)}-${Date.now()}`,
-        });
-
-        if (roomRef.current?.localParticipant) {
-          await roomRef.current.localParticipant.publishTrack(newVideoTrack);
-
-          if (currentVideoTrack) {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-            await roomRef.current.localParticipant.unpublishTrack(
-              currentVideoTrack
-            );
-            currentVideoTrack.stop();
-          }
-        }
-
-        setCurrentVideoTrack(newVideoTrack);
+      if (result.success && result.track) {
+        setCurrentVideoTrack(result.track);
         setCurrentCameraId(deviceId);
         setShowCameraOptions(false);
-
-        const streamRef = doc(db, "streams", slug);
-        await updateDoc(streamRef, {
-          currentCameraId: deviceId,
-        });
-      } catch (error) {
-        console.error("Error switching camera:", error);
       }
     },
     [currentVideoTrack, slug]
   );
 
-  const switchMic = useCallback(
+  // Handle mic switch
+  const handleSwitchMic = useCallback(
     async (deviceId: string) => {
-      try {
-        const newAudioTrack = await createLocalAudioTrack({
-          deviceId,
-          name: "microphone",
-        });
+      const result = await switchMic(
+        deviceId,
+        roomRef.current,
+        currentAudioTrack,
+        slug
+      );
 
-        if (roomRef.current?.localParticipant) {
-          await roomRef.current.localParticipant.publishTrack(newAudioTrack);
-
-          if (currentAudioTrack) {
-            await roomRef.current.localParticipant.unpublishTrack(
-              currentAudioTrack
-            );
-            currentAudioTrack.stop();
-          }
-        }
-
-        setCurrentAudioTrack(newAudioTrack);
+      if (result.success && result.track) {
+        setCurrentAudioTrack(result.track);
         setCurrentMicId(deviceId);
         setShowMicOptions(false);
-
-        const streamRef = doc(db, "streams", slug);
-        await updateDoc(streamRef, {
-          currentMicId: deviceId,
-        });
-      } catch (error) {
-        console.error("Error switching microphone:", error);
       }
     },
     [currentAudioTrack, slug]
   );
 
-  const startStream = useCallback(async () => {
-    if (!currentUser || !currentCameraId || !currentMicId) {
+  // Handle stream start
+  const handleStartStream = useCallback(async () => {
+    if (!currentUser?.uid || !currentCameraId || !currentMicId || !slug) {
       console.error("Missing required data to start stream");
+      alert(
+        "Cannot start stream. Ensure camera and mic are selected and you are logged in."
+      );
       return;
     }
 
+    setIsRoomConnecting(true);
     try {
-      setIsRoomConnecting(true);
+      const prepareResult = await prepareStreamStart(
+        slug,
+        currentUser.uid,
+        currentUser.username || currentUser.email || "Streamer"
+      );
 
-      // Update Firestore immediately when starting
-      const streamDocRef = doc(db, "streams", slug);
-      await updateDoc(streamDocRef, {
-        hasStarted: true,
-        hasEnded: false,
-        startedAt: new Date().toISOString(),
-      });
-
-      const res = await fetch("/api/twilio/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomName: slug,
-          userName: currentUser.username || currentUser.email,
-        }),
-      });
-
-      const data = await res.json();
-      if (!data.token) throw new Error("No Twilio token returned");
-
-      // Create tracks silently without showing alerts
-      const audioTrack = await createLocalAudioTrack({
-        deviceId: currentMicId,
-        name: "microphone",
-      });
-      const videoTrack = await createLocalVideoTrack({
-        width: 1280,
-        height: 720,
-        deviceId: currentCameraId,
-        name: `camera-${
-          currentCameraId?.substring(0, 8) || "default"
-        }-${Date.now()}`,
-      });
-      const tracks = [audioTrack, videoTrack];
-
-      const twRoom = await connect(data.token, {
-        tracks,
-        bandwidthProfile: {
-          video: {
-            mode: "collaboration",
-            maxTracks: 2,
-            dominantSpeakerPriority: "high",
-            maxSubscriptionBitrate: 1500000, // 1.5 Mbps
-          },
-        },
-        dominantSpeaker: true,
-      });
-      roomRef.current = twRoom;
-
-      // Attach video if available
-      if (videoTrack && videoContainerRef.current) {
-        clearVideoContainer(videoContainerRef.current);
-        const videoEl = videoTrack.attach();
-        videoEl.style.width = "100%";
-        videoEl.style.height = "100%";
-        videoEl.style.objectFit = "cover";
-        videoContainerRef.current.appendChild(videoEl);
-        setCurrentVideoTrack(videoTrack);
+      if (!prepareResult.success || !prepareResult.token) {
+        throw new Error(
+          prepareResult.error || "Failed to prepare stream start"
+        );
       }
 
-      if (audioTrack) {
-        setCurrentAudioTrack(audioTrack);
+      // Setup Twilio room
+      const roomResult = await setupTwilioRoom(
+        slug,
+        currentUser.username || currentUser.email || "Streamer",
+        currentCameraId,
+        currentMicId,
+        videoContainerRef as React.RefObject<HTMLDivElement>,
+        {
+          audioMuted: !isAudioEnabled,
+          cameraOff: !isVideoEnabled,
+        }
+      );
+
+      if (!roomResult.success) {
+        throw new Error(roomResult.error || "Failed to setup Twilio room");
       }
 
+      roomRef.current = roomResult.room;
+      setCurrentAudioTrack(roomResult.audioTrack);
+      setCurrentVideoTrack(roomResult.videoTrack);
       setIsConnected(true);
-      setIsStreamStarted(true);
-      setIsRoomConnecting(false);
 
-      twRoom.on("disconnected", () => {
-        console.log("Room disconnected event triggered");
+      // Setup room disconnection handler
+      roomResult.room?.on("disconnected", (room, error) => {
+        console.log("Room disconnected event triggered", { error });
         setIsConnected(false);
+        setCurrentAudioTrack(null);
+        setCurrentVideoTrack(null);
+        roomRef.current = null;
+        clearVideoContainer(videoContainerRef.current);
+        if (error) {
+          console.error("Disconnected due to error:", error);
+        }
       });
     } catch (error) {
       console.error("Error starting stream:", error);
+      alert(
+        `Failed to start stream: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+
+      // Reset stream status in Firestore if start failed
+      await updateDoc(doc(db, "streams", slug), { hasStarted: false });
+    } finally {
       setIsRoomConnecting(false);
-
-      // Reset Firestore if stream fails to start
-      const streamDocRef = doc(db, "streams", slug);
-      await updateDoc(streamDocRef, {
-        hasStarted: false,
-        hasEnded: false,
-      }).catch(console.error);
     }
-  }, [slug, currentUser, currentCameraId, currentMicId]);
+  }, [
+    currentUser,
+    slug,
+    currentCameraId,
+    currentMicId,
+    isAudioEnabled,
+    isVideoEnabled,
+  ]);
 
-  const endStream = useCallback(async () => {
-    if (roomRef.current) {
-      roomRef.current.disconnect();
-      setIsConnected(false);
+  const handleEndStream = useCallback(async () => {
+    const result = await endStream(slug, roomRef.current);
+    if (!result.success) {
+      console.error("Failed to end stream gracefully:", result.error);
+      roomRef.current?.disconnect();
     }
-    try {
-      await updateDoc(doc(db, "streams", slug), {
-        hasStarted: false,
-        hasEnded: true,
-        endedAt: new Date().toISOString(),
-      });
-      router.push("/dashboard");
-    } catch (error) {
-      console.error("Error ending stream:", error);
-    }
-  }, [router, slug]);
+    setShowEndConfirmation(false);
+  }, [slug]);
 
-  const toggleAudio = useCallback(async () => {
+  const handleToggleAudio = useCallback(async () => {
     if (!currentAudioTrack) return;
-
-    if (isAudioEnabled) {
-      currentAudioTrack.disable();
-      // Update Firestore
-      const streamRef = doc(db, "streams", slug);
-      await updateDoc(streamRef, {
-        audioMuted: true,
-      });
+    const newState = !isAudioEnabled;
+    if (newState) {
+      await currentAudioTrack.enable();
     } else {
-      currentAudioTrack.enable();
-      // Update Firestore
-      const streamRef = doc(db, "streams", slug);
-      await updateDoc(streamRef, {
-        audioMuted: false,
-      });
+      await currentAudioTrack.disable();
     }
-    setIsAudioEnabled(!isAudioEnabled);
+    setIsAudioEnabled(newState);
+    // Update Firestore
+    await updateStreamDeviceStatus(slug, { audioMuted: !newState });
   }, [currentAudioTrack, isAudioEnabled, slug]);
 
-  const toggleVideo = useCallback(async () => {
+  const handleToggleVideo = useCallback(async () => {
     if (!currentVideoTrack) return;
-
-    if (isVideoEnabled) {
-      currentVideoTrack.disable();
-      // Update Firestore
-      const streamRef = doc(db, "streams", slug);
-      await updateDoc(streamRef, {
-        cameraOff: true,
-      });
+    const newState = !isVideoEnabled;
+    if (newState) {
+      await currentVideoTrack.enable();
     } else {
-      currentVideoTrack.enable();
-      // Update Firestore
-      const streamRef = doc(db, "streams", slug);
-      await updateDoc(streamRef, {
-        cameraOff: false,
-      });
+      await currentVideoTrack.disable();
     }
-    setIsVideoEnabled(!isVideoEnabled);
+    setIsVideoEnabled(newState);
+    // Update Firestore
+    await updateStreamDeviceStatus(slug, { cameraOff: !newState });
   }, [currentVideoTrack, isVideoEnabled, slug]);
 
-  const handleSendMessage = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!newMessage.trim() || !currentUser) return;
-      const userName = currentUser.username || currentUser.email;
-      await sendChatMessage(slug, userName || "User", newMessage.trim());
-      setNewMessage("");
-    },
-    [newMessage, currentUser, slug]
-  );
+  const handleUpdateInfo = useCallback(async () => {
+    if (!streamData) return;
 
-  // Effects
-  useEffect(() => {
-    let hasCheckedPermissions = false;
-    if (!hasCheckedPermissions) {
-      navigator.mediaDevices
-        .getUserMedia({ audio: true, video: true })
-        .then(() => {
-          hasCheckedPermissions = true;
-        })
-        .catch((err) => {
-          console.error("Media permissions error:", err);
-        });
+    const result = await updateStreamInfo(
+      slug,
+      streamData.title || "",
+      streamData.thumbnail || ""
+    );
+
+    if (result.success) {
+      alert("Stream info updated successfully!");
+    } else {
+      alert(`Failed to update stream info: ${result.error}`);
     }
-  }, []);
-
-  useEffect(() => {
-    if (currentUser) {
-      setLoading(false);
-    }
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (!slug) return;
-    const streamDocRef = doc(db, "streams", slug);
-    const unsubscribe = onSnapshot(streamDocRef, async (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setStreamerStatus({
-          audioMuted: data.audioMuted || false,
-          cameraOff: data.cameraOff || false,
-        });
-
-        // Update video status based on stream state
-        if (data.hasEnded) {
-          setIsStreamStarted(false);
-          if (roomRef.current) {
-            roomRef.current.disconnect();
-          }
-        } else if (data.hasStarted) {
-          setIsStreamStarted(true);
-
-          // Load device preferences if stream hasn't started
-          if (!data.hasStarted) {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            if (data.currentMicId) {
-              const savedMic = devices.find(
-                (d: MediaDeviceInfo) =>
-                  d.deviceId === data.currentMicId && d.kind === "audioinput"
-              );
-              if (savedMic) {
-                setCurrentMicId(data.currentMicId);
-                await switchMic(data.currentMicId);
-              }
-            }
-            if (data.currentCameraId) {
-              const savedCamera = devices.find(
-                (d: MediaDeviceInfo) =>
-                  d.deviceId === data.currentCameraId && d.kind === "videoinput"
-              );
-              if (savedCamera) {
-                setCurrentCameraId(data.currentCameraId);
-                await switchCamera(data.currentCameraId);
-              }
-            }
-          }
-        } else {
-          setIsStreamStarted(false);
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, [slug, roomRef, switchCamera, switchMic]);
-
-  useEffect(() => {
-    if (!roomRef.current || !isConnected) return;
-
-    const handleTrackStatus = (track: LocalTrack) => {
-      if (track.kind === "video") {
-        setStreamerStatus((prev) => ({
-          ...prev,
-          cameraOff: !track.isEnabled,
-        }));
-      } else if (track.kind === "audio") {
-        setStreamerStatus((prev) => ({
-          ...prev,
-          audioMuted: !track.isEnabled,
-        }));
-      }
-    };
-
-    const handleVideoDisabled = () => {
-      if (currentVideoTrack) handleTrackStatus(currentVideoTrack);
-    };
-
-    const handleAudioDisabled = () => {
-      if (currentAudioTrack) handleTrackStatus(currentAudioTrack);
-    };
-
-    currentVideoTrack?.on("disabled", handleVideoDisabled);
-    currentVideoTrack?.on("enabled", handleVideoDisabled);
-    currentAudioTrack?.on("disabled", handleAudioDisabled);
-    currentAudioTrack?.on("enabled", handleAudioDisabled);
-
-    return () => {
-      currentVideoTrack?.off("disabled", handleVideoDisabled);
-      currentVideoTrack?.off("enabled", handleVideoDisabled);
-      currentAudioTrack?.off("disabled", handleAudioDisabled);
-      currentAudioTrack?.off("enabled", handleAudioDisabled);
-    };
-  }, [isConnected, currentVideoTrack, currentAudioTrack]);
-
-  // Update stream status in Firestore
-  const updateStreamStatus = useCallback(async () => {
-    if (!slug || !isConnected) return;
-
-    await updateDoc(doc(db, "streams", slug), {
-      isMuted: !isAudioEnabled,
-      isCameraOff: !isVideoEnabled,
-      currentMicId,
-      currentCameraId,
-      lastUpdated: new Date().toISOString(),
-    }).catch(console.error);
-  }, [
-    slug,
-    isAudioEnabled,
-    isVideoEnabled,
-    currentMicId,
-    currentCameraId,
-    isConnected,
-  ]);
-
-  useEffect(() => {
-    updateStreamStatus();
-  }, [
-    slug,
-    isAudioEnabled,
-    isVideoEnabled,
-    currentMicId,
-    currentCameraId,
-    isConnected,
-    updateStreamStatus,
-  ]);
-
-  useEffect(() => {
-    if (!roomRef.current || !isConnected) return;
-
-    const networkQualityInterval = setInterval(async () => {
-      const localParticipant = roomRef.current?.localParticipant;
-      if (!localParticipant) return;
-
-      interface NetworkQualityStats {
-        networkQualityLevel?: number;
-      }
-
-      const quality = (localParticipant as NetworkQualityStats)
-        .networkQualityLevel;
-
-      if (quality !== undefined) {
-        if (quality <= 2) {
-          await switchVideoQuality("low");
-        } else if (quality === 3) {
-          await switchVideoQuality("medium");
-        } else {
-          await switchVideoQuality("high");
-        }
-      }
-    }, 5000);
-
-    return () => clearInterval(networkQualityInterval);
-  }, [roomRef, isConnected, switchVideoQuality, currentCameraId, currentMicId]);
-
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const setupDevices = async () => {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoInputs = devices.filter((d) => d.kind === "videoinput");
-        const audioInputs = devices.filter((d) => d.kind === "audioinput");
-
-        setCameraDevices(videoInputs);
-        setMicDevices(audioInputs);
-
-        // Initialize with saved preferences or defaults
-        if (!currentCameraId && videoInputs.length > 0) {
-          setCurrentCameraId(videoInputs[0].deviceId);
-          await switchCamera(videoInputs[0].deviceId);
-        }
-        if (!currentMicId && audioInputs.length > 0) {
-          setCurrentMicId(audioInputs[0].deviceId);
-          await switchMic(audioInputs[0].deviceId);
-        }
-      } catch (error) {
-        console.error("Error setting up devices:", error);
-      }
-    };
-
-    setupDevices();
-  }, [currentUser, currentCameraId, currentMicId, switchCamera, switchMic]);
-
-  useEffect(() => {
-    if (!currentUser || !slug) return;
-
-    const setupStream = async () => {
-      try {
-        console.log("Setting up stream...");
-        const { data } = await axios.post("/api/twilio/connect", {
-          roomName: slug,
-          userName: currentUser.username || currentUser.email,
-        });
-
-        // Create video track
-        const videoTrack = await createLocalVideoTrack({
-          width: 1280,
-          height: 720,
-          deviceId: currentCameraId,
-          name: `camera-${
-            currentCameraId?.substring(0, 8) || "default"
-          }-${Date.now()}`,
-        });
-
-        // Create audio track
-        const audioTrack = await createLocalAudioTrack({
-          deviceId: currentMicId,
-          name: "microphone",
-        });
-
-        // Connect to room
-        const twRoom = await connect(data.token, {
-          name: slug,
-          tracks: [videoTrack, audioTrack],
-          bandwidthProfile: {
-            video: {
-              mode: "collaboration",
-              maxTracks: 2,
-              dominantSpeakerPriority: "high",
-              maxSubscriptionBitrate: 1500000, // 1.5 Mbps
-            },
-          },
-          dominantSpeaker: true,
-        });
-
-        roomRef.current = twRoom;
-
-        // Attach local video
-        if (videoContainerRef.current) {
-          clearVideoContainer(videoContainerRef.current);
-          const videoEl = videoTrack.attach();
-          videoEl.style.width = "100%";
-          videoEl.style.height = "100%";
-          videoEl.style.objectFit = "cover";
-          videoContainerRef.current.appendChild(videoEl);
-        }
-
-        setCurrentVideoTrack(videoTrack);
-        setCurrentAudioTrack(audioTrack);
-        setIsVideoEnabled(true);
-        setIsAudioEnabled(true);
-
-        // Update Firestore with initial state - DO NOT set hasStarted here!
-        const streamRef = doc(db, "streams", slug);
-        await updateDoc(streamRef, {
-          // DO NOT set hasStarted to true here - only when Start Stream button is clicked
-          cameraOff: false,
-          audioMuted: false,
-        });
-
-        // Handle room events
-        twRoom.on("disconnected", () => {
-          console.log("Room disconnected event triggered");
-          setIsConnected(false);
-        });
-
-        // Cleanup interval on component unmount
-        return () => {
-          twRoom.disconnect();
-        };
-      } catch (error) {
-        console.error("Error setting up stream:", error);
-      }
-    };
-
-    setupStream();
-  }, [currentUser, slug, currentCameraId, currentMicId]);
-
-  useEffect(() => {
-    if (!currentUser || !slug) return;
-    const startStreamOnLoad = async () => {
-      try {
-        const streamDocRef = doc(db, "streams", slug);
-        const unsubscribe = onSnapshot(streamDocRef, async (snapshot) => {
-          const data = snapshot.data();
-          if (!data) return;
-
-          if (data.hasEnded) {
-            if (roomRef.current) {
-              roomRef.current.disconnect();
-            }
-            setIsConnected(false);
-            setIsStreamStarted(false);
-            setIsRoomConnecting(false);
-            router.push("/dashboard/streams");
-          } else if (data.hasStarted) {
-            setIsStreamStarted(true);
-
-            // Load device preferences if stream hasn't started
-            if (!data.hasStarted) {
-              const devices = await navigator.mediaDevices.enumerateDevices();
-              const videoInputs = devices.filter(
-                (d) => d.kind === "videoinput"
-              );
-              const audioInputs = devices.filter(
-                (d) => d.kind === "audioinput"
-              );
-
-              if (videoInputs.length > 0 && !currentCameraId) {
-                setCurrentCameraId(videoInputs[0].deviceId);
-              }
-              if (audioInputs.length > 0 && !currentMicId) {
-                setCurrentMicId(audioInputs[0].deviceId);
-              }
-            }
-          }
-        });
-
-        return () => unsubscribe();
-      } catch (error) {
-        console.error("Error starting stream on load:", error);
-        setIsRoomConnecting(false);
-      }
-    };
-    startStreamOnLoad();
-  }, [
-    slug,
-    currentUser,
-    isStreamStarted,
-    currentCameraId,
-    currentMicId,
-    router,
-  ]);
+  }, [slug, streamData]);
 
   // Streamer status overlay
   const [streamerStatus, setStreamerStatus] = useState({
@@ -694,277 +326,316 @@ const ManageStreamPage = () => {
   });
 
   // Modal controls
-  const openModal = () => {
-    setShowEndConfirmation(true);
-  };
+  const openModal = () => setShowEndConfirmation(true);
+  const closeModal = () => setShowEndConfirmation(false);
 
-  const closeModal = () => {
-    setShowEndConfirmation(false);
-  };
-
-  // Add effect to fetch stream title and thumbnail
+  // Subscribe to chat messages
   useEffect(() => {
     if (!slug) return;
 
-    const fetchStreamInfo = async () => {
-      try {
-        const streamDoc = await getDoc(doc(db, "streams", slug));
-        if (streamDoc.exists()) {
-          const data = streamDoc.data();
-          setStreamTitle(data.title || "Untitled Stream");
-          if (data.thumbnail) {
-            setThumbnailUrl(data.thumbnail);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching stream info:", error);
-      }
-    };
+    console.log("Subscribing to chat messages for stream:", slug);
+    const unsubscribe = listenToMessages(slug, (newMessages) => {
+      console.log("Received messages:", newMessages);
+      setMessages(newMessages);
+    });
 
-    fetchStreamInfo();
+    return () => {
+      console.log("Unsubscribing from chat messages");
+      unsubscribe();
+    };
   }, [slug]);
 
-  if (loading) {
+  // Handle sending a message
+  const handleSendMessage = useCallback(async () => {
+    if (!newMessage.trim() || !currentUser) return;
+
+    try {
+      await sendChatMessage(
+        slug,
+        currentUser.username || currentUser.email || "Streamer",
+        newMessage
+      );
+      setNewMessage("");
+    } catch (error) {
+      console.error("Error sending message:", error);
+    }
+  }, [slug, newMessage, currentUser]);
+
+  // Handle Enter key press for sending messages
+  const handleKeyPress = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    },
+    [handleSendMessage]
+  );
+
+  if (loading || loadingDevices) {
     return null;
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="min-h-screen bg-brandBlack text-brandWhite p-4 md:p-8 space-y-6">
       {/* Header */}
-      <header className="flex items-center justify-between p-4 border-b border-brandOrange">
-        <div className="flex items-center space-x-4">
-          <div className="h-10 w-10 rounded overflow-hidden flex-shrink-0 bg-brandGray">
-            <Image
-              src={thumbnailUrl}
-              alt="Stream thumbnail"
-              className="h-full w-full object-cover"
-              width={40}
-              height={40}
-              onError={() => {
-                setThumbnailUrl(
-                  "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg"
-                );
-              }}
-            />
-          </div>
-          <h1 className="text-xl font-bold text-brandWhite">{streamTitle}</h1>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
+        <h1 className="text-2xl md:text-3xl font-bold text-brandOrange">
+          Manage Stream
+        </h1>
+        <div className="flex space-x-2 md:space-x-4">
+          <ShareButton streamLink={shareUrl} />
+          {!isStreamStarted || !isConnected ? (
+            <Button
+              onClick={handleStartStream}
+              disabled={isRoomConnecting || !currentCameraId || !currentMicId}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {isRoomConnecting ? "Connecting..." : "Start Streaming"}
+            </Button>
+          ) : (
+            <Button
+              onClick={openModal}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              End Stream
+            </Button>
+          )}
         </div>
-        <div className="flex items-center space-x-4">
-          <Button className="px-4 py-2 bg-brandOrange text-brandBlack rounded hover:bg-brandWhite hover:text-brandBlack">
-            Subscribe
-          </Button>
-          <Button className="p-2 bg-brandGray rounded-full">😀</Button>
-        </div>
-      </header>
+      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-4rem)]">
-        {/* Video Section */}
-        <div className="flex-1 p-4 relative">
-          <div className="relative bg-black w-full h-full rounded-lg overflow-hidden">
-            <div ref={videoContainerRef} className="w-full h-full" />
-
-            {/* 🔥 Overlays for streamer status */}
-            {streamerStatus?.cameraOff && (
-              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-20">
-                <VideoOff className="w-10 h-10 text-brandOrange mb-2" />
-                <p className="text-brandOrange text-xl font-semibold">
-                  Camera is Off
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: Video Preview & Controls */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Video Preview */}
+          <div
+            ref={videoContainerRef}
+            className="aspect-video bg-brandGray rounded-lg relative overflow-hidden border border-brandOrange/30"
+          >
+            {(!isConnected || !isVideoEnabled || streamerStatus.cameraOff) && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70">
+                <VideoOff className="w-16 h-16 text-brandGray mb-4" />
+                <p className="text-lg text-brandWhite">
+                  {isStreamStarted ? "Camera Off" : "Stream Offline"}
                 </p>
               </div>
             )}
-
-            {/* 🔧 Stream Controls (Streamer only) */}
-            {isStreamStarted && !isRoomConnecting && (
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-black/50 p-3 rounded-lg z-40">
-                {/* 🎤 Audio Toggle */}
-                <div className="relative">
-                  <button
-                    onClick={toggleAudio}
-                    className="p-3 rounded-full bg-brandOrange hover:bg-brandOrange/80 transition-colors"
-                  >
-                    {isAudioEnabled ? (
-                      <Mic className="w-5 h-5" />
-                    ) : (
-                      <MicOff className="w-5 h-5" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setShowMicOptions(!showMicOptions)}
-                    className="absolute -right-1 -top-1 p-1 rounded-md bg-orange-100 hover:bg-orange-200 transition-colors"
-                  >
-                    <ChevronUp className="w-3 h-3 text-orange-600" />
-                  </button>
-                  {showMicOptions && (
-                    <div className="absolute bottom-full left-0 mb-2 w-48 bg-neutral-800 rounded-lg shadow-lg overflow-hidden z-50">
-                      {micDevices.map((device) => (
-                        <button
-                          key={device.deviceId}
-                          onClick={() => {
-                            switchMic(device.deviceId);
-                            setShowMicOptions(false);
-                          }}
-                          className={`w-full px-4 py-2 text-left text-sm hover:bg-brandOrange/20 flex items-center justify-between ${
-                            currentMicId === device.deviceId
-                              ? "bg-brandOrange/10"
-                              : ""
-                          }`}
-                        >
-                          <span className="truncate">{device.label}</span>
-                          {currentMicId === device.deviceId && (
-                            <Check className="w-4 h-4 text-brandOrange flex-shrink-0 ml-2" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 📷 Video Toggle */}
-                <div className="relative">
-                  <button
-                    onClick={toggleVideo}
-                    className="p-3 rounded-full bg-brandOrange hover:bg-brandOrange/80 transition-colors"
-                  >
-                    {isVideoEnabled ? (
-                      <Video className="w-5 h-5" />
-                    ) : (
-                      <VideoOff className="w-5 h-5" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setShowCameraOptions(!showCameraOptions)}
-                    className="absolute -right-1 -top-1 p-1 rounded-md bg-orange-100 hover:bg-orange-200 transition-colors"
-                  >
-                    <ChevronUp className="w-3 h-3 text-orange-600" />
-                  </button>
-                  {showCameraOptions && (
-                    <div className="absolute bottom-full left-0 mb-2 w-48 bg-neutral-800 rounded-lg shadow-lg overflow-hidden z-50">
-                      {cameraDevices.map((device) => (
-                        <button
-                          key={device.deviceId}
-                          onClick={() => {
-                            switchCamera(device.deviceId);
-                            setShowCameraOptions(false);
-                          }}
-                          className={`w-full px-4 py-2 text-left text-sm hover:bg-brandOrange/20 flex items-center justify-between ${
-                            currentCameraId === device.deviceId
-                              ? "bg-brandOrange/10"
-                              : ""
-                          }`}
-                        >
-                          <span className="truncate">{device.label}</span>
-                          {currentCameraId === device.deviceId && (
-                            <Check className="w-4 h-4 text-brandOrange flex-shrink-0 ml-2" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 🔴 End Stream Button */}
-                <Button
-                  onClick={openModal}
-                  className="rounded-full bg-red-500 text-white shadow-lg px-6 py-2"
-                >
-                  End Stream
-                </Button>
-              </div>
-            )}
-
-            {/* ▶️ Start Stream Button */}
-            {!isStreamStarted && !isRoomConnecting && (
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-40">
-                <Button
-                  onClick={startStream}
-                  className="bg-brandOrange text-white px-6 py-2 rounded-full"
-                >
-                  Start Stream
-                </Button>
-              </div>
-            )}
           </div>
 
-          {/* Connecting Indicator */}
-          {isRoomConnecting && (
-            <p className="absolute text-brandOrange text-xl font-bold">
-              Connecting...
-            </p>
+          {/* Controls */}
+          {isConnected && (
+            <div className="flex justify-center items-center space-x-4 bg-brandBlack border border-brandOrange/30 p-3 rounded-lg">
+              {/* Mic Toggle */}
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleToggleAudio}
+                  className="rounded-full bg-brandGray hover:bg-brandGray/80 text-brandWhite"
+                >
+                  {isAudioEnabled ? (
+                    <Mic className="w-5 h-5" />
+                  ) : (
+                    <MicOff className="w-5 h-5 text-red-500" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowMicOptions(!showMicOptions)}
+                  className="absolute -top-2 -right-2 w-5 h-5 p-0 rounded-full bg-brandOrange text-brandBlack text-xs"
+                >
+                  <ChevronUp
+                    className={`w-3 h-3 transition-transform ${
+                      showMicOptions ? "rotate-180" : ""
+                    }`}
+                  />
+                </Button>
+                {showMicOptions && (
+                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-48 bg-brandGray border border-brandOrange/30 rounded-lg shadow-lg z-10 p-2 space-y-1">
+                    <p className="text-xs text-brandGray mb-1 px-1">
+                      Microphones
+                    </p>
+                    {micDevices.map((device) => (
+                      <button
+                        key={device.deviceId}
+                        onClick={() => handleSwitchMic(device.deviceId)}
+                        className={`w-full text-left text-sm px-2 py-1 rounded hover:bg-brandOrange/20 ${
+                          currentMicId === device.deviceId
+                            ? "text-brandOrange"
+                            : "text-brandWhite"
+                        }`}
+                      >
+                        {device.label ||
+                          `Mic ${micDevices.indexOf(device) + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Camera Toggle */}
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleToggleVideo}
+                  className="rounded-full bg-brandGray hover:bg-brandGray/80 text-brandWhite"
+                >
+                  {isVideoEnabled ? (
+                    <Video className="w-5 h-5" />
+                  ) : (
+                    <VideoOff className="w-5 h-5 text-red-500" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowCameraOptions(!showCameraOptions)}
+                  className="absolute -top-2 -right-2 w-5 h-5 p-0 rounded-full bg-brandOrange text-brandBlack text-xs"
+                >
+                  <ChevronUp
+                    className={`w-3 h-3 transition-transform ${
+                      showCameraOptions ? "rotate-180" : ""
+                    }`}
+                  />
+                </Button>
+                {showCameraOptions && (
+                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-48 bg-brandGray border border-brandOrange/30 rounded-lg shadow-lg z-10 p-2 space-y-1">
+                    <p className="text-xs text-brandGray mb-1 px-1">Cameras</p>
+                    {cameraDevices.map((device) => (
+                      <button
+                        key={device.deviceId}
+                        onClick={() => handleSwitchCamera(device.deviceId)}
+                        className={`w-full text-left text-sm px-2 py-1 rounded hover:bg-brandOrange/20 ${
+                          currentCameraId === device.deviceId
+                            ? "text-brandOrange"
+                            : "text-brandWhite"
+                        }`}
+                      >
+                        {device.label ||
+                          `Camera ${cameraDevices.indexOf(device) + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
 
-        {/* Chat Panel */}
-        <div className="w-full md:w-96 lg:w-80 bg-brandGray border-l border-brandOrange flex flex-col">
-          <div className="flex items-center justify-end p-2 border-b border-brandOrange">
-            <ShareButton
-              streamLink={
-                typeof window !== "undefined" ? window.location.href : ""
-              }
-            />
+        {/* Right Column: Stream Info & Chat */}
+        <div className="lg:col-span-1 space-y-4">
+          {/* Stream Info Card */}
+          <div className="bg-brandBlack border border-brandOrange/30 p-4 rounded-lg space-y-3">
+            <h2 className="text-lg font-semibold text-brandOrange mb-2">
+              Stream Details
+            </h2>
+            <div>
+              <label className="text-xs text-brandGray mb-1 block">Title</label>
+              <Input
+                value={streamData?.title || ""}
+                onChange={(e) => {
+                  if (streamData) {
+                    // Create updated streamData with new title
+                    const updatedData = {
+                      ...streamData,
+                      title: e.target.value,
+                    };
+                    // Update local state instead of direct Firestore write for each keystroke
+                  }
+                }}
+                placeholder="Stream Title"
+                className="bg-brandGray border-brandOrange/20 text-brandWhite"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-brandGray mb-1 block">
+                Thumbnail URL
+              </label>
+              <Input
+                value={streamData?.thumbnail || ""}
+                onChange={(e) => {
+                  if (streamData) {
+                    // Create updated streamData with new thumbnail
+                    const updatedData = {
+                      ...streamData,
+                      thumbnail: e.target.value,
+                    };
+                    // Update local state instead of direct Firestore write for each keystroke
+                  }
+                }}
+                placeholder="Thumbnail URL"
+                className="bg-brandGray border-brandOrange/20 text-brandWhite"
+              />
+            </div>
+            <Button
+              onClick={handleUpdateInfo}
+              className="w-full bg-brandOrange text-brandBlack hover:bg-brandOrange/90"
+            >
+              Update Info
+            </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {/* messages.map((msg) => (
-              <div
-                key={msg.id}
-                className="bg-brandBlack p-2 rounded-md text-sm"
-              >
-                <strong className="text-brandOrange">{msg.userName}:</strong>{" "}
-                {msg.content}
-              </div>
-            )) */}
-          </div>
-
-          <div className="p-4 border-t border-brandOrange">
-            <form onSubmit={handleSendMessage} className="relative">
+          {/* Chat Card */}
+          <div className="bg-brandBlack border border-brandOrange/30 p-4 rounded-lg h-96 flex flex-col">
+            <h2 className="text-lg font-semibold text-brandOrange mb-3">
+              Live Chat
+            </h2>
+            {/* Chat Messages Area */}
+            <div className="flex-grow bg-brandGray rounded p-2 mb-3 overflow-y-auto">
+              {messages.length === 0 ? (
+                <p className="text-sm text-brandGray italic">
+                  No messages yet.
+                </p>
+              ) : (
+                messages.map((msg) => (
+                  <p key={msg.id} className="text-sm text-brandWhite mb-1">
+                    <span className="font-semibold text-brandOrange">
+                      {msg.userName}:
+                    </span>{" "}
+                    {msg.content}
+                  </p>
+                ))
+              )}
+            </div>
+            {/* Chat Input */}
+            <div className="flex space-x-2">
               <Input
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Type a message..."
-                className="pr-10"
+                placeholder="Send a message..."
+                className="flex-grow bg-brandGray border-brandOrange/20 text-brandWhite"
+                onKeyPress={handleKeyPress}
               />
-              <button
-                type="button"
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="absolute right-2 top-1/2 -translate-y-1/2"
+              <Button
+                onClick={handleSendMessage}
+                className="bg-brandOrange text-brandBlack hover:bg-brandOrange/90"
               >
-                😊
-              </button>
-            </form>
-            {showEmojiPicker && (
-              <div className="absolute bottom-full right-4 mb-2">
-                <EmojiPicker
-                  theme={Theme.DARK}
-                  onEmojiClick={(emoji) => {
-                    setNewMessage((prev) => prev + emoji.emoji);
-                    setShowEmojiPicker(false);
-                  }}
-                />
-              </div>
-            )}
+                Send
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* End Stream Confirmation Modal */}
       {showEndConfirmation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-          <div className="bg-brandGray p-6 rounded-lg max-w-md w-full mx-4">
-            <h2 className="text-xl font-semibold mb-4">End Stream?</h2>
-            <p className="text-gray-300 mb-6">
-              Are you sure you want to end the stream? This cannot be undone.
+        <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center">
+          <div className="bg-brandBlack border border-red-500/50 rounded-lg p-6 max-w-sm text-center space-y-4">
+            <h3 className="text-xl font-bold text-red-500">End Stream?</h3>
+            <p className="text-brandWhite">
+              Are you sure you want to end this stream? This action cannot be
+              undone.
             </p>
-            <div className="flex justify-end gap-4">
-              <Button
-                onClick={closeModal}
-                className="bg-gray-600 hover:bg-gray-700"
-              >
+            <div className="flex justify-center space-x-4">
+              <Button variant="outline" onClick={closeModal}>
                 Cancel
               </Button>
               <Button
-                onClick={endStream}
-                className="bg-red-500 hover:bg-red-600"
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={handleEndStream}
               >
                 End Stream
               </Button>

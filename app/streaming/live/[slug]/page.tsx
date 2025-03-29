@@ -3,6 +3,11 @@ import { db } from "@/lib/config/firebase";
 import { listenToMessages, sendChatMessage } from "@/lib/services/ChatService";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { ChatMessage } from "@/lib/types/stream";
+import { HandlerRefs, WithListeners, WithDetach } from "@/lib/types/streaming";
+import {
+  clearVideoContainer,
+  updateTrackEnabledState,
+} from "@/lib/utils/streaming";
 import { doc, onSnapshot, getDoc } from "firebase/firestore";
 import { MicOff, VideoOff, Volume2, VolumeX } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -18,23 +23,6 @@ import {
   Room,
 } from "twilio-video";
 import { Countdown } from "@/components/streaming/Countdown";
-
-interface HandlerRefs {
-  trackSubscribed: (track: RemoteTrack) => void;
-  trackUnsubscribed: (track: RemoteTrack) => void;
-  trackPublished: (publication: RemoteTrackPublication) => void;
-  trackUnpublished: (publication: RemoteTrackPublication) => void;
-  participantConnected: (participant: RemoteParticipant) => void;
-  participantDisconnected: (participant: RemoteParticipant) => void;
-}
-
-interface WithListeners {
-  removeAllListeners: () => void;
-}
-
-interface WithDetach {
-  detach: () => HTMLElement[];
-}
 
 export default function LiveViewPage() {
   const pathname = usePathname();
@@ -72,29 +60,6 @@ export default function LiveViewPage() {
   );
   const [streamTitle, setStreamTitle] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
-
-  // Store stable references to handler functions to break circular dependencies
-  const handlerRefs = useRef<HandlerRefs>({
-    trackSubscribed: () => {},
-    trackUnsubscribed: () => {},
-    trackPublished: () => {},
-    trackUnpublished: () => {},
-    participantConnected: () => {},
-    participantDisconnected: () => {},
-  });
-
-  // Define clearVideoContainer outside of handleTrackSubscribed so it can be used anywhere
-  const clearVideoContainer = useCallback(() => {
-    if (!videoContainerRef.current) return;
-
-    console.log("Clearing video container");
-    const existingVideos = videoContainerRef.current.querySelectorAll("video");
-    existingVideos.forEach((v) => {
-      console.log("Removing existing video element");
-      v.remove();
-    });
-    videoContainerRef.current.innerHTML = "";
-  }, []);
 
   useEffect(() => {
     const unsub = useAuthStore.persist.onFinishHydration(() =>
@@ -141,43 +106,6 @@ export default function LiveViewPage() {
     return () => unsubscribe();
   }, [slug, room]);
 
-  // Helper function to update UI based on track enabled state
-  const updateTrackEnabledState = useCallback(
-    (track: RemoteTrack) => {
-      try {
-        if (!track) return;
-
-        console.log(
-          `Updating track enabled state for ${track.kind} track:`,
-          track.isEnabled
-        );
-
-        if (track.kind === "audio") {
-          // Handle audio track enabled/disabled state
-          const audioElements = document.querySelectorAll(
-            `audio[data-track-sid="${track.sid}"]`
-          );
-          audioElements.forEach((el) => {
-            const audioEl = el as HTMLAudioElement;
-            audioEl.muted = !track.isEnabled || isAudioMuted;
-          });
-        } else if (track.kind === "video") {
-          // Handle video track enabled/disabled state
-          if (track.isEnabled) {
-            setVideoStatus("active");
-          } else {
-            // Only update UI state, don't set to offline
-            // This prevents showing "Stream is Offline" when camera is just disabled
-            console.log("Video track disabled, but not setting to offline");
-          }
-        }
-      } catch (error) {
-        console.error("Error in updateTrackEnabledState:", error);
-      }
-    },
-    [isAudioMuted]
-  );
-
   const handleTrackSubscribed = useCallback(
     (track: RemoteTrack) => {
       try {
@@ -207,8 +135,7 @@ export default function LiveViewPage() {
 
           // Create and configure video element
           if (videoContainerRef.current) {
-            // Clear existing videos first
-            clearVideoContainer();
+            clearVideoContainer(videoContainerRef.current);
 
             // Create a new video element
             const element = document.createElement("video");
@@ -280,19 +207,19 @@ export default function LiveViewPage() {
           // Set up track event listeners
           audioTrack.on("disabled", () => {
             console.log("Audio track disabled");
-            updateTrackEnabledState(audioTrack);
+            updateTrackEnabledState(track, isAudioMuted);
           });
 
           audioTrack.on("enabled", () => {
             console.log("Audio track enabled");
-            updateTrackEnabledState(audioTrack);
+            updateTrackEnabledState(track, isAudioMuted);
           });
         }
       } catch (error) {
         console.error("Error in handleTrackSubscribed:", error);
       }
     },
-    [isAudioMuted, updateTrackEnabledState, offlineTimerId, clearVideoContainer]
+    [offlineTimerId, isAudioMuted]
   );
 
   const handleTrackUnsubscribed = useCallback(
@@ -334,7 +261,7 @@ export default function LiveViewPage() {
               setVideoStatus("active"); // Keep as active if hasStarted is true
 
               // Clear the video container
-              clearVideoContainer();
+              clearVideoContainer(videoContainerRef.current);
             }
           }, 5000); // Wait 5 seconds before checking
 
@@ -415,7 +342,7 @@ export default function LiveViewPage() {
           console.log(
             "Video track published, clearing container to prepare for new track"
           );
-          clearVideoContainer();
+          clearVideoContainer(videoContainerRef.current);
 
           // Force the track to be subscribed if it's not already
           if (!publication.isSubscribed) {
@@ -644,23 +571,6 @@ export default function LiveViewPage() {
     [handleTrackUnsubscribed, offlineTimerId]
   );
 
-  // Initialize the handler refs to break circular dependencies
-  useEffect(() => {
-    handlerRefs.current.trackSubscribed = handleTrackSubscribed;
-    handlerRefs.current.trackUnsubscribed = handleTrackUnsubscribed;
-    handlerRefs.current.trackPublished = handleTrackPublished;
-    handlerRefs.current.trackUnpublished = handleTrackUnpublished;
-    handlerRefs.current.participantConnected = handleParticipantConnected;
-    handlerRefs.current.participantDisconnected = handleParticipantDisconnected;
-  }, [
-    handleTrackSubscribed,
-    handleTrackUnsubscribed,
-    handleTrackPublished,
-    handleTrackUnpublished,
-    handleParticipantConnected,
-    handleParticipantDisconnected,
-  ]);
-
   useEffect(() => {
     if (!slug || !currentUser) return;
 
@@ -720,17 +630,11 @@ export default function LiveViewPage() {
         setRoom(room);
 
         // Handle existing participants
-        room.participants.forEach(handlerRefs.current.participantConnected);
+        room.participants.forEach(handleParticipantConnected);
 
         // Set up room handlers
-        room.on(
-          "participantConnected",
-          handlerRefs.current.participantConnected
-        );
-        room.on(
-          "participantDisconnected",
-          handlerRefs.current.participantDisconnected
-        );
+        room.on("participantConnected", handleParticipantConnected);
+        room.on("participantDisconnected", handleParticipantDisconnected);
         room.on("disconnected", () => {
           console.log("Room disconnected");
         });
@@ -743,14 +647,8 @@ export default function LiveViewPage() {
 
         roomCleanup = () => {
           console.log("Cleaning up room connection");
-          room.off(
-            "participantConnected",
-            handlerRefs.current.participantConnected
-          );
-          room.off(
-            "participantDisconnected",
-            handlerRefs.current.participantDisconnected
-          );
+          room.off("participantConnected", handleParticipantConnected);
+          room.off("participantDisconnected", handleParticipantDisconnected);
           room.removeAllListeners();
           room.disconnect();
         };
@@ -935,7 +833,7 @@ export default function LiveViewPage() {
       );
 
       // First clear the container
-      clearVideoContainer();
+      clearVideoContainer(videoContainerRef.current);
 
       // Then try to resubscribe to all video tracks
       let foundVideoTrack = false;

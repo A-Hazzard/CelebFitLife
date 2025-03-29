@@ -1,5 +1,5 @@
-import { db } from '@/lib/config/firebase';
-import { ChatMessage } from '@/lib/types/stream';
+import { db } from "@/lib/config/firebase";
+import { ChatMessage } from "@/lib/types/stream";
 import {
   collection,
   addDoc,
@@ -7,9 +7,13 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 
-export async function sendChatMessage(slug: string, userName: string, content: string) {
+export async function sendChatMessage(
+  slug: string,
+  userName: string,
+  content: string
+) {
   try {
     console.log(`💬 Sending message: ${content} to stream: ${slug}`);
     const ref = collection(db, "streams", slug, "messages");
@@ -19,13 +23,15 @@ export async function sendChatMessage(slug: string, userName: string, content: s
       content,
       createdAt: serverTimestamp(),
     });
-
   } catch (error) {
     console.error("❌ Error sending chat message:", error);
   }
 }
 
-export function listenToMessages(slug: string, cb: (msgs: ChatMessage[]) => void) {
+export function listenToMessages(
+  slug: string,
+  cb: (msgs: ChatMessage[]) => void
+) {
   console.log(`📡 Subscribing to chat messages for stream: ${slug}`);
 
   const ref = collection(db, "streams", slug, "messages");

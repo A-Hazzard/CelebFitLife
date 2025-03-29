@@ -2,9 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
-import { v4 as uuidv4 } from "uuid";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { Play, Calendar } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { createStream } from "@/lib/helpers/streaming";
+import { getDefaultScheduleTime } from "@/lib/utils/streaming";
 
 export default function CreateStreamPage() {
   const router = useRouter();
@@ -29,49 +28,32 @@ export default function CreateStreamPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!currentUser) return;
+    if (!currentUser || !currentUser.uid) {
+      console.error("User is not authenticated or UID is missing.");
+      return; // Handle the case where the user is not logged in
+    }
 
-    const slug = `${title
-      .trim()
-      .replace(/\s+/g, "-")
-      .toLowerCase()}-${uuidv4()}`;
-
-    // Log the raw selected time
-    console.log("Selected time object:", selectedTime);
-    console.log("Selected time is valid:", !isNaN(selectedTime.getTime()));
-    console.log("Time in ISO format:", selectedTime.toISOString());
-    console.log("Time in local format:", selectedTime.toString());
-    console.log("Scheduling enabled:", showSchedule);
-
-    const streamData = {
+    const result = await createStream(
+      currentUser.uid, // Now guaranteed to be a string
       title,
       description,
-      thumbnail:
-        thumbnailUrl ||
-        "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg",
-      slug,
-      createdAt: new Date().toISOString(),
-      createdBy: currentUser.uid,
-      hasStarted: false, // Never automatically start the stream
-      hasEnded: false,
-      scheduledAt: showSchedule ? selectedTime.toISOString() : null,
-      audioMuted: false,
-      cameraOff: false,
-    };
+      thumbnailUrl,
+      showSchedule ? selectedTime : null
+    );
 
-    console.log("Creating stream with scheduledAt:", streamData.scheduledAt);
-
-    await setDoc(doc(db, "streams", slug), streamData);
-    router.push(`/dashboard/streams/manage/${slug}`);
+    // Handle the result of the stream creation
+    if (result.success) {
+      router.push(`/dashboard/streams/manage/${result.slug}`);
+    } else {
+      alert(`Failed to create stream: ${result.error}`);
+    }
   };
 
   const handleScheduleChange = (checked: boolean) => {
     setShowSchedule(checked);
     if (checked) {
       // Set default scheduled time to 10 minutes from now
-      const newDate = new Date();
-      newDate.setMinutes(newDate.getMinutes() + 10);
-      setSelectedTime(newDate);
+      setSelectedTime(getDefaultScheduleTime(10));
     }
   };
 
