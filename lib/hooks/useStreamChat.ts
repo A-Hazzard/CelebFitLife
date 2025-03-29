@@ -34,23 +34,62 @@ export const useStreamChat = (streamId: string) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuthStore();
-  const retryCount = useRef(0); // Use ref for retry count to avoid re-renders
+  const retryCount = useRef(0);
   const maxRetries = 3;
+  const unsubscribeRef = useRef<(() => void) | null>(null); // Ref to hold unsubscribe function
 
-  // Load and subscribe to messages
-  useEffect(() => {
-    if (!streamId) {
-      console.error("No streamId provided to useStreamChat hook");
-      setError("Stream ID is missing, cannot load chat.");
-      setIsLoading(false);
-      return;
+  // Define fetchInitialMessages outside useEffect but use useCallback if needed elsewhere
+  const fetchInitialMessages = useCallback(async () => {
+    if (!streamId) return false;
+    console.log(`Fetching initial messages for stream: ${streamId}`);
+    try {
+      const messagesCollectionRef = collection(
+        db,
+        "streams",
+        streamId,
+        "messages"
+      );
+      const q = query(messagesCollectionRef, orderBy("createdAt", "asc"));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const chatMessages: ChatMessage[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          chatMessages.push({
+            id: doc.id,
+            createdAt: data.createdAt?.toDate?.()
+              ? data.createdAt.toDate().toISOString()
+              : new Date().toISOString(),
+            sender: data.senderName || "Anonymous",
+            message: data.message || "",
+            isHost: data.isHost || false,
+          });
+        });
+        console.log(`Fetched ${chatMessages.length} initial messages.`);
+        setMessages(chatMessages); // Update state
+        return true;
+      }
+      console.log("No initial messages found.");
+      setMessages([]); // Clear messages if none found
+      return false;
+    } catch (err) {
+      console.error("Error fetching initial messages:", err);
+      return false;
+    }
+  }, [streamId]);
+
+  // Define setupListener outside useEffect, use useCallback for stable reference
+  const setupListener = useCallback(() => {
+    if (!streamId) return;
+    console.log(`Setting up snapshot listener for stream: ${streamId}`);
+
+    // Clean up previous listener before starting a new one
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+      console.log("Cleaned up previous listener.");
     }
 
-    setIsLoading(true);
-    setError(null);
-    retryCount.current = 0; // Reset retries when streamId changes
-
-    // Reference the messages subcollection within the specific stream document
     const messagesCollectionRef = collection(
       db,
       "streams",
@@ -59,123 +98,129 @@ export const useStreamChat = (streamId: string) => {
     );
     const q = query(messagesCollectionRef, orderBy("createdAt", "asc"));
 
-    // Initial fetch to handle the case where onSnapshot fails but data exists
-    const fetchInitialMessages = async () => {
-      console.log(`Fetching initial messages for stream: ${streamId}`);
-      try {
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          const chatMessages: ChatMessage[] = [];
-          querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            chatMessages.push({
-              id: doc.id,
-              createdAt: data.createdAt?.toDate?.()
-                ? data.createdAt.toDate().toISOString()
-                : new Date().toISOString(), // Fallback for missing timestamp
-              sender: data.senderName || "Anonymous",
-              message: data.message || "",
-              isHost: data.isHost || false,
-            });
+    const newUnsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        console.log(
+          `Received snapshot update with ${snapshot.docs.length} messages.`
+        );
+        const chatMessages: ChatMessage[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          chatMessages.push({
+            id: doc.id,
+            createdAt: data.createdAt?.toDate?.()
+              ? data.createdAt.toDate().toISOString()
+              : new Date().toISOString(),
+            sender: data.senderName || "Anonymous",
+            message: data.message || "",
+            isHost: data.isHost || false,
           });
-          console.log(`Fetched ${chatMessages.length} initial messages.`);
-          setMessages(chatMessages);
-          setIsLoading(false);
-          setError(null);
-          return true;
-        }
-        console.log("No initial messages found.");
-        return false;
-      } catch (err) {
-        console.error("Error fetching initial messages:", err);
-        return false;
-      }
-    };
+        });
+        setMessages(chatMessages);
+        setIsLoading(false); // Got messages, stop loading
+        setError(null); // Clear errors on success
+        retryCount.current = 0; // Reset retries on success
+      },
+      async (err) => {
+        console.error("Error in snapshot listener:", err);
+        setIsLoading(false); // Stop loading on error
 
-    // Set up listener for real-time updates
-    const setupListener = () => {
-      console.log(`Setting up snapshot listener for stream: ${streamId}`);
-      // Create a listener for real-time updates
-      const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          console.log(
-            `Received snapshot update with ${snapshot.docs.length} messages.`
-          );
-          const chatMessages: ChatMessage[] = [];
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            chatMessages.push({
-              id: doc.id,
-              createdAt: data.createdAt?.toDate?.()
-                ? data.createdAt.toDate().toISOString()
-                : new Date().toISOString(), // Fallback
-              sender: data.senderName || "Anonymous",
-              message: data.message || "",
-              isHost: data.isHost || false,
-            });
-          });
-          setMessages(chatMessages);
-          setIsLoading(false);
-          setError(null); // Clear any previous errors
-          retryCount.current = 0; // Reset retry count on success
-        },
-        async (err) => {
-          console.error("Error listening to chat messages:", err);
-
-          // Try to fetch messages directly if listener fails
-          const fetchSuccess = await fetchInitialMessages();
-
-          if (!fetchSuccess) {
-            if (retryCount.current < maxRetries) {
-              // Retry connecting
-              retryCount.current += 1;
-              console.log(
-                `Retrying chat connection (${retryCount.current}/${maxRetries})...`
-              );
-
-              // Wait a bit before retrying (exponential backoff)
-              const delay = Math.min(1000 * 2 ** retryCount.current, 10000);
-              setTimeout(() => {
-                setupListener();
-              }, delay);
-            } else {
-              console.error("Max retries reached. Failed to connect to chat.");
-              // Only show error if we have no messages cached
-              if (messages.length === 0) {
-                setError(
-                  "Failed to load chat messages. Please try refreshing the page."
-                );
-              } else {
-                console.warn(
-                  "Connection to chat lost, but showing cached messages"
-                );
-                setError(null);
-              }
-              setIsLoading(false);
-            }
+        // If listener fails, check if we have *any* messages (maybe from initial fetch)
+        if (messages.length === 0) {
+          if (retryCount.current < maxRetries) {
+            retryCount.current += 1;
+            const delay = Math.min(1000 * 2 ** retryCount.current, 10000);
+            console.log(
+              `Retrying listener setup (${
+                retryCount.current
+              }/${maxRetries}) in ${delay / 1000}s...`
+            );
+            setTimeout(setupListener, delay); // Retry setupListener itself
+          } else {
+            console.error("Max retries reached. Failed to connect listener.");
+            setError(
+              "Failed to connect to real-time chat. Check connection or refresh."
+            );
           }
+        } else {
+          // We have messages (likely initial fetch worked), but listener failed.
+          console.warn(
+            "Real-time chat listener failed, showing potentially stale messages."
+          );
+          // Don't set error state here, as we have some data
+          setError(null);
         }
-      );
+      }
+    );
 
-      return unsubscribe;
+    unsubscribeRef.current = newUnsubscribe; // Store the new unsubscribe function
+    console.log("New listener attached.");
+  }, [streamId, messages.length]); // Dependency array for useCallback
+
+  // Main effect for initialization and cleanup
+  useEffect(() => {
+    if (!streamId) {
+      setError("Stream ID missing.");
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    retryCount.current = 0;
+
+    const initialize = async () => {
+      const fetched = await fetchInitialMessages();
+      setIsLoading(false); // Initial fetch is done, loading stops unless listener fails later
+      if (!fetched && messages.length === 0) {
+        // Only set error if fetch failed AND we have no prior messages
+        // setError("Failed to fetch initial messages."); // Optional: more specific error?
+      }
+      // Always setup listener regardless of initial fetch result
+      setupListener();
     };
 
-    // Start the listener
-    const unsubscribe = setupListener();
+    initialize();
 
-    // Clean up the listener on unmount or when streamId changes
+    // Cleanup function for when the component unmounts or streamId changes
     return () => {
-      console.log(`Unsubscribing from chat listener for stream: ${streamId}`);
-      if (unsubscribe) {
-        unsubscribe();
+      if (unsubscribeRef.current) {
+        console.log(`Unsubscribing from chat listener on cleanup: ${streamId}`);
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
       }
     };
-  }, [streamId]); // Re-run effect if streamId changes
+  }, [streamId, fetchInitialMessages, setupListener]); // Dependencies
 
-  // Send a new message
+  // Manual retry
+  const retryConnection = useCallback(() => {
+    if (!streamId) return;
+    console.log("Manual retry requested.");
+    setIsLoading(true); // Indicate loading during retry
+    setError(null);
+    retryCount.current = 0; // Reset retries
+    fetchInitialMessages().then((fetched) => {
+      if (!fetched && messages.length === 0) {
+        // setError("Retry: Failed initial fetch."); // Optional
+      }
+      // Always re-setup listener on retry
+      setupListener();
+      // Loading state will be handled by the listener/fetch results
+    });
+  }, [streamId, fetchInitialMessages, setupListener, messages.length]);
+
+  // Send a new message - Ensure correct path and fields
   const sendMessage = useCallback(async () => {
-    if (!newMessage.trim() || !currentUser || !streamId) return;
+    // Ensure all required data is present
+    if (!newMessage.trim() || !currentUser || !streamId) {
+      console.warn("Cannot send message: Missing data", {
+        hasMessage: !!newMessage.trim(),
+        hasUser: !!currentUser,
+        hasStreamId: !!streamId,
+      });
+      return;
+    }
 
     try {
       setError(null);
@@ -184,19 +229,36 @@ export const useStreamChat = (streamId: string) => {
         currentUser.role &&
         (currentUser.role.streamer === true || currentUser.role.admin === true);
 
-      // Add the message to the subcollection
-      await addDoc(collection(db, "streams", streamId, "messages"), {
+      const senderName =
+        currentUser.username || currentUser.email?.split("@")[0] || "Anonymous";
+
+      // Log before sending
+      console.log(`Sending message to streams/${streamId}/messages:`, {
         senderId: currentUser.uid,
-        senderName:
-          currentUser.username ||
-          currentUser.email?.split("@")[0] ||
-          "Anonymous",
+        senderName: senderName,
         message: newMessage.trim(),
         isHost: isHost || false,
-        createdAt: serverTimestamp(),
       });
 
-      setNewMessage("");
+      // Reference the correct subcollection path
+      const messagesCollectionRef = collection(
+        db,
+        "streams",
+        streamId,
+        "messages"
+      );
+
+      // Add the message document
+      await addDoc(messagesCollectionRef, {
+        senderId: currentUser.uid,
+        senderName: senderName,
+        message: newMessage.trim(),
+        isHost: isHost || false,
+        createdAt: serverTimestamp(), // Use server timestamp for consistency
+      });
+
+      console.log("Message sent successfully.");
+      setNewMessage(""); // Clear input after successful send
     } catch (err) {
       console.error("Error sending chat message:", err);
       setError("Failed to send your message. Please try again.");
@@ -223,20 +285,6 @@ export const useStreamChat = (streamId: string) => {
     },
     [sendMessage]
   );
-
-  // Manual retry function that users can call
-  const retryConnection = useCallback(() => {
-    if (!streamId) return; // Don't retry if no streamId
-    setIsLoading(true);
-    setError(null);
-    retryCount.current = 0; // Reset retry count
-    // The useEffect hook will automatically trigger a reconnect attempt due to state change
-    // We need to force a state update if streamId hasn't changed, maybe toggle loading briefly?
-    // Or better, directly call setupListener if needed (though useEffect handles it)
-    console.log("Manual retry requested.");
-    // Note: A state change here might be needed if useEffect doesn't re-run
-    // For now, relying on isLoading change.
-  }, [streamId]);
 
   return {
     messages,
