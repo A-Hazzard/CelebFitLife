@@ -93,7 +93,7 @@ export default function ManageStreamPage() {
 
           {/* Chat Panel */}
           <div className="w-full md:w-96 h-full">
-            <StreamChat slug={stream.slug} className="h-full" />
+            <StreamChat streamId={stream.id} className="h-full" />
           </div>
         </div>
       </div>

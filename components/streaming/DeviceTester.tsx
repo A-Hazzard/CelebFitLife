@@ -202,75 +202,90 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   // Initialize audio analyzer for microphone
   const startMicAnalyzing = (stream: MediaStream) => {
     try {
+      console.log("Attempting to start microphone analysis...");
       // Clean up previous context
       if (audioContext) {
-        audioContext.close();
+        audioContext
+          .close()
+          .catch((err) =>
+            console.warn("Error closing previous audio context:", err)
+          );
       }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
 
-      // Create new audio context with proper initialization
+      // Create new audio context
       const context = new (window.AudioContext ||
         (window as any).webkitAudioContext)();
       setAudioContext(context);
+      console.log("AudioContext created for mic analysis");
 
-      // Create more sensitive analyzer
+      // Create analyzer
       const analyser = context.createAnalyser();
-      analyser.fftSize = 1024; // Higher resolution
-      analyser.smoothingTimeConstant = 0.2; // More responsive
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.2;
       setAudioAnalyser(analyser);
+      console.log("AnalyserNode created for mic");
 
-      // Connect mic stream to analyzer with gain
+      // Connect mic stream to analyzer
       const source = context.createMediaStreamSource(stream);
       const gainNode = context.createGain();
-      gainNode.gain.value = 3.0; // Boost sensitivity
+      gainNode.gain.value = 2.5; // Slightly reduced gain to prevent clipping
       source.connect(gainNode);
       gainNode.connect(analyser);
+      console.log("Mic stream connected to analyser via gain node");
 
-      // Start analyzing with improved sensitivity
+      // Start analyzing
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const analyzeLevel = () => {
-        if (!analyser) return;
+      let consecutiveZeros = 0; // Track silent frames
+      const analyzeLevelMic = () => {
+        if (!analyser) {
+          console.log("Mic analysis stopped: Analyser is null");
+          return;
+        }
 
         analyser.getByteFrequencyData(dataArray);
 
-        // Find peak level (more sensitive than average)
         let peak = 0;
         let sum = 0;
-
         for (let i = 0; i < dataArray.length; i++) {
           sum += dataArray[i];
           if (dataArray[i] > peak) peak = dataArray[i];
         }
-
-        // Use combination of peak and average for better sensitivity
         const average = sum / dataArray.length;
-        const combinedValue = peak * 0.7 + average * 0.3;
 
-        // Apply non-linear scaling for better visualization
-        // This makes small sounds more visible
-        const scalingFactor = 1.5; // Increase this for more sensitivity
-        const scaledLevel = Math.min(
+        if (sum < dataArray.length * 2) {
+          consecutiveZeros++;
+        } else {
+          consecutiveZeros = 0;
+        }
+
+        const combinedValue = peak * 0.6 + average * 0.4;
+        const scalingFactor = 1.8;
+        const calculatedLevel = Math.min(
           100,
-          Math.round((combinedValue / 256) * 100 * scalingFactor)
+          Math.round((combinedValue / 255) * 100 * scalingFactor)
         );
 
-        setMicLevel(scaledLevel);
+        // *** DEBUG LOGGING ***
+        console.log(
+          `[Mic Analyzer] Calculated Level: ${calculatedLevel}, Peak: ${peak.toFixed(
+            1
+          )}, Avg: ${average.toFixed(1)}, Sum: ${sum}`
+        );
 
-        // Continue analyzing
-        animationFrameRef.current = requestAnimationFrame(analyzeLevel);
+        setMicLevel(calculatedLevel);
 
-        // Debug logging - uncomment if needed
-        // console.log(`Mic level: ${scaledLevel}, peak: ${peak}, avg: ${average}`);
+        animationFrameRef.current = requestAnimationFrame(analyzeLevelMic);
       };
 
-      analyzeLevel();
-
-      console.log("Enhanced microphone analyzer started");
+      analyzeLevelMic();
+      console.log("Real-time microphone analysis started");
     } catch (error) {
       console.error("Error starting microphone analyzer:", error);
       toast.error("Failed to analyze microphone audio.");
+      stopMicAnalyzing(); // Ensure cleanup on error
     }
   };
 
@@ -293,58 +308,82 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   };
 
   // Initialize audio analyzer for speaker
-  const startSpeakerAnalyzing = () => {
+  const startSpeakerAnalyzing = (audioElement: HTMLAudioElement) => {
     try {
-      // Clean up previous context
+      console.log("Attempting to start speaker analysis from audio element...");
+      // Clean up previous context if any
       if (audioContext) {
-        audioContext.close();
+        audioContext
+          .close()
+          .catch((err) =>
+            console.warn("Error closing previous audio context:", err)
+          );
       }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
-      }
-
-      if (!audioRef.current) {
-        console.error("Audio element not found");
-        return;
       }
 
       // Create new audio context
       const context = new (window.AudioContext ||
         (window as any).webkitAudioContext)();
       setAudioContext(context);
+      console.log("AudioContext created for speaker analysis");
+
+      // Create source from the audio element
+      const source = context.createMediaElementSource(audioElement);
+      console.log("MediaElementAudioSourceNode created");
 
       // Create analyzer
       const analyser = context.createAnalyser();
       analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.5; // Add smoothing for better visualization
+      analyser.smoothingTimeConstant = 0.6; // Slightly more smoothing for speaker output
       setAudioAnalyser(analyser);
+      console.log("AnalyserNode created");
 
-      // Create a more dynamic speaker level animation
-      // Using a more complex pattern to simulate actual audio activity
-      let phase = 0;
-      const simulateSpeakerLevel = () => {
-        phase += 0.1;
+      // Connect the source to the analyser and the destination (speakers)
+      source.connect(analyser);
+      analyser.connect(context.destination);
+      console.log("Source connected to Analyser and destination");
 
-        // Create a more dynamic pattern by combining multiple frequencies
-        const base = Math.sin(phase);
-        const mid = Math.sin(phase * 2.7) * 0.5;
-        const high = Math.sin(phase * 5.1) * 0.25;
+      // Start analyzing the audio data
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const analyzeLevelSpeaker = () => {
+        if (!analyser) {
+          console.log("Speaker analysis stopped: Analyser is null");
+          return;
+        }
 
-        // Combine patterns and scale to 0-100 range
-        const combined = (base + mid + high) * 0.57 + 0.5;
-        const scaled = Math.round(combined * 85); // Scale to max 85% to add some variation
+        analyser.getByteFrequencyData(dataArray);
 
-        setSpeakerLevel(scaled);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / dataArray.length;
 
-        // Continue simulating
-        animationFrameRef.current = requestAnimationFrame(simulateSpeakerLevel);
+        const calculatedLevel = Math.min(
+          100,
+          Math.pow(average / 150, 0.7) * 100
+        );
+
+        // *** DEBUG LOGGING ***
+        console.log(
+          `[Speaker Analyzer] Calculated Level: ${calculatedLevel.toFixed(
+            1
+          )}, Avg Freq: ${average.toFixed(1)}, Sum: ${sum}`
+        );
+
+        setSpeakerLevel(calculatedLevel);
+
+        animationFrameRef.current = requestAnimationFrame(analyzeLevelSpeaker);
       };
 
-      simulateSpeakerLevel();
-      console.log("Enhanced speaker level visualization started");
+      analyzeLevelSpeaker();
+      console.log("Real-time speaker analysis started");
     } catch (error) {
-      console.error("Error starting speaker analyzer:", error);
-      toast.error("Failed to analyze speaker audio.");
+      console.error("Error starting real speaker analyzer:", error);
+      toast.error("Failed to analyze speaker audio output.");
+      stopSpeakerAnalyzing(); // Ensure cleanup on error
     }
   };
 
@@ -371,19 +410,39 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     setIsTesting(true);
     setTestType("speaker");
 
+    stopSpeakerAnalyzing(); // Stop any previous analysis
+
     if (audioRef.current) {
-      audioRef.current.src = "/audio/sound-test.mp3";
-      audioRef.current.volume = 0.5; // Set volume to 50%
+      const audioElement = audioRef.current;
+      audioElement.pause();
+      audioElement.currentTime = 0;
+      audioElement.src = "/audio/sound-test.mp3";
+      audioElement.volume = 0.7; // Slightly lower volume to prevent clipping issues
+      audioElement.loop = true;
 
-      // Start speaker analysis before playing
-      startSpeakerAnalyzing();
+      const playPromise = audioElement.play();
 
-      audioRef.current.play().catch((error) => {
-        console.error("Error playing audio:", error);
-        toast.error(
-          "Failed to play test sound. Please check your browser permissions."
-        );
-      });
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log("Audio playback started, initiating analysis...");
+            // Start analysis *after* playback begins
+            startSpeakerAnalyzing(audioElement);
+          })
+          .catch((error) => {
+            console.error("Error playing audio:", error);
+            toast.error(
+              "Failed to play test sound. Check browser permissions or console."
+            );
+            stopSpeakerAnalyzing(); // Clean up if play fails
+          });
+      } else {
+        console.error("audioRef.current.play() did not return a promise");
+        toast.error("Could not initiate audio playback.");
+      }
+    } else {
+      console.error("Audio element ref is null");
+      toast.error("Audio player not ready.");
     }
   };
 
@@ -392,23 +451,44 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     setIsTesting(true);
     setTestType("mic");
 
+    // Force stop any existing analysis
+    stopMicAnalyzing();
+
+    // Force new stream creation for testing
     if (micStream) {
-      startMicAnalyzing(micStream);
-    } else {
-      // Try to get mic stream if not already available
-      navigator.mediaDevices
-        .getUserMedia({
-          audio: { deviceId: selectedMic ? { exact: selectedMic } : undefined },
-        })
-        .then((stream) => {
-          setMicStream(stream);
-          startMicAnalyzing(stream);
-        })
-        .catch((error) => {
-          console.error("Error accessing microphone:", error);
-          toast.error("Failed to access microphone. Please check permissions.");
-        });
+      micStream.getTracks().forEach((track) => track.stop());
+      setMicStream(null);
     }
+
+    // Create a fresh audio context for better reliability
+    if (audioContext) {
+      audioContext.close().catch(console.error);
+      setAudioContext(null);
+    }
+
+    // Get a new microphone stream with explicit constraints
+    navigator.mediaDevices
+      .getUserMedia({
+        audio: {
+          deviceId: selectedMic ? { exact: selectedMic } : undefined,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      })
+      .then((stream) => {
+        console.log("New microphone stream created for testing");
+        setMicStream(stream);
+
+        // Wait a moment for stream to initialize properly
+        setTimeout(() => {
+          startMicAnalyzing(stream);
+        }, 100);
+      })
+      .catch((error) => {
+        console.error("Error accessing microphone:", error);
+        toast.error("Failed to access microphone. Please check permissions.");
+      });
   };
 
   // Camera test

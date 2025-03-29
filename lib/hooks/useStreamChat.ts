@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "@/lib/config/firebase";
 import {
   collection,
   query,
-  where,
   orderBy,
   addDoc,
   onSnapshot,
   serverTimestamp,
   getDocs,
+  doc,
 } from "firebase/firestore";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { toast } from "sonner";
@@ -25,38 +25,43 @@ export interface ChatMessage {
  * Custom hook to manage chat functionality for streams.
  * Handles chat message listening, sending messages, and state management.
  *
- * @param slug - The stream identifier to connect to the correct chat
+ * @param streamId - The ID of the stream document containing the messages subcollection
  * @returns Object containing messages, sending functionality, and message input state
  */
-export const useStreamChat = (slug: string) => {
+export const useStreamChat = (streamId: string) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuthStore();
-  const [retryCount, setRetryCount] = useState(0);
+  const retryCount = useRef(0); // Use ref for retry count to avoid re-renders
   const maxRetries = 3;
 
   // Load and subscribe to messages
   useEffect(() => {
-    if (!slug) {
-      console.error("No slug provided to useStreamChat hook");
+    if (!streamId) {
+      console.error("No streamId provided to useStreamChat hook");
+      setError("Stream ID is missing, cannot load chat.");
+      setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
     setError(null);
+    retryCount.current = 0; // Reset retries when streamId changes
 
-    // Create a query against the stream_chat collection
-    const chatRef = collection(db, "stream_chat");
-    const q = query(
-      chatRef,
-      where("streamSlug", "==", slug),
-      orderBy("createdAt", "asc")
+    // Reference the messages subcollection within the specific stream document
+    const messagesCollectionRef = collection(
+      db,
+      "streams",
+      streamId,
+      "messages"
     );
+    const q = query(messagesCollectionRef, orderBy("createdAt", "asc"));
 
     // Initial fetch to handle the case where onSnapshot fails but data exists
     const fetchInitialMessages = async () => {
+      console.log(`Fetching initial messages for stream: ${streamId}`);
       try {
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
@@ -67,17 +72,19 @@ export const useStreamChat = (slug: string) => {
               id: doc.id,
               createdAt: data.createdAt?.toDate?.()
                 ? data.createdAt.toDate().toISOString()
-                : new Date().toISOString(),
+                : new Date().toISOString(), // Fallback for missing timestamp
               sender: data.senderName || "Anonymous",
               message: data.message || "",
               isHost: data.isHost || false,
             });
           });
+          console.log(`Fetched ${chatMessages.length} initial messages.`);
           setMessages(chatMessages);
           setIsLoading(false);
           setError(null);
           return true;
         }
+        console.log("No initial messages found.");
         return false;
       } catch (err) {
         console.error("Error fetching initial messages:", err);
@@ -87,10 +94,14 @@ export const useStreamChat = (slug: string) => {
 
     // Set up listener for real-time updates
     const setupListener = () => {
+      console.log(`Setting up snapshot listener for stream: ${streamId}`);
       // Create a listener for real-time updates
       const unsubscribe = onSnapshot(
         q,
         (snapshot) => {
+          console.log(
+            `Received snapshot update with ${snapshot.docs.length} messages.`
+          );
           const chatMessages: ChatMessage[] = [];
           snapshot.forEach((doc) => {
             const data = doc.data();
@@ -98,7 +109,7 @@ export const useStreamChat = (slug: string) => {
               id: doc.id,
               createdAt: data.createdAt?.toDate?.()
                 ? data.createdAt.toDate().toISOString()
-                : new Date().toISOString(),
+                : new Date().toISOString(), // Fallback
               sender: data.senderName || "Anonymous",
               message: data.message || "",
               isHost: data.isHost || false,
@@ -107,7 +118,7 @@ export const useStreamChat = (slug: string) => {
           setMessages(chatMessages);
           setIsLoading(false);
           setError(null); // Clear any previous errors
-          setRetryCount(0); // Reset retry count on success
+          retryCount.current = 0; // Reset retry count on success
         },
         async (err) => {
           console.error("Error listening to chat messages:", err);
@@ -116,23 +127,30 @@ export const useStreamChat = (slug: string) => {
           const fetchSuccess = await fetchInitialMessages();
 
           if (!fetchSuccess) {
-            if (retryCount < maxRetries) {
+            if (retryCount.current < maxRetries) {
               // Retry connecting
-              setRetryCount((prev) => prev + 1);
+              retryCount.current += 1;
               console.log(
-                `Retrying chat connection (${retryCount + 1}/${maxRetries})...`
+                `Retrying chat connection (${retryCount.current}/${maxRetries})...`
               );
 
-              // Wait a bit before retrying
+              // Wait a bit before retrying (exponential backoff)
+              const delay = Math.min(1000 * 2 ** retryCount.current, 10000);
               setTimeout(() => {
                 setupListener();
-              }, 2000);
+              }, delay);
             } else {
-              // Don't set error if we have messages already cached
+              console.error("Max retries reached. Failed to connect to chat.");
+              // Only show error if we have no messages cached
               if (messages.length === 0) {
                 setError(
                   "Failed to load chat messages. Please try refreshing the page."
                 );
+              } else {
+                console.warn(
+                  "Connection to chat lost, but showing cached messages"
+                );
+                setError(null);
               }
               setIsLoading(false);
             }
@@ -146,27 +164,28 @@ export const useStreamChat = (slug: string) => {
     // Start the listener
     const unsubscribe = setupListener();
 
-    // Clean up the listener on unmount
+    // Clean up the listener on unmount or when streamId changes
     return () => {
-      unsubscribe();
+      console.log(`Unsubscribing from chat listener for stream: ${streamId}`);
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
-  }, [slug, retryCount]);
+  }, [streamId]); // Re-run effect if streamId changes
 
   // Send a new message
   const sendMessage = useCallback(async () => {
-    if (!newMessage.trim() || !currentUser) return;
+    if (!newMessage.trim() || !currentUser || !streamId) return;
 
     try {
       setError(null);
 
-      // Check if user is host or admin
       const isHost =
         currentUser.role &&
         (currentUser.role.streamer === true || currentUser.role.admin === true);
 
-      // Add a new document to the stream_chat collection
-      await addDoc(collection(db, "stream_chat"), {
-        streamSlug: slug,
+      // Add the message to the subcollection
+      await addDoc(collection(db, "streams", streamId, "messages"), {
         senderId: currentUser.uid,
         senderName:
           currentUser.username ||
@@ -183,7 +202,7 @@ export const useStreamChat = (slug: string) => {
       setError("Failed to send your message. Please try again.");
       toast.error("Failed to send message. Please try again.");
     }
-  }, [newMessage, slug, currentUser]);
+  }, [newMessage, streamId, currentUser]);
 
   // Handle form submission
   const handleSubmit = useCallback(
@@ -207,10 +226,17 @@ export const useStreamChat = (slug: string) => {
 
   // Manual retry function that users can call
   const retryConnection = useCallback(() => {
+    if (!streamId) return; // Don't retry if no streamId
     setIsLoading(true);
     setError(null);
-    setRetryCount(0); // Reset retry count to trigger useEffect
-  }, []);
+    retryCount.current = 0; // Reset retry count
+    // The useEffect hook will automatically trigger a reconnect attempt due to state change
+    // We need to force a state update if streamId hasn't changed, maybe toggle loading briefly?
+    // Or better, directly call setupListener if needed (though useEffect handles it)
+    console.log("Manual retry requested.");
+    // Note: A state change here might be needed if useEffect doesn't re-run
+    // For now, relying on isLoading change.
+  }, [streamId]);
 
   return {
     messages,

@@ -1,32 +1,47 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useStreamChat } from "@/lib/hooks/useStreamChat";
-import { Send, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Send, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface StreamChatProps {
-  slug: string;
+  streamId: string;
   className?: string;
 }
 
-const StreamChat: React.FC<StreamChatProps> = ({ slug, className = "" }) => {
+const StreamChat: React.FC<StreamChatProps> = ({
+  streamId,
+  className = "",
+}) => {
   const {
     messages,
     newMessage,
     setNewMessage,
+    sendMessage,
     handleSubmit,
     handleKeyPress,
     isLoading,
     error,
     retryConnection,
-  } = useStreamChat(slug);
+  } = useStreamChat(streamId);
 
-  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when new messages arrive
-  React.useEffect(() => {
+  // Scroll to bottom when messages update
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Helper to format time - consider moving to a utils file if used elsewhere
+  const formatTime = (timestamp: string) => {
+    try {
+      return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+    } catch (e) {
+      console.warn("Error formatting time:", e);
+      return "Just now";
+    }
+  };
 
   return (
     <div
@@ -44,7 +59,7 @@ const StreamChat: React.FC<StreamChatProps> = ({ slug, className = "" }) => {
             <div className="animate-spin rounded-full h-6 w-6 border-2 border-t-brandOrange border-gray-600 mr-2"></div>
             Loading messages...
           </div>
-        ) : error && messages.length === 0 ? (
+        ) : error ? (
           <div className="flex flex-col justify-center items-center h-full text-gray-400">
             <p className="mb-4 text-center">{error}</p>
             <Button
@@ -52,7 +67,7 @@ const StreamChat: React.FC<StreamChatProps> = ({ slug, className = "" }) => {
               onClick={retryConnection}
               className="flex items-center gap-2 text-brandOrange border-brandOrange/50 hover:bg-brandOrange/10"
             >
-              <RefreshCw size={16} className="animate-spin" />
+              <RefreshCw size={16} />
               Retry Connection
             </Button>
           </div>
@@ -77,9 +92,7 @@ const StreamChat: React.FC<StreamChatProps> = ({ slug, className = "" }) => {
                   )}
                 </span>
                 <span className="text-xs text-gray-500">
-                  {formatDistanceToNow(new Date(message.createdAt), {
-                    addSuffix: true,
-                  })}
+                  {formatTime(message.createdAt)}
                 </span>
               </div>
               <p className="text-gray-300">{message.message}</p>
@@ -90,26 +103,23 @@ const StreamChat: React.FC<StreamChatProps> = ({ slug, className = "" }) => {
       </div>
 
       {/* Input Area */}
-      <form
-        onSubmit={handleSubmit}
-        className="border-t border-gray-800 p-3 bg-gray-900"
-      >
-        <div className="flex gap-2">
-          <input
+      <form onSubmit={handleSubmit} className="p-3 border-t border-gray-800">
+        <div className="flex items-center gap-2">
+          <Input
             type="text"
+            placeholder="Send a message..."
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Type a message..."
-            className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-brandOrange text-brandWhite placeholder:text-gray-500"
+            className="flex-1 bg-gray-700 border-gray-600 text-white focus:border-brandOrange focus:ring-brandOrange"
+            disabled={isLoading || !!error}
           />
           <Button
             type="submit"
-            disabled={!newMessage.trim()}
-            className="flex items-center gap-1 bg-brandOrange hover:bg-brandOrange/80 text-brandBlack"
+            className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+            disabled={!newMessage.trim() || isLoading || !!error}
           >
             <Send size={16} />
-            Send
           </Button>
         </div>
       </form>
