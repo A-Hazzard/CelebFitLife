@@ -3,7 +3,7 @@ import { db } from "@/lib/config/firebase";
 import { listenToMessages, sendChatMessage } from "@/lib/services/ChatService";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { ChatMessage } from "@/lib/types/stream";
-import { HandlerRefs, WithListeners, WithDetach } from "@/lib/types/streaming";
+import { WithListeners } from "@/lib/types/streaming";
 import {
   clearVideoContainer,
   updateTrackEnabledState,
@@ -61,6 +61,9 @@ export default function LiveViewPage() {
   const [streamTitle, setStreamTitle] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
 
+  // State to track whether we're currently attempting to connect
+  const [isConnecting, setIsConnecting] = useState(false);
+
   useEffect(() => {
     const unsub = useAuthStore.persist.onFinishHydration(() =>
       setHasHydrated(true)
@@ -79,10 +82,19 @@ export default function LiveViewPage() {
   // Listen for stream status from Firestore
   useEffect(() => {
     if (!slug) return;
+
+    console.log("[Status] Setting up stream status listener for:", slug);
     const streamDocRef = doc(db, "streams", slug);
     const unsubscribe = onSnapshot(streamDocRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
+        console.log("[Status] Stream status update:", {
+          hasStarted: data.hasStarted,
+          hasEnded: data.hasEnded,
+          audioMuted: data.audioMuted || false,
+          cameraOff: data.cameraOff || false,
+        });
+
         setStreamerStatus({
           audioMuted: data.audioMuted || false,
           cameraOff: data.cameraOff || false,
@@ -90,20 +102,27 @@ export default function LiveViewPage() {
 
         // Update video status based on stream state
         if (data.hasEnded) {
+          console.log("[Status] Stream has ended, disconnecting from room");
           setVideoStatus("ended");
           if (room) {
             room.disconnect();
           }
         } else if (data.hasStarted) {
+          console.log("[Status] Stream has started");
           setVideoStatus("active");
           setHasStarted(true);
         } else {
+          console.log("[Status] Stream is waiting to start");
           setVideoStatus("waiting");
           setHasStarted(false);
         }
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      console.log("[Status] Cleaning up stream status listener");
+      unsubscribe();
+    };
   }, [slug, room]);
 
   const handleTrackSubscribed = useCallback(
@@ -219,7 +238,7 @@ export default function LiveViewPage() {
         console.error("Error in handleTrackSubscribed:", error);
       }
     },
-    [offlineTimerId, isAudioMuted]
+    [offlineTimerId, isAudioMuted, videoContainerRef]
   );
 
   const handleTrackUnsubscribed = useCallback(
@@ -272,45 +291,29 @@ export default function LiveViewPage() {
           // to avoid flickering if a new track is coming soon
         } else if (track.kind === "audio") {
           // Clean up audio elements
-          document
-            .querySelectorAll(`audio[data-track-sid="${track.sid}"]`)
-            .forEach((audio) => audio.remove());
+          const audioElements = document.querySelectorAll(
+            `audio[data-track-sid="${track.sid}"]`
+          );
+          audioElements.forEach((element) => {
+            console.log("Removing audio element for unsubscribed track");
+            element.parentNode?.removeChild(element);
+          });
 
-          // Clean up track event listeners
+          // Clean up event listeners
           if ("removeAllListeners" in track) {
             (track as WithListeners).removeAllListeners();
           }
 
-          setRemoteAudioTrack(null);
-
-          console.log("Audio track unsubscribed and cleaned up");
-        }
-
-        // Safely detach track from all elements
-        if ("detach" in track) {
-          try {
-            const detachedElements = (track as WithDetach).detach();
-            if (Array.isArray(detachedElements)) {
-              detachedElements.forEach((element) => {
-                if (element && element.remove) {
-                  element.remove();
-                }
-              });
-            }
-            console.log(
-              `Detached ${track.kind} track from ${
-                detachedElements?.length || 0
-              } elements`
-            );
-          } catch (detachError) {
-            console.error("Error detaching track:", detachError);
+          // Set the audio track to null
+          if (remoteAudioTrack?.sid === track.sid) {
+            setRemoteAudioTrack(null);
           }
         }
       } catch (error) {
         console.error("Error in handleTrackUnsubscribed:", error);
       }
     },
-    [remoteVideoTrack, videoStatus, clearVideoContainer]
+    [remoteVideoTrack, remoteAudioTrack, videoStatus, videoContainerRef]
   );
 
   const handleTrackPublished = useCallback(
@@ -411,7 +414,7 @@ export default function LiveViewPage() {
         console.error("Error in handleTrackPublished:", error);
       }
     },
-    [handleTrackSubscribed, clearVideoContainer]
+    [handleTrackSubscribed, videoContainerRef]
   );
 
   const handleTrackUnpublished = useCallback(
@@ -572,8 +575,10 @@ export default function LiveViewPage() {
   );
 
   useEffect(() => {
-    if (!slug || !currentUser) return;
+    // Don't attempt to connect if any of these conditions are true
+    if (!slug || !currentUser || isConnecting || room) return;
 
+    console.log("Starting Twilio room connection process...");
     let isSubscribed = true;
     let roomCleanup: (() => void) | null = null;
     let connectAttempts = 0;
@@ -582,14 +587,20 @@ export default function LiveViewPage() {
     const connectToRoom = async () => {
       try {
         // Prevent multiple connection attempts
+        setIsConnecting(true);
+
         connectAttempts++;
         if (connectAttempts > maxAttempts) {
           console.error(`Failed to connect after ${maxAttempts} attempts`);
           setVideoStatus("offline");
+          setIsConnecting(false);
           return;
         }
 
-        console.log(`Connecting to room (attempt ${connectAttempts}):`, slug);
+        console.log(
+          `[Connection] Connecting to room (attempt ${connectAttempts}):`,
+          slug
+        );
         const response = await fetch("/api/twilio/connect", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -599,17 +610,24 @@ export default function LiveViewPage() {
           }),
         });
 
-        if (!isSubscribed) return;
+        if (!isSubscribed) {
+          console.log(
+            "[Connection] Component unmounted during connection, aborting"
+          );
+          setIsConnecting(false);
+          return;
+        }
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.error("Error getting token:", errorData);
+          console.error("[Connection] Error getting token:", errorData);
           setVideoStatus("offline");
+          setIsConnecting(false);
           return;
         }
 
         const { token } = await response.json();
-        console.log("Got token, connecting to Twilio...");
+        console.log("[Connection] Got token, connecting to Twilio room...");
 
         const room = await connect(token, {
           name: slug,
@@ -622,12 +640,17 @@ export default function LiveViewPage() {
         });
 
         if (!isSubscribed) {
+          console.log(
+            "[Connection] Component unmounted after connection, disconnecting"
+          );
           room.disconnect();
+          setIsConnecting(false);
           return;
         }
 
-        console.log("Connected to room, participants:", room.participants.size);
+        console.log("[Connection] Successfully connected to room:", slug);
         setRoom(room);
+        setIsConnecting(false);
 
         // Handle existing participants
         room.participants.forEach(handleParticipantConnected);
@@ -636,35 +659,47 @@ export default function LiveViewPage() {
         room.on("participantConnected", handleParticipantConnected);
         room.on("participantDisconnected", handleParticipantDisconnected);
         room.on("disconnected", () => {
-          console.log("Room disconnected");
+          console.log("[Connection] Room disconnected");
+          setIsConnecting(false);
         });
         room.on("reconnecting", () => {
-          console.log("Room reconnecting");
+          console.log("[Connection] Room reconnecting");
         });
         room.on("reconnected", () => {
-          console.log("Room reconnected");
+          console.log("[Connection] Room reconnected");
         });
 
         roomCleanup = () => {
-          console.log("Cleaning up room connection");
+          console.log("[Connection] Cleaning up room connection");
           room.off("participantConnected", handleParticipantConnected);
           room.off("participantDisconnected", handleParticipantDisconnected);
           room.removeAllListeners();
           room.disconnect();
+          setRoom(null);
         };
       } catch (error) {
-        console.error("Error connecting to room:", error);
+        console.error("[Connection] Error connecting to room:", error);
+        setIsConnecting(false);
       }
     };
 
     connectToRoom();
 
     return () => {
-      console.log("Cleaning up room connection effect");
+      console.log("[Connection] Cleaning up connection effect");
       isSubscribed = false;
+      setIsConnecting(false);
       if (roomCleanup) roomCleanup();
     };
-  }, [slug, currentUser]); // Remove handler dependencies
+  }, [
+    slug,
+    currentUser,
+    handleParticipantConnected,
+    handleParticipantDisconnected,
+    isConnecting,
+    room,
+    hasStarted,
+  ]);
 
   // Add track status monitoring
   useEffect(() => {
@@ -867,7 +902,6 @@ export default function LiveViewPage() {
     remoteParticipant,
     videoContainerRef,
     streamerStatus.cameraOff,
-    clearVideoContainer,
     handleTrackSubscribed,
   ]);
 
@@ -952,25 +986,10 @@ export default function LiveViewPage() {
 
   useEffect(() => {
     if (!slug || !currentUser) return;
-    const unsub = onSnapshot(doc(db, "streams", slug), (snap) => {
-      if (!snap.exists()) {
-        setVideoStatus("ended");
-        return;
-      }
-      const started = !!snap.data()?.hasStarted;
-      setHasStarted(started);
-      if (started) {
-        setVideoStatus("connecting");
-      } else {
-        setVideoStatus("waiting");
-      }
-    });
-    return unsub;
-  }, [slug, currentUser]);
 
-  useEffect(() => {
-    if (!slug || !currentUser) return;
+    console.log("[Chat] Setting up chat message listener for:", slug);
     return listenToMessages(slug, (msgs) => {
+      // Use functional update pattern to avoid dependencies on previous messages
       setMessages(msgs.filter((msg) => msg.userName !== "System"));
     });
   }, [slug, currentUser]);

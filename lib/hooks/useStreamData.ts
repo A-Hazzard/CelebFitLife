@@ -3,6 +3,9 @@ import { doc, onSnapshot, Unsubscribe } from "firebase/firestore";
 import { db } from "@/lib/config/firebase";
 import { StreamData } from "@/lib/types/streaming";
 import { useRouter } from "next/navigation";
+import { createLogger } from "@/lib/utils/logger";
+
+const logger = createLogger("StreamData");
 
 /**
  * Custom hook to subscribe to Firestore updates for a specific stream document.
@@ -22,11 +25,13 @@ export const useStreamData = (slug: string) => {
 
   useEffect(() => {
     if (!slug) {
+      logger.error("No slug provided to useStreamData hook");
       setLoading(false);
       setError("Slug is required to fetch stream data.");
       return;
     }
 
+    logger.info(`Subscribing to stream data for: ${slug}`);
     setLoading(true);
     setError(null);
     const streamDocRef = doc(db, "streams", slug);
@@ -36,6 +41,7 @@ export const useStreamData = (slug: string) => {
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data() as StreamData; // Assume it fits StreamData
+          logger.debug(`Received stream data update for: ${slug}`);
           setStreamData({
             ...data,
             // Provide defaults for potentially missing fields if needed
@@ -49,14 +55,14 @@ export const useStreamData = (slug: string) => {
 
           // Handle stream ending
           if (data.hasEnded) {
-            console.log("Stream has ended, redirecting...");
+            logger.info(`Stream ${slug} has ended, redirecting to dashboard`);
             // Potential TODO: Disconnect Twilio room here if not handled elsewhere
             router.push("/dashboard/streams");
           }
 
           setLoading(false);
         } else {
-          console.error("Stream document not found for slug:", slug);
+          logger.error(`Stream document not found for slug: ${slug}`);
           setError("Stream not found.");
           setStreamData(null);
           setLoading(false);
@@ -65,15 +71,23 @@ export const useStreamData = (slug: string) => {
         }
       },
       (err) => {
-        console.error("Error listening to stream document:", err);
-        setError(err.message || "Failed to listen to stream updates.");
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error";
+        logger.error(
+          `Error listening to stream document: ${errorMessage}`,
+          err
+        );
+        setError(errorMessage || "Failed to listen to stream updates.");
         setStreamData(null);
         setLoading(false);
       }
     );
 
     // Cleanup function to unsubscribe from the listener when the component unmounts or slug changes
-    return () => unsubscribe();
+    return () => {
+      logger.debug(`Unsubscribing from stream updates for: ${slug}`);
+      unsubscribe();
+    };
   }, [slug, router]); // Rerun effect if slug changes
 
   return { streamData, loading, error };

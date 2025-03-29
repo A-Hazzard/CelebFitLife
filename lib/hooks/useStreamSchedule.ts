@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/config/firebase";
+import { createLogger } from "@/lib/utils/logger";
+
+const logger = createLogger("StreamSchedule");
 
 /**
  * Custom hook to manage scheduled stream countdown functionality.
@@ -24,8 +27,14 @@ export const useStreamSchedule = (slug: string) => {
 
   // Fetch stream schedule info from Firestore
   const fetchScheduleInfo = useCallback(async () => {
-    if (!slug) return;
+    if (!slug) {
+      logger.warn("No slug provided to useStreamSchedule hook");
+      setError("Stream ID is required");
+      setLoading(false);
+      return;
+    }
 
+    logger.info(`Fetching schedule info for stream: ${slug}`);
     try {
       setLoading(true);
       setError(null);
@@ -35,6 +44,7 @@ export const useStreamSchedule = (slug: string) => {
 
       if (streamSnapshot.exists()) {
         const data = streamSnapshot.data();
+        logger.debug(`Retrieved stream data for ${slug}`);
 
         // Set stream title
         setStreamTitle(data.title || "Upcoming Stream");
@@ -46,21 +56,30 @@ export const useStreamSchedule = (slug: string) => {
 
           // Only consider scheduled if date is in the future
           if (scheduledDate > now) {
+            logger.debug(
+              `Stream ${slug} is scheduled for ${scheduledDate.toISOString()}`
+            );
             setIsScheduled(true);
             setScheduledTime(data.scheduledAt);
           } else {
+            logger.debug(
+              `Stream ${slug} scheduled time is in the past, marking as not scheduled`
+            );
             setIsScheduled(false);
             setScheduledTime(null);
           }
         } else {
+          logger.debug(`Stream ${slug} has no scheduled time`);
           setIsScheduled(false);
           setScheduledTime(null);
         }
       } else {
+        logger.error(`Stream not found for slug: ${slug}`);
         setError("Stream not found");
       }
-    } catch (error) {
-      console.error("Error fetching stream schedule:", error);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      logger.error(`Error fetching stream schedule: ${errorMessage}`, err);
       setError("Failed to fetch stream schedule");
     } finally {
       setLoading(false);
@@ -76,6 +95,9 @@ export const useStreamSchedule = (slug: string) => {
 
     // If scheduled time is in the past, return null
     if (scheduledDate <= now) {
+      logger.debug(
+        "Scheduled time is now in the past, resetting schedule status"
+      );
       setIsScheduled(false);
       setScheduledTime(null);
       return null;
@@ -103,12 +125,14 @@ export const useStreamSchedule = (slug: string) => {
   useEffect(() => {
     if (!isScheduled || !scheduledTime) return;
 
+    logger.debug("Starting countdown timer for scheduled stream");
     const intervalId = setInterval(() => {
       const remaining = calculateTimeRemaining();
       setTimeRemaining(remaining);
 
       // Stop timer if countdown is complete
       if (!remaining) {
+        logger.info("Countdown complete, stream should be starting");
         clearInterval(intervalId);
       }
     }, 1000);
@@ -116,7 +140,10 @@ export const useStreamSchedule = (slug: string) => {
     // Initial calculation
     setTimeRemaining(calculateTimeRemaining());
 
-    return () => clearInterval(intervalId);
+    return () => {
+      logger.debug("Cleaning up countdown timer");
+      clearInterval(intervalId);
+    };
   }, [isScheduled, scheduledTime, calculateTimeRemaining]);
 
   // Format scheduled time for display

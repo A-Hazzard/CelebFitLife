@@ -68,3 +68,105 @@ export type WithListeners = {
 export type WithDetach = {
   detach: () => HTMLElement[];
 };
+
+/**
+ * Base error interface for streaming operations
+ */
+export interface StreamingError {
+  name: string;
+  message: string;
+  stack?: string;
+  code?: string | number;
+}
+
+/**
+ * Type for Twilio-specific errors
+ */
+export interface TwilioStreamingError extends StreamingError {
+  code: number;
+  twilioError: boolean;
+}
+
+/**
+ * Type for DOM-related errors that can occur during streaming
+ */
+export interface DOMError extends StreamingError {
+  domError: boolean;
+  element?: {
+    tagName?: string;
+    id?: string;
+    className?: string;
+  };
+}
+
+/**
+ * Type for media device errors
+ */
+export interface MediaDeviceError extends StreamingError {
+  deviceId?: string;
+  deviceType?: "audio" | "video";
+  deviceError: boolean;
+}
+
+/**
+ * Type for track-related errors
+ */
+export interface TrackError extends StreamingError {
+  trackSid?: string;
+  trackType?: "audio" | "video";
+  trackError: boolean;
+}
+
+/**
+ * Type for network-related errors
+ */
+export interface NetworkError extends StreamingError {
+  networkError: boolean;
+  status?: number;
+}
+
+/**
+ * Type for Firestore-related errors
+ */
+export interface FirestoreError extends StreamingError {
+  firestoreError: boolean;
+  path?: string;
+  operation?: "read" | "write" | "update" | "delete";
+}
+
+/**
+ * Union type of all streaming-related errors
+ */
+export type StreamingErrorType =
+  | TwilioStreamingError
+  | DOMError
+  | MediaDeviceError
+  | TrackError
+  | NetworkError
+  | FirestoreError
+  | StreamingError;
+
+/**
+ * Function to safely convert an unknown error to a typed StreamingError
+ */
+export function toStreamingError(error: unknown): StreamingErrorType {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  if (typeof error === "string") {
+    return {
+      name: "StringError",
+      message: error,
+    };
+  }
+
+  return {
+    name: "UnknownError",
+    message: String(error),
+  };
+}

@@ -2,6 +2,9 @@ import { useState, useCallback, useEffect } from "react";
 import { listenToMessages, sendChatMessage } from "@/lib/services/ChatService";
 import { ChatMessage } from "@/lib/types/stream";
 import { useAuthStore } from "@/lib/store/useAuthStore";
+import { createLogger } from "@/lib/utils/logger";
+
+const logger = createLogger("StreamChat");
 
 /**
  * Custom hook to manage chat functionality for streams.
@@ -13,17 +16,30 @@ import { useAuthStore } from "@/lib/store/useAuthStore";
 export const useStreamChat = (slug: string) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuthStore();
 
   // Set up message listener
   useEffect(() => {
-    if (!slug) return;
+    if (!slug) {
+      logger.warn("No slug provided to useStreamChat hook");
+      return;
+    }
+
+    logger.info(`Setting up chat listener for stream: ${slug}`);
+    setError(null);
 
     const unsubscribe = listenToMessages(slug, (newMessages) => {
       setMessages(newMessages);
+      logger.debug(
+        `Received ${newMessages.length} messages for stream: ${slug}`
+      );
     });
 
-    return () => unsubscribe();
+    return () => {
+      logger.debug(`Cleaning up chat listener for stream: ${slug}`);
+      unsubscribe();
+    };
   }, [slug]);
 
   // Handle sending messages
@@ -31,20 +47,34 @@ export const useStreamChat = (slug: string) => {
     async (e?: React.FormEvent) => {
       if (e) e.preventDefault();
 
-      if (!newMessage.trim() || !currentUser) return;
+      if (!newMessage.trim()) {
+        logger.debug("Attempted to send empty message, ignoring");
+        return;
+      }
+
+      if (!currentUser) {
+        logger.warn("Attempted to send message without being logged in");
+        setError("You must be logged in to send messages");
+        return;
+      }
+
+      logger.debug(`Sending message to stream: ${slug}`);
+      setError(null);
 
       try {
-        await sendChatMessage({
-          streamId: slug,
-          userId: currentUser.uid,
-          username: currentUser.username || currentUser.email || "Anonymous",
-          message: newMessage,
-          timestamp: new Date().toISOString(),
-        });
+        await sendChatMessage(
+          slug,
+          currentUser.username || currentUser.email || "Anonymous",
+          newMessage
+        );
 
+        logger.debug("Message sent successfully");
         setNewMessage("");
-      } catch (error) {
-        console.error("Error sending message:", error);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error sending message";
+        logger.error(`Error sending message: ${errorMessage}`, err);
+        setError(errorMessage);
       }
     },
     [slug, newMessage, currentUser]
@@ -67,5 +97,6 @@ export const useStreamChat = (slug: string) => {
     setNewMessage,
     handleSendMessage,
     handleKeyPress,
+    error,
   };
 };

@@ -1,4 +1,4 @@
-import { Streamer, StreamData } from "@/lib/types/streaming";
+import { Streamer, toStreamingError } from "@/lib/types/streaming";
 import {
   LocalVideoTrack,
   RemoteTrack,
@@ -7,6 +7,12 @@ import {
 } from "twilio-video";
 import { createLocalVideoTrack, createLocalAudioTrack } from "twilio-video";
 import { updateStreamDeviceStatus } from "@/lib/helpers/streaming";
+import { createLogger } from "@/lib/utils/logger";
+
+// Create context-specific loggers
+const streamUtilLogger = createLogger("StreamUtils");
+const domLogger = streamUtilLogger.withContext("DOM");
+const deviceLogger = streamUtilLogger.withContext("Devices");
 
 /**
  * Filters an array of streamers based on selected categories and tags.
@@ -65,21 +71,135 @@ export const getDefaultScheduleTime = (minutesFromNow: number = 10): Date => {
 
 /**
  * Safely clears all child elements (typically video elements) from a container.
- * It attempts to detach Twilio tracks if a track object is provided,
- * but primarily focuses on removing DOM elements.
+ * Includes detailed logging of the DOM operations and resource cleanup.
+ *
  * @param container - The HTMLDivElement to clear.
- * @param [track] - Optional Twilio LocalVideoTrack to detach from elements before removal.
  */
-export const clearVideoContainer = (container: HTMLDivElement | null) => {
-  if (!container) return;
+export const clearVideoContainer = (container: HTMLDivElement | null): void => {
+  const logger = domLogger.withContext("ClearContainer");
 
-  console.log("Clearing video container");
+  if (!container) {
+    logger.warn("No container provided to clearVideoContainer");
+    return;
+  }
+
+  logger.info(`Clearing video container: ${container.id || "unnamed"}`);
+  logger.debug(`Container details:`, {
+    id: container.id,
+    className: container.className,
+    childElementCount: container.childElementCount,
+  });
+
   try {
-    // Use innerHTML to clear all contents - safer than removing individual elements
-    container.innerHTML = "";
-    console.log("Video container cleared");
-  } catch (error) {
-    console.error("Error clearing video container:", error);
+    // First, try to clean up video srcObject to release MediaStream resources
+    const existingVideos = container.querySelectorAll("video");
+    logger.info(`Found ${existingVideos.length} video elements to clean up`);
+
+    // Use Array.from to safely iterate through NodeList
+    Array.from(existingVideos).forEach((videoElement, index) => {
+      try {
+        logger.debug(
+          `Cleaning up video element ${index + 1}/${existingVideos.length}`
+        );
+
+        // Capture element details for debugging
+        logger.debug(`Video element details:`, {
+          id: videoElement.id,
+          className: videoElement.className,
+          hasSource: !!videoElement.srcObject,
+          width: videoElement.width,
+          height: videoElement.height,
+        });
+
+        // Stop all tracks from MediaStream if present
+        if (videoElement.srcObject instanceof MediaStream) {
+          const stream = videoElement.srcObject as MediaStream;
+          const trackCount = stream.getTracks().length;
+          logger.debug(`Video has MediaStream with ${trackCount} tracks`);
+
+          stream.getTracks().forEach((track, trackIndex) => {
+            try {
+              logger.debug(
+                `Stopping track ${trackIndex + 1}/${trackCount}: ${track.kind}`
+              );
+              logger.debug(`Track state before stopping:`, {
+                kind: track.kind,
+                id: track.id,
+                enabled: track.enabled,
+                readyState: track.readyState,
+              });
+
+              track.stop();
+              logger.debug(
+                `Successfully stopped ${track.kind} track: ${track.id}`
+              );
+            } catch (trackErr) {
+              const error = toStreamingError(trackErr);
+              logger.error(
+                `Error stopping track ${trackIndex + 1}: ${track.kind}`,
+                error
+              );
+            }
+          });
+        } else {
+          logger.debug(`Video element has no MediaStream attached`);
+        }
+
+        // Clear srcObject reference
+        logger.debug(`Clearing srcObject reference`);
+        videoElement.srcObject = null;
+
+        // Pause the video element
+        logger.debug(`Pausing video element`);
+        videoElement.pause();
+
+        // Remove element from DOM if it has a parent
+        if (videoElement.parentNode) {
+          logger.debug(`Removing video element from DOM`);
+          videoElement.parentNode.removeChild(videoElement);
+          logger.debug(
+            `Successfully removed video element ${index + 1} from DOM`
+          );
+        } else {
+          logger.warn(
+            `Video element ${
+              index + 1
+            } has no parent node, can't remove from DOM`
+          );
+        }
+      } catch (videoErr) {
+        const error = toStreamingError(videoErr);
+        logger.error(`Error cleaning up video element ${index + 1}:`, error);
+        logger.trace(`Full stack trace for video cleanup error`);
+      }
+    });
+
+    // As a safety measure, also clear innerHTML - but only after properly
+    // cleaning up media resources above
+    try {
+      logger.debug(`Clearing container innerHTML as final cleanup step`);
+      container.innerHTML = "";
+      logger.debug(`Successfully cleared innerHTML`);
+    } catch (innerErr) {
+      const error = toStreamingError(innerErr);
+      logger.error(`Error clearing container innerHTML:`, error);
+    }
+
+    logger.info(`Video container cleared successfully`);
+  } catch (err) {
+    const error = toStreamingError(err);
+    logger.error(`Critical error in clearVideoContainer:`, error);
+    logger.trace(`Stack trace for critical error`);
+
+    // Last resort fallback
+    try {
+      logger.warn(`Attempting last resort innerHTML clear`);
+      container.innerHTML = "";
+      logger.info(`Last resort innerHTML clear successful`);
+    } catch (fallbackErr) {
+      const error = toStreamingError(fallbackErr);
+      logger.error(`Even fallback innerHTML clear failed:`, error);
+    }
   }
 };
 
@@ -166,42 +286,156 @@ export const switchCamera = async (
   track: LocalVideoTrack | null;
   error?: string;
 }> => {
-  try {
-    console.log("Switching camera to device:", deviceId);
+  const logger = deviceLogger.withContext("SwitchCamera");
+  let newVideoTrack: LocalVideoTrack | null = null;
 
-    const newVideoTrack = await createLocalVideoTrack({
-      deviceId,
-      width: 1280,
-      height: 720,
-      name: `camera-${deviceId.substring(0, 8)}-${Date.now()}`,
+  try {
+    logger.info(
+      `Switching camera to device ID: ${deviceId.substring(0, 8)}...`
+    );
+    logger.debug(`Switch camera parameters:`, {
+      deviceId: deviceId.substring(0, 8) + "...",
+      hasRoom: !!room,
+      hasCurrentTrack: !!currentVideoTrack,
+      currentTrackId: currentVideoTrack?.id || "none",
+      slug,
     });
 
-    if (room?.localParticipant) {
-      await room.localParticipant.publishTrack(newVideoTrack);
+    // Create new track with error handling
+    try {
+      logger.debug(`Creating new video track with selected device`);
+      newVideoTrack = await createLocalVideoTrack({
+        deviceId,
+        width: 1280,
+        height: 720,
+        name: `camera-${deviceId.substring(0, 8)}-${Date.now()}`,
+      });
+      logger.debug(`New track created successfully (ID: ${newVideoTrack.id})`);
+    } catch (trackErr) {
+      const error = toStreamingError(trackErr);
+      logger.error(`Failed to create new video track:`, error);
+      logger.debug(`Track creation error details:`, {
+        deviceId: deviceId.substring(0, 8) + "...",
+        error: error.name,
+        message: error.message,
+      });
+      return {
+        success: false,
+        track: null,
+        error: error.message,
+      };
+    }
 
-      if (currentVideoTrack) {
-        // Small delay to ensure smooth transition
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        await room.localParticipant.unpublishTrack(currentVideoTrack);
-        currentVideoTrack.stop();
+    // Handle publishing to room if connected
+    if (room?.localParticipant) {
+      logger.debug(`Publishing new track to room`);
+
+      try {
+        // First publish the new track
+        await room.localParticipant.publishTrack(newVideoTrack);
+        logger.info(`New video track published successfully`);
+
+        // Then handle the old track with a safe delay for smooth transition
+        if (currentVideoTrack) {
+          logger.debug(
+            `Waiting before unpublishing old track to ensure smooth transition`
+          );
+          // Small delay to ensure smooth transition
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          try {
+            logger.debug(
+              `Unpublishing old video track (ID: ${currentVideoTrack.id})`
+            );
+            await room.localParticipant.unpublishTrack(currentVideoTrack);
+            logger.debug(`Old video track unpublished successfully`);
+
+            // Now safely clean up resources
+            logger.debug(`Stopping old video track`);
+            // Stop will automatically detach the track
+            currentVideoTrack.stop();
+            logger.debug(`Old video track stopped successfully`);
+          } catch (unpublishErr) {
+            const error = toStreamingError(unpublishErr);
+            logger.error(`Error unpublishing old track:`, error);
+            if (error.name === "NotFoundError") {
+              logger.warn(
+                `NotFoundError when unpublishing track - this might indicate the track was already unpublished`
+              );
+            }
+            // Continue with the process despite error
+          }
+        } else {
+          logger.debug(`No current track to unpublish`);
+        }
+      } catch (publishErr) {
+        const error = toStreamingError(publishErr);
+        logger.error(`Error publishing new track:`, error);
+
+        // If we failed to publish the new track, we should clean it up
+        try {
+          logger.debug(`Cleaning up new track after publish failure`);
+          (newVideoTrack as LocalVideoTrack).stop();
+        } catch (cleanupErr) {
+          const cleanupError = toStreamingError(cleanupErr);
+          logger.error(
+            `Error cleaning up new track after publish failure:`,
+            cleanupError
+          );
+        }
+
+        return {
+          success: false,
+          track: null,
+          error: error.message,
+        };
       }
+    } else {
+      logger.warn(`No active room or local participant, skipping publish step`);
+      // If there's no room, we'll just return the new track
+      // This allows camera switching even when not connected to a room
     }
 
     // Update Firestore with the new device ID
-    if (slug) {
-      await updateStreamDeviceStatus(slug, { currentCameraId: deviceId });
+    try {
+      logger.debug(`Updating Firestore with new camera device ID`);
+      if (slug) {
+        await updateStreamDeviceStatus(slug, { currentCameraId: deviceId });
+        logger.debug(`Firestore update successful`);
+      } else {
+        logger.warn(`No slug provided, skipping Firestore update`);
+      }
+    } catch (firestoreErr) {
+      const error = toStreamingError(firestoreErr);
+      logger.error(`Error updating Firestore with new device ID:`, error);
+      // Continue despite Firestore error - we want to return the new track anyway
     }
 
+    logger.info(`Camera switch completed successfully`);
     return { success: true, track: newVideoTrack };
-  } catch (error) {
-    console.error("Error switching camera:", error);
+  } catch (err) {
+    const error = toStreamingError(err);
+    logger.error(`Unexpected error in switchCamera:`, error);
+    logger.trace(`switchCamera error stack trace`);
+
+    // Clean up the new track if it was created but we hit a different error
+    if (newVideoTrack) {
+      try {
+        logger.debug(`Cleaning up new track after general error`);
+        (newVideoTrack as LocalVideoTrack).stop();
+      } catch (cleanupErr) {
+        const cleanupError = toStreamingError(cleanupErr);
+        logger.error(
+          `Error cleaning up track after general error:`,
+          cleanupError
+        );
+      }
+    }
+
     return {
       success: false,
       track: null,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Unknown error switching camera",
+      error: error.message,
     };
   }
 };
@@ -360,7 +594,7 @@ export const setupReconnectionHandlers = (
   };
 
   // Handler for when reconnection fails and room disconnects
-  const handleDisconnected = (room: Room, error?: Error) => {
+  const handleDisconnected = (_room: Room, error?: Error) => {
     if (error) {
       console.error("Room disconnected due to error:", error);
       onFailed?.(error);

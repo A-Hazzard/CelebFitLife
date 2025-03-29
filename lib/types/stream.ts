@@ -1,7 +1,7 @@
 type ChatMessage = {
-    id: string;
-    userName: string;
-    content: string;
-}
+  id: string;
+  userName: string;
+  content: string;
+};
 
-export type {ChatMessage}
+export type { ChatMessage };

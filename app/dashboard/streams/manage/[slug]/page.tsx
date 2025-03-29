@@ -3,29 +3,26 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ShareButton from "@/components/ui/ShareButton";
 import { db } from "@/lib/config/firebase";
-import { sendChatMessage, listenToMessages } from "@/lib/services/ChatService";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import {
   clearVideoContainer,
-  setupDevices,
   switchCamera,
   switchMic,
   switchVideoQuality,
 } from "@/lib/utils/streaming";
 import {
-  fetchStreamInfo,
   updateStreamInfo,
   prepareStreamStart,
   endStream,
   updateStreamDeviceStatus,
   setupTwilioRoom,
+  safelyDetachTrack,
 } from "@/lib/helpers/streaming";
-import EmojiPicker from "emoji-picker-react";
+import { createLogger } from "@/lib/utils/logger";
 import { doc, updateDoc } from "firebase/firestore";
-import { Check, ChevronUp, Mic, MicOff, Video, VideoOff } from "lucide-react";
+import { ChevronUp, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
-import Image from "next/image";
 import {
   LocalAudioTrack,
   LocalVideoTrack,
@@ -38,8 +35,10 @@ import {
   useNetworkQualityMonitor,
   useTwilioTrackEvents,
 } from "@/lib/hooks/useTwilioTrackEvents";
-import { StreamData } from "@/lib/types/streaming";
-import { ChatMessage } from "@/lib/types/stream";
+import { toStreamingError } from "@/lib/types/streaming";
+
+// Create page-specific logger
+const pageLogger = createLogger("ManagePage");
 
 const ManageStreamPage = () => {
   const pathname = usePathname();
@@ -51,13 +50,11 @@ const ManageStreamPage = () => {
   const roomRef = useRef<Room | null>(null);
 
   // State declarations
-  const [newMessage, setNewMessage] = useState("");
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isStreamStarted, setIsStreamStarted] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isRoomConnecting, setIsRoomConnecting] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showCameraOptions, setShowCameraOptions] = useState(false);
   const [showMicOptions, setShowMicOptions] = useState(false);
   const [currentVideoTrack, setCurrentVideoTrack] =
@@ -66,10 +63,9 @@ const ManageStreamPage = () => {
     useState<LocalAudioTrack | null>(null);
   const [showEndConfirmation, setShowEndConfirmation] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   // Use custom hooks
-  const { streamData, loading, error: streamError } = useStreamData(slug);
+  const { streamData, loading } = useStreamData(slug);
   const {
     cameraDevices,
     micDevices,
@@ -166,7 +162,7 @@ const ManageStreamPage = () => {
         setShowCameraOptions(false);
       }
     },
-    [currentVideoTrack, slug]
+    [currentVideoTrack, slug, setCurrentCameraId]
   );
 
   // Handle mic switch
@@ -185,13 +181,25 @@ const ManageStreamPage = () => {
         setShowMicOptions(false);
       }
     },
-    [currentAudioTrack, slug]
+    [currentAudioTrack, slug, setCurrentMicId]
   );
 
   // Handle stream start
   const handleStartStream = useCallback(async () => {
+    const logger = pageLogger.withContext("StartStream");
+
+    logger.info(`Starting stream for slug: ${slug}`);
+
     if (!currentUser?.uid || !currentCameraId || !currentMicId || !slug) {
-      console.error("Missing required data to start stream");
+      const missingItems = [];
+      if (!currentUser?.uid) missingItems.push("user ID");
+      if (!currentCameraId) missingItems.push("camera");
+      if (!currentMicId) missingItems.push("microphone");
+      if (!slug) missingItems.push("stream ID");
+
+      logger.error(
+        `Missing required data to start stream: ${missingItems.join(", ")}`
+      );
       alert(
         "Cannot start stream. Ensure camera and mic are selected and you are logged in."
       );
@@ -199,23 +207,37 @@ const ManageStreamPage = () => {
     }
 
     setIsRoomConnecting(true);
-    try {
-      const prepareResult = await prepareStreamStart(
-        slug,
-        currentUser.uid,
-        currentUser.username || currentUser.email || "Streamer"
-      );
+    logger.debug(`Setting isRoomConnecting = true`);
 
-      if (!prepareResult.success || !prepareResult.token) {
-        throw new Error(
-          prepareResult.error || "Failed to prepare stream start"
-        );
+    try {
+      // Type guard to ensure uid is defined
+      const uid = currentUser.uid;
+      if (!uid) {
+        logger.error(`User ID is unexpectedly undefined after check`);
+        return;
       }
 
-      // Setup Twilio room
+      const username = currentUser.username || currentUser.email || "Streamer";
+      logger.debug(`Preparing stream start with username: ${username}`);
+
+      // Step 1: Prepare the stream in Firestore
+      logger.debug(`Calling prepareStreamStart...`);
+      const prepareResult = await prepareStreamStart(slug, uid, username);
+
+      if (!prepareResult.success || !prepareResult.token) {
+        const errorMsg =
+          prepareResult.error || "Failed to prepare stream start";
+        logger.error(`Stream preparation failed: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      logger.info(`Stream preparation successful, token received`);
+
+      // Step 2: Setup Twilio room
+      logger.debug(`Setting up Twilio room...`);
       const roomResult = await setupTwilioRoom(
         slug,
-        currentUser.username || currentUser.email || "Streamer",
+        username,
         currentCameraId,
         currentMicId,
         videoContainerRef as React.RefObject<HTMLDivElement>,
@@ -226,37 +248,69 @@ const ManageStreamPage = () => {
       );
 
       if (!roomResult.success) {
-        throw new Error(roomResult.error || "Failed to setup Twilio room");
+        const errorMsg = roomResult.error || "Failed to setup Twilio room";
+        logger.error(`Room setup failed: ${errorMsg}`);
+        throw new Error(errorMsg);
       }
 
+      logger.info(`Room setup successful`);
+      logger.debug(`Storing room reference and tracks`);
+
+      // Store references
       roomRef.current = roomResult.room;
       setCurrentAudioTrack(roomResult.audioTrack);
       setCurrentVideoTrack(roomResult.videoTrack);
       setIsConnected(true);
+      logger.debug(`Setting isConnected = true`);
 
-      // Setup room disconnection handler
-      roomResult.room?.on("disconnected", (room, error) => {
-        console.log("Room disconnected event triggered", { error });
-        setIsConnected(false);
-        setCurrentAudioTrack(null);
-        setCurrentVideoTrack(null);
-        roomRef.current = null;
-        clearVideoContainer(videoContainerRef.current);
-        if (error) {
-          console.error("Disconnected due to error:", error);
+      // Step 3: Setup room disconnection handler
+      logger.debug(`Setting up room disconnection handler`);
+      roomResult.room?.on(
+        "disconnected",
+        (_disconnectedRoom: Room, error: TwilioError | undefined) => {
+          logger.info(`Room disconnected event triggered`);
+          if (error) {
+            logger.error(`Room disconnected due to error:`, error);
+          }
+
+          logger.debug(`Clearing state after disconnection`);
+          setIsConnected(false);
+          setCurrentAudioTrack(null);
+          setCurrentVideoTrack(null);
+          roomRef.current = null;
+
+          logger.debug(`Clearing video container`);
+          clearVideoContainer(videoContainerRef.current);
         }
-      });
-    } catch (error) {
-      console.error("Error starting stream:", error);
-      alert(
-        `Failed to start stream: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
       );
 
+      logger.info(`Stream started successfully`);
+    } catch (err) {
+      const error = toStreamingError(err);
+      logger.error(`Error starting stream:`, error);
+      logger.trace(`Start stream error stack trace`);
+
+      // Log detailed error information
+      if (err instanceof TwilioError) {
+        logger.error(`Twilio error details:`, {
+          code: err.code,
+          message: err.message,
+        });
+      }
+
+      alert(`Failed to start stream: ${error.message}`);
+
       // Reset stream status in Firestore if start failed
-      await updateDoc(doc(db, "streams", slug), { hasStarted: false });
+      try {
+        logger.debug(`Resetting stream status in Firestore`);
+        await updateDoc(doc(db, "streams", slug), { hasStarted: false });
+        logger.debug(`Stream status reset successful`);
+      } catch (updateErr) {
+        const updateError = toStreamingError(updateErr);
+        logger.error(`Failed to reset stream status:`, updateError);
+      }
     } finally {
+      logger.debug(`Setting isRoomConnecting = false`);
       setIsRoomConnecting(false);
     }
   }, [
@@ -266,16 +320,79 @@ const ManageStreamPage = () => {
     currentMicId,
     isAudioEnabled,
     isVideoEnabled,
+    videoContainerRef,
   ]);
 
   const handleEndStream = useCallback(async () => {
-    const result = await endStream(slug, roomRef.current);
-    if (!result.success) {
-      console.error("Failed to end stream gracefully:", result.error);
-      roomRef.current?.disconnect();
-    }
     setShowEndConfirmation(false);
-  }, [slug]);
+    const logger = pageLogger.withContext("EndStream");
+
+    try {
+      logger.info("Ending stream...");
+
+      // First, manually clean up video container to avoid DOM-related errors
+      if (videoContainerRef.current) {
+        clearVideoContainer(videoContainerRef.current);
+      }
+
+      // Safely clean up current tracks before ending stream
+      if (currentVideoTrack) {
+        try {
+          safelyDetachTrack(currentVideoTrack);
+        } catch (err) {
+          const error = toStreamingError(err);
+          logger.error("Error cleaning up video track:", error);
+          // Continue despite errors
+        }
+      }
+
+      if (currentAudioTrack) {
+        try {
+          safelyDetachTrack(currentAudioTrack);
+        } catch (err) {
+          const error = toStreamingError(err);
+          logger.error("Error cleaning up audio track:", error);
+          // Continue despite errors
+        }
+      }
+
+      // Now end the stream with our enhanced helper function
+      const result = await endStream(slug, roomRef.current);
+
+      if (!result.success) {
+        logger.error("Failed to end stream gracefully:", result.error);
+        alert(`There was an issue ending the stream: ${result.error}`);
+
+        // Force disconnect room as fallback
+        if (roomRef.current) {
+          try {
+            roomRef.current.disconnect();
+          } catch (err) {
+            const error = toStreamingError(err);
+            logger.error("Force disconnect failed:", error);
+          }
+        }
+      } else {
+        logger.info("Stream ended successfully");
+        setIsStreamStarted(false);
+        setIsConnected(false);
+
+        // Reset track references
+        setCurrentVideoTrack(null);
+        setCurrentAudioTrack(null);
+        roomRef.current = null;
+      }
+
+      // After small delay, redirect to dashboard
+      setTimeout(() => {
+        router.push("/dashboard/streams");
+      }, 1500);
+    } catch (err) {
+      const error = toStreamingError(err);
+      logger.error("Critical error in handleEndStream:", error);
+      alert("Failed to end stream properly. Please try again.");
+    }
+  }, [slug, currentVideoTrack, currentAudioTrack, router]);
 
   const handleToggleAudio = useCallback(async () => {
     if (!currentAudioTrack) return;
@@ -319,58 +436,9 @@ const ManageStreamPage = () => {
     }
   }, [slug, streamData]);
 
-  // Streamer status overlay
-  const [streamerStatus, setStreamerStatus] = useState({
-    audioMuted: false,
-    cameraOff: false,
-  });
-
   // Modal controls
-  const openModal = () => setShowEndConfirmation(true);
-  const closeModal = () => setShowEndConfirmation(false);
-
-  // Subscribe to chat messages
-  useEffect(() => {
-    if (!slug) return;
-
-    console.log("Subscribing to chat messages for stream:", slug);
-    const unsubscribe = listenToMessages(slug, (newMessages) => {
-      console.log("Received messages:", newMessages);
-      setMessages(newMessages);
-    });
-
-    return () => {
-      console.log("Unsubscribing from chat messages");
-      unsubscribe();
-    };
-  }, [slug]);
-
-  // Handle sending a message
-  const handleSendMessage = useCallback(async () => {
-    if (!newMessage.trim() || !currentUser) return;
-
-    try {
-      await sendChatMessage(
-        slug,
-        currentUser.username || currentUser.email || "Streamer",
-        newMessage
-      );
-      setNewMessage("");
-    } catch (error) {
-      console.error("Error sending message:", error);
-    }
-  }, [slug, newMessage, currentUser]);
-
-  // Handle Enter key press for sending messages
-  const handleKeyPress = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleSendMessage();
-      }
-    },
-    [handleSendMessage]
-  );
+  const openModal = (): void => setShowEndConfirmation(true);
+  const closeModal = (): void => setShowEndConfirmation(false);
 
   if (loading || loadingDevices) {
     return null;
@@ -413,7 +481,7 @@ const ManageStreamPage = () => {
             ref={videoContainerRef}
             className="aspect-video bg-brandGray rounded-lg relative overflow-hidden border border-brandOrange/30"
           >
-            {(!isConnected || !isVideoEnabled || streamerStatus.cameraOff) && (
+            {(!isConnected || !isVideoEnabled) && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70">
                 <VideoOff className="w-16 h-16 text-brandGray mb-4" />
                 <p className="text-lg text-brandWhite">
@@ -525,7 +593,7 @@ const ManageStreamPage = () => {
           )}
         </div>
 
-        {/* Right Column: Stream Info & Chat */}
+        {/* Right Column: Stream Info */}
         <div className="lg:col-span-1 space-y-4">
           {/* Stream Info Card */}
           <div className="bg-brandBlack border border-brandOrange/30 p-4 rounded-lg space-y-3">
@@ -536,15 +604,8 @@ const ManageStreamPage = () => {
               <label className="text-xs text-brandGray mb-1 block">Title</label>
               <Input
                 value={streamData?.title || ""}
-                onChange={(e) => {
-                  if (streamData) {
-                    // Create updated streamData with new title
-                    const updatedData = {
-                      ...streamData,
-                      title: e.target.value,
-                    };
-                    // Update local state instead of direct Firestore write for each keystroke
-                  }
+                onChange={() => {
+                  // Update will be handled by the Update Info button
                 }}
                 placeholder="Stream Title"
                 className="bg-brandGray border-brandOrange/20 text-brandWhite"
@@ -556,15 +617,8 @@ const ManageStreamPage = () => {
               </label>
               <Input
                 value={streamData?.thumbnail || ""}
-                onChange={(e) => {
-                  if (streamData) {
-                    // Create updated streamData with new thumbnail
-                    const updatedData = {
-                      ...streamData,
-                      thumbnail: e.target.value,
-                    };
-                    // Update local state instead of direct Firestore write for each keystroke
-                  }
+                onChange={() => {
+                  // Update will be handled by the Update Info button
                 }}
                 placeholder="Thumbnail URL"
                 className="bg-brandGray border-brandOrange/20 text-brandWhite"
@@ -576,46 +630,6 @@ const ManageStreamPage = () => {
             >
               Update Info
             </Button>
-          </div>
-
-          {/* Chat Card */}
-          <div className="bg-brandBlack border border-brandOrange/30 p-4 rounded-lg h-96 flex flex-col">
-            <h2 className="text-lg font-semibold text-brandOrange mb-3">
-              Live Chat
-            </h2>
-            {/* Chat Messages Area */}
-            <div className="flex-grow bg-brandGray rounded p-2 mb-3 overflow-y-auto">
-              {messages.length === 0 ? (
-                <p className="text-sm text-brandGray italic">
-                  No messages yet.
-                </p>
-              ) : (
-                messages.map((msg) => (
-                  <p key={msg.id} className="text-sm text-brandWhite mb-1">
-                    <span className="font-semibold text-brandOrange">
-                      {msg.userName}:
-                    </span>{" "}
-                    {msg.content}
-                  </p>
-                ))
-              )}
-            </div>
-            {/* Chat Input */}
-            <div className="flex space-x-2">
-              <Input
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Send a message..."
-                className="flex-grow bg-brandGray border-brandOrange/20 text-brandWhite"
-                onKeyPress={handleKeyPress}
-              />
-              <Button
-                onClick={handleSendMessage}
-                className="bg-brandOrange text-brandBlack hover:bg-brandOrange/90"
-              >
-                Send
-              </Button>
-            </div>
           </div>
         </div>
       </div>
