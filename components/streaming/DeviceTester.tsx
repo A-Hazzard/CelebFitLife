@@ -937,6 +937,51 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     cleanupSpeakerAnalysis,
   ]);
 
+  // Handle test completion
+  const handleComplete = useCallback(() => {
+    // Save selected device settings to localStorage
+    const deviceSettings = {
+      selectedMic,
+      selectedSpeaker,
+      selectedCamera,
+      micEnabled,
+      cameraEnabled,
+    };
+
+    localStorage.setItem("deviceSettings", JSON.stringify(deviceSettings));
+
+    // Clean up resources
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((track) => track.stop());
+      micStreamRef.current = null;
+    }
+
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+
+    cleanupMicAnalysis();
+    cleanupSpeakerAnalysis();
+    closeAudioContext();
+
+    console.log("Device settings saved:", deviceSettings);
+    toast.success("Device settings saved successfully!");
+
+    // Notify parent component
+    onComplete();
+  }, [
+    selectedMic,
+    selectedSpeaker,
+    selectedCamera,
+    micEnabled,
+    cameraEnabled,
+    onComplete,
+    cleanupMicAnalysis,
+    cleanupSpeakerAnalysis,
+    closeAudioContext,
+  ]);
+
   // --- UI Handlers ---
   const handleDeviceChange = (
     deviceType: "mic" | "speaker" | "camera",
@@ -1187,7 +1232,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         {/* Confirm Button */}
         <div className="flex justify-center pt-4">
           <Button
-            onClick={onComplete}
+            onClick={handleComplete}
             size="lg"
             className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack font-semibold"
           >

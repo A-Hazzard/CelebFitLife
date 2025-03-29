@@ -1,15 +1,12 @@
 "use client";
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { db } from "@/lib/config/firebase";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import StreamChat from "@/components/streaming/StreamChat";
 import { useAuthStore } from "@/lib/store/useAuthStore";
-import {
-  clearVideoContainer,
-  updateTrackEnabledState,
-} from "@/lib/utils/streaming";
+import { clearVideoContainer } from "@/lib/utils/streaming";
 import {
   Room,
   RemoteAudioTrack,
@@ -19,16 +16,22 @@ import {
   RemoteTrackPublication,
   connect,
 } from "twilio-video";
-import { MicOff, VideoOff, Volume2, VolumeX } from "lucide-react";
+import { MicOff, Mic, VideoOff } from "lucide-react";
 import { Countdown } from "@/components/streaming/Countdown";
 import { ClientTwilioService } from "@/lib/services/ClientTwilioService";
 
 // Create a static instance of ClientTwilioService for the client side
 const clientTwilioService = new ClientTwilioService();
 
+// Move error type definition out of connectToRoom
+type TwilioErrorType = {
+  name?: string;
+  code?: number;
+  message?: string;
+};
+
 export default function LiveViewPage() {
   const pathname = usePathname();
-  const router = useRouter();
   const slug = pathname?.split("/").pop() || "";
   const { currentUser } = useAuthStore();
 
@@ -42,7 +45,7 @@ export default function LiveViewPage() {
   const [remoteAudioTrack, setRemoteAudioTrack] =
     useState<RemoteAudioTrack | null>(null);
   const [videoStatus, setVideoStatus] = useState<
-    "waiting" | "connecting" | "active" | "offline" | "ended"
+    "waiting" | "connecting" | "active" | "offline" | "ended" | "error"
   >("waiting");
   const [hasHydrated, setHasHydrated] = useState(false);
   const [streamerStatus, setStreamerStatus] = useState({
@@ -52,6 +55,10 @@ export default function LiveViewPage() {
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduledTime, setScheduledTime] = useState("");
+  const [streamStartTime, setStreamStartTime] = useState<string | null>(null);
+  const [streamDuration, setStreamDuration] = useState(0);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [authError, setAuthError] = useState(false);
 
   // This state is used to detect browser autoplay restrictions
   const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -63,11 +70,43 @@ export default function LiveViewPage() {
 
   // State to track whether we're currently attempting to connect
   const [isConnecting, setIsConnecting] = useState(false);
+  // Add error state
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
-  // Define a debug function that uses remoteVideoTrack to make TypeScript happy
-  // and actually use it when checking for video track details
+  // All useEffect hooks must be defined at the top level
+  // Dynamic page title effect
   useEffect(() => {
-    // Log video track details when available - this actually uses the remoteVideoTrack variable
+    let interval: NodeJS.Timeout | null = null;
+
+    if (videoStatus === "active" && hasStarted) {
+      // Create blinking title effect for live streams
+      const baseTitle = streamTitle || "Live Stream";
+      const titles = [`🔴 LIVE: ${baseTitle}`, `⚪ LIVE: ${baseTitle}`];
+      let index = 0;
+
+      document.title = titles[0];
+      interval = setInterval(() => {
+        index = (index + 1) % 2;
+        document.title = titles[index];
+      }, 1000);
+    } else if (videoStatus === "ended") {
+      document.title = "Stream Ended";
+    } else if (videoStatus === "waiting") {
+      document.title = isScheduled
+        ? `Scheduled: ${streamTitle || "Upcoming Stream"}`
+        : `Waiting: ${streamTitle || "Stream"}`;
+    } else {
+      document.title = streamTitle || "CelebFitLife | Live Stream";
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+      document.title = "CelebFitLife | Live Fitness Streaming";
+    };
+  }, [videoStatus, hasStarted, streamTitle, isScheduled]);
+
+  // Log video track details when available
+  useEffect(() => {
     if (remoteVideoTrack) {
       console.debug("Video track details:", {
         sid: remoteVideoTrack.sid,
@@ -77,20 +116,31 @@ export default function LiveViewPage() {
     }
   }, [remoteVideoTrack]);
 
+  // Hydration effect
   useEffect(() => {
-    const unsub = useAuthStore.persist.onFinishHydration(() =>
-      setHasHydrated(true)
-    );
-    const timeout = setTimeout(() => setHasHydrated(true), 2000);
+    const unsub = useAuthStore.persist.onFinishHydration(() => {
+      setHasHydrated(true);
+      setLoadingAuth(false);
+    });
+
+    const timeout = setTimeout(() => {
+      setHasHydrated(true);
+      setLoadingAuth(false);
+    }, 2000);
+
     return () => {
       unsub();
       clearTimeout(timeout);
     };
   }, []);
 
+  // Authentication check effect
   useEffect(() => {
-    if (hasHydrated && !currentUser) router.push("/login");
-  }, [currentUser, hasHydrated, router]);
+    if (hasHydrated && !currentUser && !loadingAuth) {
+      setAuthError(true);
+      // Don't redirect here, we'll show a UI message instead
+    }
+  }, [currentUser, hasHydrated, loadingAuth]);
 
   // Listen for stream status from Firestore
   useEffect(() => {
@@ -106,12 +156,24 @@ export default function LiveViewPage() {
           hasEnded: data.hasEnded,
           audioMuted: data.audioMuted || false,
           cameraOff: data.cameraOff || false,
+          startedAt: data.startedAt || null,
         });
 
         setStreamerStatus({
           audioMuted: data.audioMuted || false,
           cameraOff: data.cameraOff || false,
         });
+
+        // Store stream start time
+        if (data.startedAt) {
+          setStreamStartTime(data.startedAt);
+
+          // Calculate duration since stream started
+          const startTime = new Date(data.startedAt).getTime();
+          const now = Date.now();
+          const elapsedSeconds = Math.floor((now - startTime) / 1000);
+          setStreamDuration(elapsedSeconds > 0 ? elapsedSeconds : 0);
+        }
 
         // Update video status based on stream state
         if (data.hasEnded) {
@@ -138,121 +200,57 @@ export default function LiveViewPage() {
     };
   }, [slug, room]);
 
-  const handleTrackSubscribed = useCallback(
-    (track: RemoteTrack) => {
-      try {
-        console.log(
-          "Track subscribed:",
-          track.kind,
-          track.name,
-          "isEnabled:",
-          track.isEnabled
-        );
+  // Audio muting handler - moved outside of render for React Hook rules
+  const toggleAudioMute = useCallback(() => {
+    setIsAudioMuted((prev) => !prev);
 
-        // If we have an offline timer running, clear it since we got a new track
-        if (offlineTimerId) {
-          console.log("Clearing offline timer since we received a new track");
-          clearTimeout(offlineTimerId);
-          setOfflineTimerId(null);
-        }
+    // Update elements for the remote audio track
+    if (remoteAudioTrack) {
+      const audioElements = document.querySelectorAll(
+        `audio[data-track-sid="${remoteAudioTrack.sid}"]`
+      );
+      audioElements.forEach((el) => {
+        (el as HTMLAudioElement).muted = !isAudioMuted;
+      });
+    }
+  }, [remoteAudioTrack, isAudioMuted]);
 
-        if (track.kind === "video") {
-          const videoTrack = track as RemoteVideoTrack;
+  // Fix remote track handling for proper video display
+  const handleTrackSubscribed = useCallback((track: RemoteTrack) => {
+    console.log(`Track subscribed: ${track.kind} - ${track.name}`);
 
-          // Store the new track reference
-          setRemoteVideoTrack(videoTrack);
-          setVideoStatus("active");
+    if (track.kind === "video") {
+      console.log("Adding video track to container");
+      const videoTrack = track as RemoteVideoTrack;
+      setRemoteVideoTrack(videoTrack);
 
-          console.log("Creating video element for track");
+      if (videoContainerRef.current) {
+        // Clear existing elements first
+        clearVideoContainer(videoContainerRef.current);
 
-          // Create and configure video element
-          if (videoContainerRef.current) {
-            clearVideoContainer(videoContainerRef.current);
+        // Create and attach a new video element
+        const videoElement = document.createElement("video");
+        videoElement.style.width = "100%";
+        videoElement.style.height = "100%";
+        videoElement.style.objectFit = "cover";
+        videoElement.setAttribute("autoplay", "true");
+        videoElement.setAttribute("playsinline", "true");
 
-            // Create a new video element
-            const element = document.createElement("video");
-            element.style.width = "100%";
-            element.style.height = "100%";
-            element.style.objectFit = "cover";
-            element.setAttribute("data-track-sid", track.sid);
-            element.setAttribute("autoplay", "true");
-            element.setAttribute("playsinline", "true");
-            element.muted = true; // 👈🏽 Add this bad boy here
+        // Attach track to the video element
+        videoTrack.attach(videoElement);
 
-            // Attach the track to the element
-            videoTrack.attach(element);
-
-            // Add the element to the container
-            videoContainerRef.current.appendChild(element);
-            console.log("Video element created and attached to container");
-
-            // Force play if needed
-            try {
-              if (element.muted) {
-                // Safe to auto-play if muted
-                element.play().catch((err) => {
-                  console.warn("Autoplay blocked even while muted:", err);
-                });
-              } else {
-                // Wait for user gesture (e.g., on click)
-                console.warn(
-                  "Not auto-playing video with audio. Waiting for interaction."
-                );
-              }
-            } catch (playError) {
-              console.warn("Error calling play():", playError);
-            }
-          }
-
-          // Set up track event listeners
-          videoTrack.on("disabled", () => {
-            console.log("Video track disabled");
-            // Don't set to offline, just update UI state
-            // This prevents showing "Stream is Offline" when camera is just disabled
-          });
-
-          videoTrack.on("enabled", () => {
-            console.log("Video track enabled");
-            setVideoStatus("active");
-          });
-        } else if (track.kind === "audio") {
-          const audioTrack = track as RemoteAudioTrack;
-
-          // Store the new track reference
-          setRemoteAudioTrack(audioTrack);
-
-          console.log("Creating audio element for track");
-
-          // Create and configure audio element
-          const element = document.createElement("audio");
-          element.setAttribute("autoplay", "true");
-          element.setAttribute("data-track-sid", track.sid);
-          element.muted = isAudioMuted;
-
-          // Attach the track to the element
-          audioTrack.attach(element);
-
-          // Add the element to the document
-          document.body.appendChild(element);
-          console.log("Audio element created and attached to document body");
-
-          // Set up track event listeners
-          audioTrack.on("disabled", () => {
-            console.log("Audio track disabled");
-            updateTrackEnabledState(track, isAudioMuted);
-          });
-
-          audioTrack.on("enabled", () => {
-            console.log("Audio track enabled");
-            updateTrackEnabledState(track, isAudioMuted);
-          });
-        }
-      } catch (error) {
-        console.error("Error in handleTrackSubscribed:", error);
+        // Add to container
+        videoContainerRef.current.appendChild(videoElement);
+        setVideoStatus("active");
+      } else {
+        console.error("Video container ref is null, can't attach track");
       }
-    },
-    [offlineTimerId, isAudioMuted, videoContainerRef]
-  );
+    } else if (track.kind === "audio") {
+      console.log("Setting up audio track");
+      setRemoteAudioTrack(track as RemoteAudioTrack);
+      track.attach(); // This creates an audio element and adds it to the DOM
+    }
+  }, []);
 
   // Handler for track published
   const handleTrackPublished = useCallback(
@@ -417,9 +415,18 @@ export default function LiveViewPage() {
     [offlineTimerId]
   );
 
+  // Connection effect
   useEffect(() => {
     // Don't attempt to connect if any of these conditions are true
-    if (!slug || !currentUser || isConnecting || room) return;
+    if (
+      !slug ||
+      !currentUser ||
+      isConnecting ||
+      room ||
+      authError ||
+      loadingAuth
+    )
+      return;
 
     console.log("Starting Twilio room connection process...");
     let isSubscribed = true;
@@ -428,8 +435,57 @@ export default function LiveViewPage() {
     const maxAttempts = 3;
     let debounceTimer: NodeJS.Timeout | null = null;
 
+    const checkStreamExists = async () => {
+      try {
+        const streamDocRef = doc(db, "streams", slug);
+        const streamDoc = await getDoc(streamDocRef);
+
+        if (!streamDoc.exists()) {
+          console.log("[Connection] Stream does not exist in Firestore:", slug);
+          setConnectionError(
+            "Stream not found. It may have been deleted or never existed."
+          );
+          setVideoStatus("error");
+          return false;
+        }
+
+        const streamData = streamDoc.data();
+        if (streamData.hasEnded) {
+          console.log("[Connection] Stream has ended:", slug);
+          setConnectionError("This stream has ended.");
+          setVideoStatus("ended");
+          return false;
+        }
+
+        if (!streamData.hasStarted) {
+          console.log("[Connection] Stream has not started yet:", slug);
+          // Don't set error, just let the waiting UI show
+          return false;
+        }
+
+        return true;
+      } catch (error) {
+        console.error("[Connection] Error checking if stream exists:", error);
+        setConnectionError(
+          "Error checking stream status. Please try again later."
+        );
+        setVideoStatus("error");
+        return false;
+      }
+    };
+
     const connectToRoom = async () => {
       try {
+        // Reset any previous errors
+        setConnectionError(null);
+
+        // First check if the stream exists and is active
+        const streamExists = await checkStreamExists();
+        if (!streamExists) {
+          setIsConnecting(false);
+          return;
+        }
+
         // Prevent multiple connection attempts
         setIsConnecting(true);
 
@@ -438,6 +494,9 @@ export default function LiveViewPage() {
           console.error(`Failed to connect after ${maxAttempts} attempts`);
           setVideoStatus("offline");
           setIsConnecting(false);
+          setConnectionError(
+            "Failed to connect after multiple attempts. Please try refreshing the page."
+          );
           return;
         }
 
@@ -458,6 +517,9 @@ export default function LiveViewPage() {
           console.error("[Connection] Error getting token:", error);
           setVideoStatus("offline");
           setIsConnecting(false);
+          setConnectionError(
+            "Unable to get access token. The stream may not be available."
+          );
           return;
         }
 
@@ -499,15 +561,46 @@ export default function LiveViewPage() {
         // Set up room handlers
         room.on("participantConnected", handleParticipantConnected);
         room.on("participantDisconnected", handleParticipantDisconnected);
-        room.on("disconnected", () => {
-          console.log("[Connection] Room disconnected");
+        room.on("disconnected", (_room, error) => {
+          console.log("[Connection] Room disconnected", error);
           setIsConnecting(false);
+
+          // Handle room disconnect errors
+          if (error) {
+            console.error(
+              "[Connection] Room disconnect error:",
+              error.code,
+              error.message
+            );
+
+            // Set appropriate error message based on the error code
+            if (error.code === 53001) {
+              setConnectionError("Room not found. The stream may have ended.");
+              setVideoStatus("error");
+            } else if (error.code === 53205) {
+              setConnectionError(
+                "You're already connected to this stream in another window."
+              );
+              setVideoStatus("error");
+            } else {
+              setConnectionError(`Connection error: ${error.message}`);
+              setVideoStatus("error");
+            }
+          }
         });
-        room.on("reconnecting", () => {
-          console.log("[Connection] Room reconnecting");
+        room.on("reconnecting", (error) => {
+          console.log("[Connection] Room reconnecting", error);
+          if (error) {
+            console.error(
+              "[Connection] Reconnection error:",
+              error.code,
+              error.message
+            );
+          }
         });
         room.on("reconnected", () => {
           console.log("[Connection] Room reconnected");
+          setConnectionError(null);
         });
 
         roomCleanup = () => {
@@ -518,9 +611,46 @@ export default function LiveViewPage() {
           room.disconnect();
           setRoom(null);
         };
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("[Connection] Error connecting to room:", error);
         setIsConnecting(false);
+
+        // Handle specific Twilio errors with user-friendly messages
+        const twilioError = error as TwilioErrorType;
+        if (twilioError.name === "TwilioError") {
+          console.error(
+            "[Twilio Error]",
+            twilioError.code,
+            twilioError.message
+          );
+
+          switch (twilioError.code) {
+            case 53000:
+              setConnectionError(
+                "Unable to connect to the stream. The room is full."
+              );
+              break;
+            case 53001:
+              setConnectionError(
+                "Stream not found. It may have ended or never started."
+              );
+              break;
+            case 53205:
+              setConnectionError(
+                "You're already watching this stream in another window."
+              );
+              break;
+            default:
+              setConnectionError(`Unable to connect: ${twilioError.message}`);
+          }
+
+          setVideoStatus("error");
+        } else {
+          setConnectionError(
+            "Failed to connect to the stream. Please try again later."
+          );
+          setVideoStatus("error");
+        }
       }
     };
 
@@ -548,6 +678,8 @@ export default function LiveViewPage() {
     isConnecting,
     room,
     hasStarted,
+    authError,
+    loadingAuth,
   ]);
 
   // Add track status monitoring
@@ -703,7 +835,51 @@ export default function LiveViewPage() {
     };
   }, [room]);
 
-  // Add a function to force check and resubscribe to tracks
+  // Update streamer status in UI
+  useEffect(() => {
+    if (!slug) return;
+
+    const streamerStatusRef = doc(db, "streams", slug);
+    const unsubscribe = onSnapshot(streamerStatusRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        console.log("Stream data from Firestore:", data);
+        setStreamerStatus({
+          // Check both field names for compatibility
+          cameraOff: data.isCameraOff ?? data.cameraOff ?? false,
+          audioMuted: data.isMuted ?? data.audioMuted ?? false,
+        });
+
+        // If camera is not off but we're not seeing video, try to resubscribe to tracks
+        if (
+          !(data.isCameraOff ?? data.cameraOff) &&
+          remoteParticipant &&
+          videoContainerRef.current &&
+          !videoContainerRef.current.querySelector("video")
+        ) {
+          console.log(
+            "Camera is on but no video element found, attempting to resubscribe to tracks"
+          );
+          remoteParticipant.tracks.forEach((publication) => {
+            if (
+              publication.track &&
+              publication.isSubscribed &&
+              publication.kind === "video"
+            ) {
+              console.log(
+                `Resubscribing to video track: ${publication.trackName}`
+              );
+              handleTrackSubscribed(publication.track);
+            }
+          });
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [slug, remoteParticipant, handleTrackSubscribed]);
+
+  // Define forceCheckAndResubscribe function before it's used in useEffect
   const forceCheckAndResubscribe = useCallback(() => {
     if (!remoteParticipant || !videoContainerRef.current) return;
 
@@ -782,59 +958,6 @@ export default function LiveViewPage() {
     forceCheckAndResubscribe,
   ]);
 
-  // Handle audio muting
-  const toggleAudioMute = useCallback(() => {
-    if (remoteAudioTrack) {
-      const audioElement = document.querySelector("audio");
-      if (audioElement) {
-        audioElement.muted = !isAudioMuted;
-        setIsAudioMuted(!isAudioMuted);
-      }
-    }
-  }, [remoteAudioTrack, isAudioMuted]);
-
-  // Update streamer status in UI
-  useEffect(() => {
-    const streamerStatusRef = doc(db, "streams", slug);
-    const unsubscribe = onSnapshot(streamerStatusRef, (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        console.log("Stream data from Firestore:", data);
-        setStreamerStatus({
-          // Check both field names for compatibility
-          cameraOff: data.isCameraOff ?? data.cameraOff ?? false,
-          audioMuted: data.isMuted ?? data.audioMuted ?? false,
-        });
-
-        // If camera is not off but we're not seeing video, try to resubscribe to tracks
-        if (
-          !(data.isCameraOff ?? data.cameraOff) &&
-          remoteParticipant &&
-          videoContainerRef.current &&
-          !videoContainerRef.current.querySelector("video")
-        ) {
-          console.log(
-            "Camera is on but no video element found, attempting to resubscribe to tracks"
-          );
-          remoteParticipant.tracks.forEach((publication) => {
-            if (
-              publication.track &&
-              publication.isSubscribed &&
-              publication.kind === "video"
-            ) {
-              console.log(
-                `Resubscribing to video track: ${publication.trackName}`
-              );
-              handleTrackSubscribed(publication.track);
-            }
-          });
-        }
-      }
-    });
-
-    return () => unsubscribe();
-  }, [slug, remoteParticipant, handleTrackSubscribed]);
-
   // Add a useEffect hook to load the stream title and thumbnail
   useEffect(() => {
     if (!slug) return;
@@ -860,52 +983,77 @@ export default function LiveViewPage() {
 
   // Updated function to check for scheduled time
   useEffect(() => {
+    if (!slug) return;
+
     const checkScheduledTime = async () => {
-      if (slug) {
-        try {
-          const streamDoc = await getDoc(doc(db, "streams", slug));
-          if (streamDoc.exists()) {
-            const data = streamDoc.data();
-            console.log("Stream data for scheduling:", data);
+      try {
+        const streamDoc = await getDoc(doc(db, "streams", slug));
+        if (streamDoc.exists()) {
+          const data = streamDoc.data();
+          console.log("Stream data for scheduling:", data);
 
-            if (data.scheduledAt) {
-              console.log("Stream scheduled for:", data.scheduledAt);
+          if (data.scheduledAt) {
+            console.log("Stream scheduled for:", data.scheduledAt);
 
-              // Parse and validate the date
-              const scheduledDate = new Date(data.scheduledAt);
-              if (!isNaN(scheduledDate.getTime())) {
-                console.log(
-                  "Valid scheduled date found:",
-                  scheduledDate.toString()
-                );
-                console.log(
-                  "Time until stream:",
-                  scheduledDate.getTime() - new Date().getTime(),
-                  "ms"
-                );
+            // Parse and validate the date
+            const scheduledDate = new Date(data.scheduledAt);
+            if (!isNaN(scheduledDate.getTime())) {
+              console.log(
+                "Valid scheduled date found:",
+                scheduledDate.toString()
+              );
+              console.log(
+                "Time until stream:",
+                scheduledDate.getTime() - new Date().getTime(),
+                "ms"
+              );
 
-                setIsScheduled(true);
-                setScheduledTime(data.scheduledAt);
-              } else {
-                console.error(
-                  "Invalid date format in scheduledAt:",
-                  data.scheduledAt
-                );
-                setIsScheduled(false);
-              }
+              setIsScheduled(true);
+              setScheduledTime(data.scheduledAt);
             } else {
-              console.log("No schedule time found in stream data");
+              console.error(
+                "Invalid date format in scheduledAt:",
+                data.scheduledAt
+              );
               setIsScheduled(false);
             }
+          } else {
+            console.log("No schedule time found in stream data");
+            setIsScheduled(false);
           }
-        } catch (error) {
-          console.error("Error checking scheduled time:", error);
         }
+      } catch (error) {
+        console.error("Error checking scheduled time:", error);
       }
     };
 
     checkScheduledTime();
   }, [slug]);
+
+  // Add timer effect to update stream duration
+  useEffect(() => {
+    if (!streamStartTime || videoStatus !== "active") return;
+
+    // Update duration every second
+    const timer = setInterval(() => {
+      const startTime = new Date(streamStartTime).getTime();
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - startTime) / 1000);
+      setStreamDuration(elapsedSeconds > 0 ? elapsedSeconds : 0);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [streamStartTime, videoStatus]);
+
+  // Format time as HH:MM:SS
+  const formatDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
 
   if (!hasHydrated || !currentUser) return null;
 
@@ -943,88 +1091,179 @@ export default function LiveViewPage() {
       <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-2.5rem)]">
         {/* Video Section */}
         <div className="flex-1 p-2 md:p-4 h-full">
-          <div className="relative w-full h-full rounded-lg overflow-hidden bg-gray-900">
-            <div ref={videoContainerRef} className="w-full h-full" />
+          <div className="w-full h-full relative">
+            <div
+              ref={videoContainerRef}
+              className="w-full aspect-video bg-gray-900 relative overflow-hidden rounded-lg shadow-lg"
+            ></div>
 
             {/* Status Overlays */}
-            {videoStatus === "waiting" && !hasStarted && (
-              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center">
-                <p className="text-brandOrange text-2xl font-semibold mb-2">
-                  Stream Starting Soon
-                </p>
-                <p className="text-gray-400 text-center max-w-md px-4">
-                  The host will start the stream shortly. You&apos;ll be
-                  automatically connected when it begins.
-                </p>
-              </div>
-            )}
-
-            {videoStatus === "connecting" && (
-              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center">
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-6 w-6 border-2 border-t-brandOrange border-gray-600"></div>
-                  <p className="text-brandOrange">Connecting to stream...</p>
+            {videoStatus === "waiting" && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
+                <div className="mb-4">
+                  {isScheduled ? (
+                    <>
+                      <h2 className="text-xl font-bold mb-4 text-center">
+                        Stream Scheduled
+                      </h2>
+                      <Countdown scheduledTime={scheduledTime} />
+                    </>
+                  ) : (
+                    <>
+                      <div className="animate-pulse flex flex-col items-center">
+                        <div className="w-4 h-4 bg-yellow-500 rounded-full mb-2"></div>
+                        <h2 className="text-xl font-bold">
+                          Waiting for Streamer
+                        </h2>
+                      </div>
+                      <p className="text-sm text-gray-400 mt-2">
+                        Stream will begin shortly
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Only show offline message if hasStarted is false */}
-            {!hasStarted && !isScheduled && (
-              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center">
-                <p className="text-brandOrange text-xl font-semibold mb-2">
-                  Stream is Offline
-                </p>
-                <p className="text-gray-400 text-center max-w-md px-4">
-                  This stream is currently offline. Please check back later.
-                </p>
+            {videoStatus === "connecting" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
+                <div className="animate-pulse flex flex-col items-center">
+                  <div className="w-4 h-4 bg-blue-500 rounded-full mb-2"></div>
+                  <h2 className="text-xl font-bold">Connecting to Stream</h2>
+                  <p className="text-sm text-gray-400 mt-2">Please wait...</p>
+                </div>
+              </div>
+            )}
+
+            {videoStatus === "offline" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
+                <div className="flex flex-col items-center">
+                  <div className="w-4 h-4 bg-red-500 rounded-full mb-2"></div>
+                  <h2 className="text-xl font-bold">Stream is Offline</h2>
+                  {connectionError ? (
+                    <p className="text-sm text-gray-400 mt-2 text-center max-w-md px-4">
+                      {connectionError}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-400 mt-2">
+                      Please try again later
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {videoStatus === "error" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
+                <div className="flex flex-col items-center">
+                  <div className="w-4 h-4 bg-red-500 rounded-full mb-2"></div>
+                  <h2 className="text-xl font-bold">Connection Error</h2>
+                  {connectionError ? (
+                    <p className="text-sm text-gray-400 mt-2 text-center max-w-md px-4">
+                      {connectionError}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-400 mt-2">
+                      There was a problem connecting to the stream.
+                    </p>
+                  )}
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="mt-4 px-4 py-2 bg-brandOrange text-brandBlack rounded hover:bg-brandOrange/80 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </div>
               </div>
             )}
 
             {videoStatus === "ended" && (
-              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center">
-                <p className="text-brandOrange text-xl font-semibold mb-2">
-                  Stream has Ended
-                </p>
-                <p className="text-gray-400 text-center max-w-md px-4">
-                  Thank you for watching! This stream has ended.
-                </p>
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
+                <div className="flex flex-col items-center">
+                  <div className="w-4 h-4 bg-red-500 rounded-full mb-2"></div>
+                  <h2 className="text-xl font-bold">Stream Has Ended</h2>
+                  <p className="text-sm text-gray-400 mt-2">
+                    Thank you for watching!
+                  </p>
+                </div>
               </div>
             )}
 
-            {/* Show camera/mic status - only when hasStarted is true */}
-            {hasStarted && streamerStatus.cameraOff && (
-              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center">
-                <VideoOff className="w-16 h-16 text-brandOrange mb-4" />
-                <p className="text-brandOrange text-xl font-semibold">
-                  Camera is Off
-                </p>
-              </div>
-            )}
-
-            {hasStarted && streamerStatus.audioMuted && (
-              <div className="absolute top-4 left-4 bg-black/70 px-3 py-1 rounded-full flex items-center gap-2">
-                <MicOff className="w-4 h-4 text-brandOrange" />
-                <span className="text-sm text-brandOrange">Audio Muted</span>
-              </div>
-            )}
-
-            {/* Audio Controls */}
-            <div className="absolute bottom-4 right-4 flex items-center gap-2">
-              <button
-                onClick={toggleAudioMute}
-                className="p-3 rounded-full bg-black/70 hover:bg-black/90 transition-colors"
-              >
-                {isAudioMuted ? (
-                  <VolumeX className="w-5 h-5 text-brandOrange" />
-                ) : (
-                  <Volume2 className="w-5 h-5 text-brandOrange" />
+            {/* Live Indicator */}
+            {videoStatus === "active" && (
+              <div className="absolute top-4 left-4 flex items-center gap-2">
+                <div className="flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-white text-sm">
+                  <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+                  LIVE
+                </div>
+                {streamStartTime && (
+                  <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-white text-sm">
+                    {formatDuration(streamDuration)}
+                  </div>
                 )}
-              </button>
-            </div>
+              </div>
+            )}
 
-            {isScheduled && !hasStarted && scheduledTime && (
-              <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/90">
-                <Countdown scheduledTime={scheduledTime} />
+            {/* Audio/Video Status Indicators - Show even when video is active */}
+            {videoStatus === "active" && (
+              <div className="absolute top-4 right-4 flex items-center gap-2">
+                {streamerStatus.audioMuted && (
+                  <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
+                    <MicOff size={16} />
+                    <span>Muted</span>
+                  </div>
+                )}
+                {streamerStatus.cameraOff && (
+                  <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
+                    <VideoOff size={16} />
+                    <span>No Video</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Large Overlay Icons for Muted/Camera Off */}
+            {videoStatus === "active" && (
+              <>
+                {/* Center Camera Off Icon */}
+                {streamerStatus.cameraOff && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="bg-black bg-opacity-60 p-5 rounded-full">
+                      <VideoOff size={60} className="text-white" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Bottom-right Audio Muted Icon */}
+                {streamerStatus.audioMuted && (
+                  <div className="absolute bottom-4 right-4">
+                    <div className="bg-black bg-opacity-60 p-2 rounded-full">
+                      <MicOff size={24} className="text-white" />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Audio control for viewer */}
+            {videoStatus === "active" && remoteAudioTrack && (
+              <div className="absolute bottom-4 left-4">
+                <button
+                  onClick={toggleAudioMute}
+                  className="flex items-center gap-2 bg-black bg-opacity-70 px-3 py-2 rounded-full text-white"
+                >
+                  {isAudioMuted ? (
+                    <>
+                      <MicOff size={18} />
+                      <span className="text-sm">Unmute</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic size={18} />
+                      <span className="text-sm">Mute</span>
+                    </>
+                  )}
+                </button>
               </div>
             )}
           </div>

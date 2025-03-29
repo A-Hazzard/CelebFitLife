@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Settings, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -11,16 +17,19 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/config/firebase";
 
 interface StreamManagerProps {
   stream: Stream;
   className?: string;
 }
 
-const StreamManager: React.FC<StreamManagerProps> = ({
-  stream,
-  className = "",
-}) => {
+// Convert to forwardRef
+const StreamManager = forwardRef<
+  { startStream: () => Promise<void> },
+  StreamManagerProps
+>(({ stream, className = "" }, ref) => {
   const [isStreaming, setIsStreaming] = useState(stream.hasStarted);
   const [isMicEnabled, setIsMicEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
@@ -32,6 +41,11 @@ const StreamManager: React.FC<StreamManagerProps> = ({
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    startStream,
+  }));
 
   // Set share URL
   useEffect(() => {
@@ -69,11 +83,31 @@ const StreamManager: React.FC<StreamManagerProps> = ({
   // Start streaming
   const startStream = async () => {
     try {
-      // In a real implementation, this would connect to Twilio or other streaming service
-      // For now, we'll just show local video as a placeholder
+      // Get the selected camera and mic from localStorage if available
+      const savedSettings = localStorage.getItem("deviceSettings");
+      const videoConstraints: MediaTrackConstraints = {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      };
+      const audioConstraints: MediaTrackConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+      };
+
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        if (settings.selectedCamera) {
+          videoConstraints.deviceId = { exact: settings.selectedCamera };
+        }
+        if (settings.selectedMic) {
+          audioConstraints.deviceId = { exact: settings.selectedMic };
+        }
+      }
+
+      // Request media with saved device preferences
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true,
+        audio: audioConstraints,
+        video: videoConstraints,
       });
 
       if (videoRef.current) {
@@ -83,10 +117,28 @@ const StreamManager: React.FC<StreamManagerProps> = ({
       localStreamRef.current = mediaStream;
       setIsStreaming(true);
       setStreamingTimer(0);
-      toast.success("Stream started successfully!");
 
-      // In a real implementation, we would update hasStarted in the database
-      console.log("Stream started for:", stream.slug);
+      // Update hasStarted in Firestore
+      try {
+        // Ensure stream.id exists before using it
+        if (!stream.id) {
+          throw new Error("Stream ID is undefined");
+        }
+
+        const streamDocRef = doc(db, "streams", stream.id);
+        await updateDoc(streamDocRef, {
+          hasStarted: true,
+          hasEnded: false,
+          startedAt: new Date().toISOString(),
+          lastUpdated: new Date().toISOString(),
+        });
+        toast.success("Stream started successfully!");
+      } catch (dbError) {
+        console.error("Error updating stream status:", dbError);
+        toast.error(
+          "Stream started locally but failed to update status in database."
+        );
+      }
     } catch (error) {
       console.error("Error starting stream:", error);
       toast.error(
@@ -109,10 +161,33 @@ const StreamManager: React.FC<StreamManagerProps> = ({
 
     setIsStreaming(false);
     setShowEndConfirmation(false);
-    toast.info("Stream ended");
 
-    // In a real implementation, we would update hasStarted in the database
-    console.log("Stream ended for:", stream.slug);
+    // Update hasEnded in Firestore
+    try {
+      // Ensure stream.id exists before using it
+      if (!stream.id) {
+        throw new Error("Stream ID is undefined");
+      }
+
+      const streamDocRef = doc(db, "streams", stream.id);
+      updateDoc(streamDocRef, {
+        hasEnded: true,
+        endedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+      })
+        .then(() => {
+          toast.info("Stream ended");
+        })
+        .catch((dbError) => {
+          console.error("Error updating stream status:", dbError);
+          toast.error(
+            "Stream ended locally but failed to update status in database."
+          );
+        });
+    } catch (error) {
+      console.error("Error ending stream:", error);
+      toast.error("Failed to end stream properly.");
+    }
   };
 
   // Toggle microphone
@@ -123,6 +198,25 @@ const StreamManager: React.FC<StreamManagerProps> = ({
         track.enabled = !isMicEnabled;
       });
       setIsMicEnabled(!isMicEnabled);
+
+      // Update Firestore
+      try {
+        // Ensure stream.id exists before using it
+        if (!stream.id) {
+          throw new Error("Stream ID is undefined");
+        }
+
+        const streamDocRef = doc(db, "streams", stream.id);
+        updateDoc(streamDocRef, {
+          audioMuted: isMicEnabled,
+          lastUpdated: new Date().toISOString(),
+        }).catch((error) => {
+          console.error("Error updating audio status in Firestore:", error);
+        });
+      } catch (error) {
+        console.error("Error updating audio status:", error);
+      }
+
       toast.info(isMicEnabled ? "Microphone muted" : "Microphone unmuted");
     }
   };
@@ -135,6 +229,25 @@ const StreamManager: React.FC<StreamManagerProps> = ({
         track.enabled = !isVideoEnabled;
       });
       setIsVideoEnabled(!isVideoEnabled);
+
+      // Update Firestore
+      try {
+        // Ensure stream.id exists before using it
+        if (!stream.id) {
+          throw new Error("Stream ID is undefined");
+        }
+
+        const streamDocRef = doc(db, "streams", stream.id);
+        updateDoc(streamDocRef, {
+          cameraOff: isVideoEnabled,
+          lastUpdated: new Date().toISOString(),
+        }).catch((error) => {
+          console.error("Error updating camera status in Firestore:", error);
+        });
+      } catch (error) {
+        console.error("Error updating camera status:", error);
+      }
+
       toast.info(isVideoEnabled ? "Camera turned off" : "Camera turned on");
     }
   };
@@ -207,6 +320,24 @@ const StreamManager: React.FC<StreamManagerProps> = ({
             </div>
           </div>
         )}
+
+        {/* Audio/Video Status Indicators - Visible to streamer */}
+        {isStreaming && (
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            {!isMicEnabled && (
+              <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
+                <MicOff size={16} />
+                <span>Muted</span>
+              </div>
+            )}
+            {!isVideoEnabled && (
+              <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
+                <VideoOff size={16} />
+                <span>Camera Off</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Stream Controls */}
@@ -222,7 +353,7 @@ const StreamManager: React.FC<StreamManagerProps> = ({
               size="icon"
               onClick={shareStream}
               title="Share stream"
-              className="border-gray-700 text-brandWhite hover:bg-gray-800"
+              className="border-gray-700 text-brandBlack bg-brandGray hover:bg-gray-300"
             >
               <Settings size={18} />
             </Button>
@@ -335,6 +466,9 @@ const StreamManager: React.FC<StreamManagerProps> = ({
       </Dialog>
     </div>
   );
-};
+});
+
+// Add display name
+StreamManager.displayName = "StreamManager";
 
 export default StreamManager;

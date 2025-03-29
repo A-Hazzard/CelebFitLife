@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 // Import regular Firebase client for client components
 import { db } from "@/lib/config/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 // Use the client service, not direct server imports
 import StreamManager from "@/components/streaming/StreamManager";
 import StreamChat from "@/components/streaming/StreamChat";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
 // Import Stream type from the models
 import { Stream } from "@/lib/models/Stream";
+import { toast } from "sonner";
 
 export default function ManageStreamPage() {
   const pathname = usePathname();
@@ -21,7 +22,12 @@ export default function ManageStreamPage() {
   const [stream, setStream] = useState<Partial<Stream> | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDeviceTester, setShowDeviceTester] = useState(false);
+  const [shouldStartStreamAfterTest, setShouldStartStreamAfterTest] =
+    useState(false);
   const [error, setError] = useState<string | null>(null);
+  const streamManagerRef = useRef<{ startStream: () => Promise<void> } | null>(
+    null
+  );
 
   useEffect(() => {
     // Fetch the stream data from Firestore client-side
@@ -49,6 +55,53 @@ export default function ManageStreamPage() {
 
     fetchStream();
   }, [slug]);
+
+  const handleStartStream = () => {
+    // If device tester hasn't been shown yet, show it first and flag to start streaming after
+    if (!localStorage.getItem("deviceSettings")) {
+      setShowDeviceTester(true);
+      setShouldStartStreamAfterTest(true);
+      return;
+    }
+
+    // Otherwise, start stream directly
+    startStream();
+  };
+
+  const startStream = async () => {
+    try {
+      if (!stream?.id) return;
+
+      const streamDocRef = doc(db, "streams", stream.id);
+      await updateDoc(streamDocRef, {
+        hasStarted: true,
+        hasEnded: false,
+        startedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+      });
+
+      // Call the internal startStream method of StreamManager
+      if (typeof streamManagerRef.current?.startStream === "function") {
+        await streamManagerRef.current.startStream();
+      }
+
+      setStream((prev) => (prev ? { ...prev, hasStarted: true } : null));
+      toast.success("Stream started successfully!");
+    } catch (error) {
+      console.error("Error starting stream:", error);
+      toast.error("Failed to start the stream. Please try again.");
+    }
+  };
+
+  const handleDeviceTestComplete = () => {
+    setShowDeviceTester(false);
+
+    // If we should start streaming after device test
+    if (shouldStartStreamAfterTest) {
+      setShouldStartStreamAfterTest(false);
+      startStream();
+    }
+  };
 
   if (loading) {
     return (
@@ -98,14 +151,25 @@ export default function ManageStreamPage() {
           }`}</h1>
 
           {!showDeviceTester && (
-            <Button
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={() => setShowDeviceTester(true)}
-            >
-              <Settings size={16} />
-              Device Settings
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex items-center gap-2 bg-brandGray text-brandBlack hover:bg-gray-300"
+                onClick={() => setShowDeviceTester(true)}
+              >
+                <Settings size={16} />
+                Device Settings
+              </Button>
+
+              {!stream.hasStarted && (
+                <Button
+                  className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+                  onClick={handleStartStream}
+                >
+                  Start Streaming
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
@@ -114,13 +178,15 @@ export default function ManageStreamPage() {
             <div className="h-full">
               {showDeviceTester ? (
                 <DeviceTester
-                  onComplete={() => {
-                    setShowDeviceTester(false);
-                  }}
+                  onComplete={handleDeviceTestComplete}
                   className="min-h-[400px]"
                 />
               ) : (
-                <StreamManager stream={stream as Stream} className="flex-1" />
+                <StreamManager
+                  ref={streamManagerRef}
+                  stream={stream as Stream}
+                  className="flex-1"
+                />
               )}
             </div>
           </div>

@@ -2,23 +2,36 @@
 export class ClientTwilioService {
   private tokenCache: Record<string, { token: string; expiresAt: number }> = {};
   private cacheTtl: number;
+  private sessionId: string;
 
   constructor(cacheTtl = 5 * 60 * 1000) {
     // 5 minutes cache by default
     this.cacheTtl = cacheTtl;
+    // Generate a unique session ID to prevent duplicate identity errors
+    this.sessionId = this.generateSessionId();
+  }
+
+  /**
+   * Generate a unique session ID
+   */
+  private generateSessionId(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
   }
 
   /**
    * Get a token for a room by calling the API
    */
   async getToken(roomName: string, userName: string): Promise<string> {
+    // Create a unique identity using userName and the session ID
+    const uniqueIdentity = `${userName}_${this.sessionId}`;
+
     // Check cache first
-    const cacheKey = `${roomName}:${userName}`;
+    const cacheKey = `${roomName}:${uniqueIdentity}`;
     const now = Date.now();
     const cachedEntry = this.tokenCache[cacheKey];
 
     if (cachedEntry && cachedEntry.expiresAt > now) {
-      console.log(`Using cached client token for user: ${userName}`);
+      console.log(`Using cached client token for user: ${uniqueIdentity}`);
       return cachedEntry.token;
     }
 
@@ -27,7 +40,7 @@ export class ClientTwilioService {
       const response = await fetch("/api/twilio/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomName, userName }),
+        body: JSON.stringify({ roomName, userName: uniqueIdentity }),
       });
 
       if (!response.ok) {
