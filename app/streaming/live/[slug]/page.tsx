@@ -3,7 +3,7 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { db } from "@/lib/config/firebase";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, Timestamp } from "firebase/firestore";
 import StreamChat from "@/components/streaming/StreamChat";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { clearVideoContainer } from "@/lib/utils/streaming";
@@ -15,6 +15,7 @@ import {
   RemoteTrack,
   RemoteTrackPublication,
   connect,
+  TwilioError,
 } from "twilio-video";
 import { MicOff, Mic, VideoOff } from "lucide-react";
 import { Countdown } from "@/components/streaming/Countdown";
@@ -37,6 +38,7 @@ export default function LiveViewPage() {
 
   // Using isStreamStarted to track if the stream is active
   const [hasStarted, setHasStarted] = useState(false);
+  const [hasEnded, setHasEnded] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [remoteParticipant, setRemoteParticipant] =
     useState<RemoteParticipant | null>(null);
@@ -54,8 +56,10 @@ export default function LiveViewPage() {
   });
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isScheduled, setIsScheduled] = useState(false);
-  const [scheduledTime, setScheduledTime] = useState("");
-  const [streamStartTime, setStreamStartTime] = useState<string | null>(null);
+  const [scheduledTime, setScheduledTime] = useState<Timestamp | null>(null);
+  const [streamStartTime, setStreamStartTime] = useState<Timestamp | null>(
+    null
+  );
   const [streamDuration, setStreamDuration] = useState(0);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authError, setAuthError] = useState(false);
@@ -73,7 +77,17 @@ export default function LiveViewPage() {
   // Add error state
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
-  // All useEffect hooks must be defined at the top level
+  const isMountedRef = useRef(false);
+  const isConnectingRef = useRef(false);
+
+  // Ensure component mount status is tracked
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Dynamic page title effect
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -142,7 +156,7 @@ export default function LiveViewPage() {
     }
   }, [currentUser, hasHydrated, loadingAuth]);
 
-  // Listen for stream status from Firestore
+  // Update streamer status in Firestore and store stream start time
   useEffect(() => {
     if (!slug) return;
 
@@ -159,17 +173,29 @@ export default function LiveViewPage() {
           startedAt: data.startedAt || null,
         });
 
+        // Handle both naming conventions for compatibility
         setStreamerStatus({
-          audioMuted: data.audioMuted || false,
-          cameraOff: data.cameraOff || false,
+          audioMuted:
+            data.audioMuted !== undefined
+              ? data.audioMuted
+              : data.isMuted || false,
+          cameraOff:
+            data.cameraOff !== undefined
+              ? data.cameraOff
+              : data.isCameraOff || false,
         });
 
-        // Store stream start time
+        // Store stream start time - handle both Timestamp and string/date formats
         if (data.startedAt) {
           setStreamStartTime(data.startedAt);
 
           // Calculate duration since stream started
-          const startTime = new Date(data.startedAt).getTime();
+          // Check if startedAt is a Firestore Timestamp or a string
+          const startTime =
+            data.startedAt instanceof Timestamp
+              ? data.startedAt.toDate().getTime()
+              : new Date(data.startedAt).getTime();
+
           const now = Date.now();
           const elapsedSeconds = Math.floor((now - startTime) / 1000);
           setStreamDuration(elapsedSeconds > 0 ? elapsedSeconds : 0);
@@ -415,271 +441,257 @@ export default function LiveViewPage() {
     [offlineTimerId]
   );
 
-  // Connection effect
+  // Connection Effect to Twilio Room
   useEffect(() => {
-    // Don't attempt to connect if any of these conditions are true
+    // Only run if essential conditions are met and not already connected/connecting
     if (
       !slug ||
       !currentUser ||
-      isConnecting ||
-      room ||
-      authError ||
-      loadingAuth
-    )
+      hasEnded || // Don't connect if stream has definitively ended
+      room || // Already connected
+      isConnectingRef.current || // Already attempting connection
+      loadingAuth || // Wait for auth to finish loading
+      !hasHydrated // Wait for zustand hydration
+    ) {
       return;
+    }
 
-    console.log("Starting Twilio room connection process...");
-    let isSubscribed = true;
-    let roomCleanup: (() => void) | null = null;
+    // Check if stream has started or is scheduled appropriately before attempting connection
+    if (!hasStarted && !isScheduled) {
+      console.log("[Connection] Stream has not started, waiting...");
+      if (isMountedRef.current) setVideoStatus("waiting");
+      return;
+    }
+    if (isScheduled && scheduledTime && scheduledTime.toDate() > new Date()) {
+      console.log("[Connection] Stream is scheduled for later, waiting...");
+      if (isMountedRef.current) setVideoStatus("waiting");
+      return;
+    }
+
+    console.log("[Connection] Conditions met, starting connection attempt...");
+    isConnectingRef.current = true; // Mark as connecting
+    if (isMountedRef.current) {
+      setConnectionError(null);
+      setVideoStatus("connecting");
+    }
+
+    let localRoom: Room | null = null;
+    let cancelled = false; // Flag to prevent actions after cleanup
     let connectAttempts = 0;
     const maxAttempts = 3;
-    let debounceTimer: NodeJS.Timeout | null = null;
 
-    const checkStreamExists = async () => {
-      try {
-        const streamDocRef = doc(db, "streams", slug);
-        const streamDoc = await getDoc(streamDocRef);
+    // Define the connection function inside the effect
+    const connectToRoom = async () => {
+      if (cancelled) return; // Check cancellation flag
 
-        if (!streamDoc.exists()) {
-          console.log("[Connection] Stream does not exist in Firestore:", slug);
+      // Nested helper to check Firestore before connecting
+      const checkStreamExists = async (): Promise<boolean> => {
+        if (cancelled || !isMountedRef.current) return false;
+        try {
+          const streamDocRef = doc(db, "streams", slug);
+          const streamDoc = await getDoc(streamDocRef);
+          if (!isMountedRef.current || cancelled) return false;
+
+          if (!streamDoc.exists()) {
+            console.log(
+              "[Connection] Stream does not exist in Firestore:",
+              slug
+            );
+            if (isMountedRef.current) {
+              setConnectionError(
+                "Stream not found. It may have been deleted or never existed."
+              );
+              setVideoStatus("error");
+            }
+            return false;
+          }
+
+          const streamData = streamDoc.data();
+          if (streamData.hasEnded) {
+            console.log("[Connection] Stream has ended:", slug);
+            if (isMountedRef.current) {
+              setConnectionError("This stream has ended.");
+              setVideoStatus("ended");
+            }
+            return false;
+          }
+
+          if (!streamData.hasStarted) {
+            console.log("[Connection] Stream has not started yet:", slug);
+            if (isMountedRef.current) setVideoStatus("waiting"); // Set waiting, not error
+            return false;
+          }
+
+          return true; // Stream exists and is active
+        } catch (error) {
+          console.error("[Connection] Error checking if stream exists:", error);
+          if (isMountedRef.current && !cancelled) {
+            setConnectionError(
+              "Error checking stream status. Please try again later."
+            );
+            setVideoStatus("error");
+          }
+          return false;
+        }
+      };
+
+      // First check if the stream exists and is active
+      const streamExistsAndActive = await checkStreamExists();
+      if (!streamExistsAndActive) {
+        isConnectingRef.current = false; // Reset connecting flag
+        return;
+      }
+
+      if (cancelled || !isMountedRef.current) return;
+
+      // Increment attempt count
+      connectAttempts++;
+      console.log(
+        `[Connection] Attempt ${connectAttempts} to connect to room: ${slug}`
+      );
+
+      if (connectAttempts > maxAttempts) {
+        console.error(
+          `[Connection] Failed to connect after ${maxAttempts} attempts`
+        );
+        if (isMountedRef.current) {
           setConnectionError(
-            "Stream not found. It may have been deleted or never existed."
+            "Failed to connect after multiple attempts. Please try refreshing."
           );
           setVideoStatus("error");
-          return false;
         }
-
-        const streamData = streamDoc.data();
-        if (streamData.hasEnded) {
-          console.log("[Connection] Stream has ended:", slug);
-          setConnectionError("This stream has ended.");
-          setVideoStatus("ended");
-          return false;
-        }
-
-        if (!streamData.hasStarted) {
-          console.log("[Connection] Stream has not started yet:", slug);
-          // Don't set error, just let the waiting UI show
-          return false;
-        }
-
-        return true;
-      } catch (error) {
-        console.error("[Connection] Error checking if stream exists:", error);
-        setConnectionError(
-          "Error checking stream status. Please try again later."
-        );
-        setVideoStatus("error");
-        return false;
+        isConnectingRef.current = false;
+        return;
       }
-    };
 
-    const connectToRoom = async () => {
+      // Get token and connect
       try {
-        // Reset any previous errors
-        setConnectionError(null);
+        const identity =
+          currentUser?.username || currentUser?.email || `user-${Date.now()}`;
+        const token = await clientTwilioService.getToken(identity, slug);
 
-        // First check if the stream exists and is active
-        const streamExists = await checkStreamExists();
-        if (!streamExists) {
-          setIsConnecting(false);
+        if (cancelled || !isMountedRef.current) {
+          console.log("[Connection] Cancelled or unmounted before connecting.");
           return;
         }
 
-        // Prevent multiple connection attempts
-        setIsConnecting(true);
+        console.log("[Connection] Got token, connecting to Twilio...");
+        localRoom = await connect(token, {
+          name: slug,
+          automaticSubscription: true,
+        });
 
-        connectAttempts++;
-        if (connectAttempts > maxAttempts) {
-          console.error(`Failed to connect after ${maxAttempts} attempts`);
-          setVideoStatus("offline");
-          setIsConnecting(false);
-          setConnectionError(
-            "Failed to connect after multiple attempts. Please try refreshing the page."
-          );
+        if (cancelled || !isMountedRef.current) {
+          console.log("[Connection] Cancelled or unmounted after connecting.");
+          localRoom?.disconnect();
           return;
         }
 
         console.log(
-          `[Connection] Connecting to room (attempt ${connectAttempts}):`,
-          slug
+          `[Connection] Successfully connected to room: ${localRoom.name}`
         );
-
-        // Use the client Twilio service instead of direct API call
-        let token;
-        try {
-          token = await clientTwilioService.getToken(
-            slug,
-            currentUser?.username || currentUser?.email || `user-${Date.now()}`
-          );
-          console.log("[Connection] Got token, connecting to Twilio room...");
-        } catch (error) {
-          console.error("[Connection] Error getting token:", error);
-          setVideoStatus("offline");
-          setIsConnecting(false);
-          setConnectionError(
-            "Unable to get access token. The stream may not be available."
-          );
-          return;
+        if (isMountedRef.current) {
+          setRoom(localRoom);
+          setVideoStatus("active");
         }
-
-        if (!isSubscribed) {
-          console.log(
-            "[Connection] Component unmounted during connection, aborting"
-          );
-          setIsConnecting(false);
-          return;
-        }
-
-        // Connect to room using the token
-        const room = await connect(token, {
-          name: slug,
-          tracks: [],
-          networkQuality: {
-            local: 1,
-            remote: 1,
-          },
-          dominantSpeaker: true,
-        });
-
-        if (!isSubscribed) {
-          console.log(
-            "[Connection] Component unmounted after connection, disconnecting"
-          );
-          room.disconnect();
-          setIsConnecting(false);
-          return;
-        }
-
-        console.log("[Connection] Successfully connected to room:", slug);
-        setRoom(room);
-        setIsConnecting(false);
+        isConnectingRef.current = false; // Connection successful
 
         // Handle existing participants
-        room.participants.forEach(handleParticipantConnected);
+        localRoom.participants.forEach(handleParticipantConnected);
 
-        // Set up room handlers
-        room.on("participantConnected", handleParticipantConnected);
-        room.on("participantDisconnected", handleParticipantDisconnected);
-        room.on("disconnected", (_room, error) => {
+        // Set up room listeners
+        localRoom.on("participantConnected", handleParticipantConnected);
+        localRoom.on("participantDisconnected", handleParticipantDisconnected);
+        localRoom.on("disconnected", (_room, error) => {
+          // Check mount status inside listener callback
+          if (!isMountedRef.current || cancelled) return;
+
           console.log("[Connection] Room disconnected", error);
-          setIsConnecting(false);
+          setRoom(null);
+          setRemoteParticipant(null);
+          setRemoteVideoTrack(null);
+          setRemoteAudioTrack(null);
+          isConnectingRef.current = false; // Reset connecting flag on disconnect
 
-          // Handle room disconnect errors
           if (error) {
             console.error(
               "[Connection] Room disconnect error:",
               error.code,
               error.message
             );
-
-            // Set appropriate error message based on the error code
-            if (error.code === 53001) {
-              setConnectionError("Room not found. The stream may have ended.");
-              setVideoStatus("error");
-            } else if (error.code === 53205) {
-              setConnectionError(
-                "You're already connected to this stream in another window."
-              );
-              setVideoStatus("error");
-            } else {
-              setConnectionError(`Connection error: ${error.message}`);
-              setVideoStatus("error");
+            let errorMsg = `Connection error: ${error.message}`;
+            if (error.code === 53001)
+              errorMsg = "Room not found. The stream may have ended.";
+            if (error.code === 53205)
+              errorMsg =
+                "You're already connected to this stream in another window.";
+            setConnectionError(errorMsg);
+            setVideoStatus("error");
+          } else if (hasEnded) {
+            setVideoStatus("ended");
+          } else {
+            setVideoStatus("offline");
+          }
+        });
+      } catch (error) {
+        console.error(
+          `[Connection] Error connecting on attempt ${connectAttempts}:`,
+          error
+        );
+        if (isMountedRef.current && !cancelled) {
+          const twilioError = error as TwilioError;
+          let errorMsg = `Connection error: ${twilioError.message}`;
+          if (twilioError.code === 20101)
+            errorMsg = "Invalid Twilio token. Please refresh.";
+          if (twilioError.code === 53118)
+            errorMsg =
+              "Could not connect. The room may be full or unavailable.";
+          setConnectionError(errorMsg);
+          setVideoStatus("error");
+        }
+        isConnectingRef.current = false; // Reset on error
+        // Optionally retry after a delay if connectAttempts < maxAttempts
+        if (connectAttempts < maxAttempts && !cancelled) {
+          console.log(`[Connection] Retrying connection in 3 seconds...`);
+          setTimeout(() => {
+            if (!cancelled && isMountedRef.current) {
+              connectToRoom();
             }
-          }
-        });
-        room.on("reconnecting", (error) => {
-          console.log("[Connection] Room reconnecting", error);
-          if (error) {
-            console.error(
-              "[Connection] Reconnection error:",
-              error.code,
-              error.message
-            );
-          }
-        });
-        room.on("reconnected", () => {
-          console.log("[Connection] Room reconnected");
-          setConnectionError(null);
-        });
-
-        roomCleanup = () => {
-          console.log("[Connection] Cleaning up room connection");
-          room.off("participantConnected", handleParticipantConnected);
-          room.off("participantDisconnected", handleParticipantDisconnected);
-          room.removeAllListeners();
-          room.disconnect();
-          setRoom(null);
-        };
-      } catch (error: unknown) {
-        console.error("[Connection] Error connecting to room:", error);
-        setIsConnecting(false);
-
-        // Handle specific Twilio errors with user-friendly messages
-        const twilioError = error as TwilioErrorType;
-        if (twilioError.name === "TwilioError") {
-          console.error(
-            "[Twilio Error]",
-            twilioError.code,
-            twilioError.message
-          );
-
-          switch (twilioError.code) {
-            case 53000:
-              setConnectionError(
-                "Unable to connect to the stream. The room is full."
-              );
-              break;
-            case 53001:
-              setConnectionError(
-                "Stream not found. It may have ended or never started."
-              );
-              break;
-            case 53205:
-              setConnectionError(
-                "You're already watching this stream in another window."
-              );
-              break;
-            default:
-              setConnectionError(`Unable to connect: ${twilioError.message}`);
-          }
-
-          setVideoStatus("error");
-        } else {
-          setConnectionError(
-            "Failed to connect to the stream. Please try again later."
-          );
-          setVideoStatus("error");
+          }, 3000);
         }
       }
     };
 
-    // Debounce the connection request to prevent multiple calls
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
-    }
+    // Initial call to start the connection process
+    connectToRoom();
 
-    debounceTimer = setTimeout(connectToRoom, 300);
-
+    // Cleanup function for the useEffect
     return () => {
       console.log("[Connection] Cleaning up connection effect");
-      isSubscribed = false;
-      setIsConnecting(false);
-      if (roomCleanup) roomCleanup();
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
+      cancelled = true; // Set cancellation flag
+      if (localRoom) {
+        console.log("[Connection] Disconnecting from room in cleanup");
+        localRoom.disconnect();
+        // Check mount status before setting state in cleanup
+        if (isMountedRef.current) setRoom(null);
       }
+      // Always reset the connecting flag on cleanup to allow future attempts
+      isConnectingRef.current = false;
     };
   }, [
+    // Core identifiers & states that MUST trigger a re-evaluation
     slug,
     currentUser,
+    hasStarted,
+    hasEnded,
+    isScheduled,
+    scheduledTime,
+    room, // If room changes (e.g., disconnects and becomes null), re-evaluate
+    loadingAuth, // Need to wait for auth
+    hasHydrated, // Need to wait for hydration
+    // Callbacks (MUST be stable - ensure they are wrapped in useCallback with correct deps)
     handleParticipantConnected,
     handleParticipantDisconnected,
-    isConnecting,
-    room,
-    hasStarted,
-    authError,
-    loadingAuth,
   ]);
 
   // Add track status monitoring
@@ -844,15 +856,27 @@ export default function LiveViewPage() {
       if (doc.exists()) {
         const data = doc.data();
         console.log("Stream data from Firestore:", data);
+
+        // Handle both possible field names for compatibility
         setStreamerStatus({
           // Check both field names for compatibility
-          cameraOff: data.isCameraOff ?? data.cameraOff ?? false,
-          audioMuted: data.isMuted ?? data.audioMuted ?? false,
+          audioMuted:
+            data.audioMuted !== undefined
+              ? data.audioMuted
+              : data.isMuted || false,
+          cameraOff:
+            data.cameraOff !== undefined
+              ? data.cameraOff
+              : data.isCameraOff || false,
         });
 
         // If camera is not off but we're not seeing video, try to resubscribe to tracks
+        const isCameraOff =
+          data.cameraOff !== undefined
+            ? data.cameraOff
+            : data.isCameraOff || false;
         if (
-          !(data.isCameraOff ?? data.cameraOff) &&
+          !isCameraOff &&
           remoteParticipant &&
           videoContainerRef.current &&
           !videoContainerRef.current.querySelector("video")
@@ -1030,20 +1054,36 @@ export default function LiveViewPage() {
     checkScheduledTime();
   }, [slug]);
 
-  // Add timer effect to update stream duration
+  // Timer Effect for Stream Duration
   useEffect(() => {
-    if (!streamStartTime || videoStatus !== "active") return;
+    let timer: NodeJS.Timeout | null = null;
+    if (hasStarted && streamStartTime) {
+      // Define the function to be called by setInterval inside the effect
+      const updateDuration = () => {
+        // Access the ref's current value INSIDE the callback
+        if (isMountedRef.current) {
+          const now = Date.now();
 
-    // Update duration every second
-    const timer = setInterval(() => {
-      const startTime = new Date(streamStartTime).getTime();
-      const now = Date.now();
-      const elapsedSeconds = Math.floor((now - startTime) / 1000);
-      setStreamDuration(elapsedSeconds > 0 ? elapsedSeconds : 0);
-    }, 1000);
+          // Check if streamStartTime is a Firestore Timestamp or a date string
+          const start =
+            streamStartTime instanceof Timestamp
+              ? streamStartTime.toDate().getTime()
+              : new Date(streamStartTime).getTime();
 
-    return () => clearInterval(timer);
-  }, [streamStartTime, videoStatus]);
+          const elapsedSeconds = Math.floor((now - start) / 1000);
+          setStreamDuration(elapsedSeconds > 0 ? elapsedSeconds : 0);
+        }
+      };
+
+      // Call immediately once
+      updateDuration();
+      // Set the interval
+      timer = setInterval(updateDuration, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [hasStarted, streamStartTime]); // Dependencies are correct
 
   // Format time as HH:MM:SS
   const formatDuration = (seconds: number): string => {
@@ -1106,7 +1146,13 @@ export default function LiveViewPage() {
                       <h2 className="text-xl font-bold mb-4 text-center">
                         Stream Scheduled
                       </h2>
-                      <Countdown scheduledTime={scheduledTime} />
+                      <Countdown
+                        scheduledTime={
+                          scheduledTime
+                            ? scheduledTime.toDate().toISOString()
+                            : null
+                        }
+                      />
                     </>
                   ) : (
                     <>

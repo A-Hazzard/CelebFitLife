@@ -78,6 +78,8 @@ export default function ManageStreamPage() {
         hasEnded: false,
         startedAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
+        audioMuted: false,
+        cameraOff: false,
       });
 
       // Call the internal startStream method of StreamManager
