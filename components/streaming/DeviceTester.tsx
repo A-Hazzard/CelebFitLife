@@ -97,14 +97,18 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   }, []);
 
   const cleanupSpeakerAnalysis = useCallback(() => {
-    console.log("Cleaning up speaker analysis resources...");
+    console.log("Cleaning up speaker analysis");
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
-    speakerStreamRef.current?.disconnect();
+
+    // Disconnect source node, not the stream (which doesn't have disconnect method)
+    speakerSourceNodeRef.current?.disconnect();
     speakerAnalyserRef.current?.disconnect();
-    speakerStreamRef.current = null;
+
+    // Clear references to nodes
+    speakerSourceNodeRef.current = null;
     speakerAnalyserRef.current = null;
     setSpeakerLevel(0);
   }, []);
@@ -146,6 +150,71 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     }
     return currentContext;
   }, [audioContext]);
+
+  // Enhance the getMicStream function with better error handling
+  const getMicStream = useCallback(async (deviceId?: string) => {
+    try {
+      console.log(
+        "Getting microphone stream for device:",
+        deviceId || "default"
+      );
+
+      // Stop any existing stream first
+      if (micStreamRef.current) {
+        console.log("Stopping existing mic stream");
+        micStreamRef.current.getTracks().forEach((track) => track.stop());
+        micStreamRef.current = null;
+      }
+
+      // Get new stream
+      let constraints: MediaStreamConstraints = {
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+        video: false,
+      };
+
+      console.log(
+        "Requesting microphone with constraints:",
+        JSON.stringify(constraints)
+      );
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      console.log(
+        "Microphone stream acquired successfully:",
+        stream.active,
+        "Tracks:",
+        stream.getAudioTracks().length,
+        "Label:",
+        stream.getAudioTracks()[0]?.label
+      );
+
+      micStreamRef.current = stream;
+      return stream;
+    } catch (error) {
+      console.error("Failed to get microphone stream:", error);
+      toast.error(
+        `Failed to access microphone: ${
+          (error as Error).message || "Unknown error"
+        }`
+      );
+      return null;
+    }
+  }, []);
+
+  // Helper function to get device name - moved up to prevent reference errors
+  const getDeviceName = useCallback(
+    (deviceType: "mic" | "speaker" | "camera", deviceId: string) => {
+      const list =
+        deviceType === "mic"
+          ? audioInputs
+          : deviceType === "speaker"
+          ? audioOutputs
+          : videoInputs;
+      return (
+        list.find((d) => d.deviceId === deviceId)?.label || "Select Device"
+      );
+    },
+    [audioInputs, audioOutputs, videoInputs]
+  );
 
   // --- Device Handling Effects ---
   // Get devices on mount
@@ -202,57 +271,319 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     };
   }, [closeAudioContext]);
 
-  // Mic Stream Management
-  useEffect(() => {
-    let isCancelled = false;
-    const setupMicStream = async () => {
-      // Stop existing stream and analysis
-      micStreamRef.current?.getTracks().forEach((track) => track.stop());
-      micStreamRef.current = null;
-      cleanupMicAnalysis();
+  // --- Test Initiation ---
+  const handleTestSpeaker = useCallback(() => {
+    setSpeakerLevel(0);
+    setTestType("speaker");
+    setIsTesting(true);
 
-      if (!selectedMic || !micEnabled) {
-        console.log("Mic setup skipped (no selection or disabled).");
+    // Note: The actual audio setup and analysis is now handled by the useEffect
+    console.log("Test speaker requested");
+  }, []);
+
+  const handleTestMic = useCallback(async () => {
+    setMicLevel(0);
+    setTestType("mic");
+    setIsTesting(true);
+
+    // Note: The actual stream acquisition and analysis is now handled by the useEffect
+    console.log("Test mic requested");
+  }, []);
+
+  const handleTestCamera = useCallback(() => {
+    setIsTesting(true);
+    setTestType("camera");
+    // No specific action needed other than opening the dialog
+  }, []);
+
+  const stopTesting = useCallback(() => {
+    console.log("Stopping tests...");
+    setIsTesting(false);
+    setTestType(null);
+
+    // Stop speaker audio if playing
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = ""; // Clear src
+    }
+
+    // Cleanup analysis resources
+    cleanupMicAnalysis();
+    cleanupSpeakerAnalysis();
+    // Consider closing context only if BOTH are fully stopped and no longer needed
+    // closeAudioContext();
+  }, [cleanupMicAnalysis, cleanupSpeakerAnalysis]);
+
+  // --- Analysis Logic ---
+  const startMicAnalysis = useCallback(() => {
+    console.log(
+      "Starting mic analysis - Stream check:",
+      !!micStreamRef.current
+    );
+    if (!micStreamRef.current) {
+      console.warn("Cannot start mic analysis: Stream not available.");
+      toast.error("Microphone stream not available. Please check permissions.");
+      return;
+    }
+
+    try {
+      const context = getAudioContext();
+      if (!context) {
+        console.error("Failed to get audio context");
+        toast.error(
+          "Failed to initialize audio context. Please refresh and try again."
+        );
         return;
       }
 
-      console.log(`Setting up microphone stream for device: ${selectedMic}`);
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            deviceId: { exact: selectedMic },
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: false, // Manual gain control preferred
-          },
-        });
-        if (isCancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        micStreamRef.current = stream;
-        console.log("Microphone stream acquired.");
-        // Re-start analysis only if currently testing mic
-        if (testType === "mic") {
-          startMicAnalysis(); // Call analysis setup
-        }
-      } catch (error) {
-        console.error("Error setting up microphone stream:", error);
-        toast.error(
-          `Failed to access microphone: ${getDeviceName("mic", selectedMic)}`
-        );
+      console.log(
+        "Starting microphone analysis with valid stream and context."
+      );
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
-    };
 
-    setupMicStream();
+      // Clean up any existing nodes
+      micSourceNodeRef.current?.disconnect();
+      micGainNodeRef.current?.disconnect();
+      micAnalyserRef.current?.disconnect();
 
-    return () => {
-      isCancelled = true;
-      console.log("Mic stream effect cleanup.");
-      micStreamRef.current?.getTracks().forEach((track) => track.stop());
+      // Create new nodes
+      try {
+        const analyser = context.createAnalyser();
+        analyser.fftSize = FFT_SIZE_MIC;
+        analyser.smoothingTimeConstant = SMOOTHING_MIC;
+        micAnalyserRef.current = analyser;
+
+        console.log(
+          "Creating MediaStreamSource for mic:",
+          micStreamRef.current.active,
+          micStreamRef.current.getAudioTracks().length
+        );
+        const source = context.createMediaStreamSource(micStreamRef.current);
+        micSourceNodeRef.current = source;
+        console.log("MediaStreamSource created successfully");
+
+        const gainNode = context.createGain();
+        gainNode.gain.value = GAIN_MIC;
+        micGainNodeRef.current = gainNode;
+        console.log("Gain node created with value:", GAIN_MIC);
+
+        // Connect the nodes
+        source.connect(gainNode);
+        gainNode.connect(analyser);
+        console.log("Audio nodes connected successfully");
+
+        // Analysis setup
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let frameCount = 0;
+
+        const runAnalysis = () => {
+          if (!micAnalyserRef.current) {
+            console.log("Mic analysis loop stopping: Analyser cleared.");
+            return;
+          }
+
+          try {
+            micAnalyserRef.current.getByteFrequencyData(dataArray);
+
+            let sum = 0;
+            let peak = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+              sum += dataArray[i];
+              if (dataArray[i] > peak) peak = dataArray[i];
+            }
+
+            // Apply level calculation with better scaling for visualization
+            const average = sum / dataArray.length;
+            const level = Math.min(100, Math.max(0, (peak / 255) * 100 * 1.8)); // Increased scaling
+
+            if (frameCount % 3 === 0 || Math.abs(level - micLevel) > 2) {
+              setMicLevel(level);
+              if (level > 5) {
+                console.log(
+                  `Mic level: ${level.toFixed(
+                    1
+                  )}, Peak: ${peak}, Avg: ${average.toFixed(1)}`
+                );
+              }
+            }
+
+            frameCount++;
+            animationFrameRef.current = requestAnimationFrame(runAnalysis);
+          } catch (analysisError) {
+            console.error("Error in analysis loop:", analysisError);
+            setMicLevel(0);
+          }
+        };
+
+        // Start the analysis loop
+        runAnalysis();
+        console.log("Microphone analysis loop started");
+      } catch (nodeError) {
+        console.error("Error creating audio nodes:", nodeError);
+        toast.error(
+          "Failed to setup microphone analyzer - Error creating audio nodes"
+        );
+        cleanupMicAnalysis();
+      }
+    } catch (error) {
+      console.error("Critical error in startMicAnalysis:", error);
+      toast.error("Failed to initialize microphone analyzer.");
       cleanupMicAnalysis();
-    };
-  }, [selectedMic, micEnabled, testType, cleanupMicAnalysis]);
+    }
+  }, [getAudioContext, cleanupMicAnalysis, micLevel]);
+
+  const startSpeakerAnalysis = useCallback(() => {
+    try {
+      console.log("Starting speaker analysis");
+      const context = getAudioContext();
+      if (!context) {
+        console.error("Failed to get audio context");
+        toast.error("Failed to initialize audio context for speaker test");
+        return;
+      }
+
+      if (!audioRef.current) {
+        console.error("No audio element available for speaker analysis");
+        toast.error("Speaker test audio not ready");
+        return;
+      }
+
+      // Clean up existing analyzer
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+
+      speakerSourceNodeRef.current?.disconnect();
+      speakerAnalyserRef.current?.disconnect();
+
+      try {
+        console.log("Creating source node from audio element");
+        const sourceNode = context.createMediaElementSource(audioRef.current);
+        speakerSourceNodeRef.current = sourceNode;
+
+        const analyser = context.createAnalyser();
+        analyser.fftSize = FFT_SIZE_SPEAKER;
+        analyser.smoothingTimeConstant = SMOOTHING_SPEAKER;
+        speakerAnalyserRef.current = analyser;
+
+        // Connect audio to both analyzer and speakers
+        sourceNode.connect(analyser);
+        sourceNode.connect(context.destination);
+        console.log("Speaker audio nodes connected successfully");
+
+        // Create visualization
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let time = 0;
+        let frameCount = 0;
+
+        const runVisualization = () => {
+          if (!speakerAnalyserRef.current) {
+            console.log("Speaker analysis loop stopping: Analyser cleared");
+            return;
+          }
+
+          try {
+            speakerAnalyserRef.current.getByteFrequencyData(dataArray);
+
+            // Calculate real level from frequency data
+            let sum = 0;
+            let peak = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+              sum += dataArray[i];
+              if (dataArray[i] > peak) peak = dataArray[i];
+            }
+
+            // Also add a sine wave pattern for visual feedback
+            const baseLevel = (sum / dataArray.length / 255) * 80;
+            time += 0.1;
+
+            // Combine real audio data with a sine wave for better visual feedback
+            // This helps even if the audio is quiet or browser doesn't provide real data
+            const pulseFactor = (Math.sin(time) + 1) / 2; // 0 to 1 range
+            const pulseAmount = 20; // Max additional percentage to add
+
+            // Final level with pulse effect
+            const level = Math.min(100, baseLevel + pulseFactor * pulseAmount);
+
+            if (frameCount % 2 === 0 || Math.abs(level - speakerLevel) > 1) {
+              setSpeakerLevel(level);
+              if (frameCount % 15 === 0) {
+                console.log(
+                  `Speaker level: ${level.toFixed(
+                    1
+                  )}, Base: ${baseLevel.toFixed(1)}, Pulse: ${(
+                    pulseFactor * pulseAmount
+                  ).toFixed(1)}`
+                );
+              }
+            }
+
+            frameCount++;
+            animationFrameRef.current = requestAnimationFrame(runVisualization);
+          } catch (error) {
+            console.error("Error in speaker visualization loop:", error);
+            setSpeakerLevel(0);
+          }
+        };
+
+        // Start visualization loop
+        runVisualization();
+        console.log("Speaker visualization started");
+      } catch (error) {
+        console.error("Failed to create speaker analysis nodes:", error);
+        toast.error("Failed to initialize speaker analyzer");
+        cleanupSpeakerAnalysis();
+      }
+    } catch (error) {
+      console.error("Critical error in startSpeakerAnalysis:", error);
+      toast.error("Failed to set up speaker test");
+      cleanupSpeakerAnalysis();
+    }
+  }, [getAudioContext, cleanupSpeakerAnalysis, speakerLevel]);
+
+  // Update the microphone related useEffect with better error handling
+  useEffect(() => {
+    // Handle microphone testing
+    if (isTesting && testType === "mic") {
+      console.log("Setting up microphone test:", selectedMic);
+
+      const setupMic = async () => {
+        try {
+          const stream = await getMicStream(selectedMic);
+          if (stream) {
+            console.log("Starting mic analysis with stream");
+            startMicAnalysis();
+          } else {
+            console.error("Failed to get microphone stream");
+            toast.error(
+              "Unable to start microphone test. Please check your permissions."
+            );
+          }
+        } catch (err) {
+          console.error("Error during mic setup:", err);
+          toast.error("Error setting up microphone test.");
+        }
+      };
+
+      setupMic();
+
+      return () => {
+        console.log("Cleaning up mic test");
+        cleanupMicAnalysis();
+      };
+    }
+  }, [
+    isTesting,
+    testType,
+    selectedMic,
+    getMicStream,
+    startMicAnalysis,
+    cleanupMicAnalysis,
+  ]);
 
   // Camera Stream Management
   useEffect(() => {
@@ -294,220 +625,73 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
       console.log("Camera stream effect cleanup.");
       cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
     };
-  }, [selectedCamera, cameraEnabled]);
+  }, [selectedCamera, cameraEnabled, getDeviceName]);
 
-  // --- Analysis Logic ---
-  const startMicAnalysis = useCallback(() => {
-    if (!micStreamRef.current) {
-      console.warn("Cannot start mic analysis: Stream not available.");
-      return;
-    }
-    const context = getAudioContext();
-    if (!context) return; // Failed to get context
+  // Update the speaker test useEffect
+  useEffect(() => {
+    // Handle speaker testing
+    if (isTesting && testType === "speaker") {
+      console.log("Setting up speaker test");
 
-    console.log("Starting microphone analysis...");
-    cleanupMicAnalysis(); // Clean previous nodes first
+      // Audio element for speaker test
+      const audioEl = new Audio("/audio/sound-test.mp3");
+      audioEl.loop = true;
 
-    try {
-      const analyser = context.createAnalyser();
-      analyser.fftSize = FFT_SIZE_MIC;
-      analyser.smoothingTimeConstant = SMOOTHING_MIC;
-      micAnalyserRef.current = analyser;
-
-      const source = context.createMediaStreamSource(micStreamRef.current);
-      micSourceNodeRef.current = source;
-
-      const gainNode = context.createGain();
-      gainNode.gain.value = GAIN_MIC;
-      micGainNodeRef.current = gainNode;
-
-      source.connect(gainNode);
-      gainNode.connect(analyser);
-      console.log("Mic analysis nodes connected.");
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      let frameCount = 0;
-
-      const runAnalysis = () => {
-        if (!micAnalyserRef.current) {
-          console.log("Mic analysis loop stopping: Analyser cleared.");
-          return; // Stop loop if analyser is cleared
+      if (selectedSpeaker) {
+        try {
+          // @ts-ignore - setSinkId exists but TypeScript doesn't know about it
+          if (audioEl.setSinkId && typeof audioEl.setSinkId === "function") {
+            audioEl
+              .setSinkId(selectedSpeaker)
+              .then(() => {
+                console.log(`Audio output device set to ${selectedSpeaker}`);
+              })
+              .catch((err) => {
+                console.error("Error setting audio output device:", err);
+                toast.error("Failed to set audio output device");
+              });
+          } else {
+            console.warn("setSinkId not supported in this browser");
+          }
+        } catch (err) {
+          console.error("Error setting audio sink:", err);
         }
-        micAnalyserRef.current.getByteFrequencyData(dataArray);
-
-        let sum = 0;
-        let peak = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
-          if (dataArray[i] > peak) peak = dataArray[i];
-        }
-        const average = sum / dataArray.length;
-        const level = Math.min(100, Math.max(0, (peak / 255) * 100 * 1.5)); // Simplified level calc
-
-        // Update state only if level changes significantly or periodically
-        if (frameCount % 3 === 0 || Math.abs(level - micLevel) > 2) {
-          setMicLevel(level);
-          // console.log(`[Mic Analyzer Loop] Level: ${level.toFixed(1)}`); // Keep logs minimal
-        }
-        frameCount++;
-        animationFrameRef.current = requestAnimationFrame(runAnalysis);
-      };
-      runAnalysis();
-    } catch (error) {
-      console.error("Error setting up mic analysis nodes:", error);
-      toast.error("Failed to initialize microphone analyzer.");
-      cleanupMicAnalysis();
-    }
-  }, [getAudioContext, cleanupMicAnalysis, micLevel]); // Include micLevel to optimize state updates
-
-  const startSpeakerAnalysis = useCallback(() => {
-    if (!audioRef.current) {
-      console.warn("Cannot start speaker analysis: Audio element not ready.");
-      return;
-    }
-    const context = getAudioContext();
-    if (!context) return;
-
-    console.log("Starting speaker analysis...");
-    cleanupSpeakerAnalysis(); // Clean previous nodes first
-
-    try {
-      // Ensure source node is created only once for the audio element
-      if (
-        !speakerSourceNodeRef.current ||
-        speakerSourceNodeRef.current.mediaElement !== audioRef.current
-      ) {
-        console.log(
-          "Creating/Re-creating MediaElementAudioSourceNode for speaker."
-        );
-        speakerSourceNodeRef.current?.disconnect();
-        const context = getAudioContext();
-        if (!context || !audioRef.current) {
-          console.error(
-            "Cannot create speaker source node: context or audio element missing."
-          );
-          throw new Error("Audio context or element unavailable");
-        }
-        speakerSourceNodeRef.current = context.createMediaElementSource(
-          audioRef.current
-        );
-      } else {
-        console.log("Reusing existing MediaElementAudioSourceNode.");
       }
 
-      const analyser = context.createAnalyser();
-      analyser.fftSize = FFT_SIZE_SPEAKER;
-      analyser.smoothingTimeConstant = SMOOTHING_SPEAKER;
-      speakerAnalyserRef.current = analyser;
-
-      // Connect: Source -> Analyser -> Destination
-      speakerSourceNodeRef.current.connect(analyser);
-      analyser.connect(context.destination);
-      console.log("Speaker analysis nodes connected.");
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      let frameCount = 0;
-
-      const runAnalysis = () => {
-        if (!speakerAnalyserRef.current) {
-          console.log("Speaker analysis loop stopping: Analyser cleared.");
-          return; // Stop loop
-        }
-        speakerAnalyserRef.current.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
-        }
-        const average = sum / dataArray.length;
-        const level = Math.min(100, Math.pow(average / 150, 0.7) * 100);
-
-        // Update state only if level changes significantly or periodically
-        if (frameCount % 3 === 0 || Math.abs(level - speakerLevel) > 2) {
-          setSpeakerLevel(level);
-          // console.log(`[Speaker Analyzer Loop] Level: ${level.toFixed(1)}`);
-        }
-        frameCount++;
-        animationFrameRef.current = requestAnimationFrame(runAnalysis);
-      };
-      runAnalysis();
-    } catch (error) {
-      console.error("Error setting up speaker analysis nodes:", error);
-      // Check for specific errors if possible (e.g., InvalidStateNode error)
-      if (error instanceof DOMException && error.name === "InvalidStateError") {
-        toast.error("Speaker analyzer error: Audio source issue. Try again.");
-        // Attempt to reset the source node if this specific error occurs
-        speakerSourceNodeRef.current = null;
-      } else {
-        toast.error("Failed to initialize speaker analyzer.");
-      }
-      cleanupSpeakerAnalysis();
-    }
-  }, [getAudioContext, cleanupSpeakerAnalysis, speakerLevel]); // Include speakerLevel
-
-  // --- Test Initiation ---
-  const handleTestSpeaker = useCallback(() => {
-    setIsTesting(true);
-    setTestType("speaker");
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current.src = "/audio/sound-test.mp3";
-      audioRef.current.loop = true;
-      audioRef.current.volume = 0.6; // Slightly lower volume
-
-      const playPromise = audioRef.current.play();
-      playPromise
-        .then(() => {
-          console.log("Speaker test audio playing...");
-          startSpeakerAnalysis(); // Start analysis after play begins
-        })
-        .catch((err) => {
-          console.error("Error playing speaker test sound:", err);
-          toast.error("Could not play test sound. Check console.");
-          stopTesting(); // Stop test if playback fails
+      audioEl.oncanplaythrough = () => {
+        console.log("Audio can play through, starting playback");
+        audioEl.play().catch((err) => {
+          console.error("Error playing audio:", err);
+          toast.error("Failed to play test sound");
         });
-    } else {
-      toast.error("Audio element not ready for speaker test.");
+        startSpeakerAnalysis();
+      };
+
+      audioEl.onerror = (err) => {
+        console.error("Audio element error:", err);
+        toast.error("Failed to load test sound");
+      };
+
+      // Save reference for cleanup
+      audioRef.current = audioEl;
+
+      return () => {
+        console.log("Cleaning up speaker test");
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.src = "";
+          audioRef.current = null;
+        }
+        cleanupSpeakerAnalysis();
+      };
     }
-  }, [startSpeakerAnalysis]); // Add dependency
-
-  const handleTestMic = useCallback(() => {
-    setIsTesting(true);
-    setTestType("mic");
-    // Ensure stream exists before starting analysis
-    if (micStreamRef.current) {
-      startMicAnalysis();
-    } else {
-      console.warn(
-        "Mic stream not ready yet for testing, effect should handle it."
-      );
-      // The useEffect for micStream should trigger analysis when ready
-    }
-  }, [startMicAnalysis]);
-
-  const handleTestCamera = useCallback(() => {
-    setIsTesting(true);
-    setTestType("camera");
-    // No specific action needed other than opening the dialog
-  }, []);
-
-  const stopTesting = useCallback(() => {
-    console.log("Stopping tests...");
-    setIsTesting(false);
-    setTestType(null);
-
-    // Stop speaker audio if playing
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = ""; // Clear src
-    }
-
-    // Cleanup analysis resources
-    cleanupMicAnalysis();
-    cleanupSpeakerAnalysis();
-    // Consider closing context only if BOTH are fully stopped and no longer needed
-    // closeAudioContext();
-  }, [cleanupMicAnalysis, cleanupSpeakerAnalysis]); // Add dependencies
+  }, [
+    isTesting,
+    testType,
+    selectedSpeaker,
+    startSpeakerAnalysis,
+    cleanupSpeakerAnalysis,
+  ]);
 
   // --- UI Handlers ---
   const togglePopover = (type: "mic" | "speaker" | "camera") => {
@@ -527,21 +711,6 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
   const toggleMicEnabled = () => setMicEnabled((prev) => !prev);
   const toggleCameraEnabled = () => setCameraEnabled((prev) => !prev);
-
-  const getDeviceName = useCallback(
-    (deviceType: "mic" | "speaker" | "camera", deviceId: string) => {
-      const list =
-        deviceType === "mic"
-          ? audioInputs
-          : deviceType === "speaker"
-          ? audioOutputs
-          : videoInputs;
-      return (
-        list.find((d) => d.deviceId === deviceId)?.label || "Select Device"
-      );
-    },
-    [audioInputs, audioOutputs, videoInputs]
-  );
 
   // --- Render ---
   return (
@@ -614,7 +783,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                     <button
                       key={device.deviceId}
                       onClick={() => handleDeviceChange("mic", device.deviceId)}
-                      className="popover-item"
+                      className={popoverItem}
                     >
                       <span className="truncate flex-1 mr-2">
                         {device.label}
@@ -625,7 +794,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                     </button>
                   ))
                 ) : (
-                  <div className="popover-item text-gray-400">
+                  <div className={popoverItem + " text-gray-400"}>
                     No mics found
                   </div>
                 )}
@@ -680,7 +849,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                       onClick={() =>
                         handleDeviceChange("speaker", device.deviceId)
                       }
-                      className="popover-item"
+                      className={popoverItem}
                     >
                       <span className="truncate flex-1 mr-2">
                         {device.label}
@@ -691,7 +860,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                     </button>
                   ))
                 ) : (
-                  <div className="popover-item text-gray-400">
+                  <div className={popoverItem + " text-gray-400"}>
                     No speakers found
                   </div>
                 )}
@@ -753,7 +922,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                       onClick={() =>
                         handleDeviceChange("camera", device.deviceId)
                       }
-                      className="popover-item"
+                      className={popoverItem}
                     >
                       <span className="truncate flex-1 mr-2">
                         {device.label}
@@ -764,7 +933,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                     </button>
                   ))
                 ) : (
-                  <div className="popover-item text-gray-400">
+                  <div className={popoverItem + " text-gray-400"}>
                     No cameras found
                   </div>
                 )}
@@ -809,10 +978,16 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
             <select
               value={selectedSpeaker}
               onChange={(e) => handleDeviceChange("speaker", e.target.value)}
-              className="dialog-select"
+              className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:ring-brandOrange focus:border-brandOrange"
+              style={{ color: "white", backgroundColor: "#374151" }}
+              aria-label="Select speaker"
             >
               {audioOutputs.map((device) => (
-                <option key={device.deviceId} value={device.deviceId}>
+                <option
+                  key={device.deviceId}
+                  value={device.deviceId}
+                  style={{ backgroundColor: "white", color: "#1f2937" }}
+                >
                   {device.label}
                 </option>
               ))}
@@ -874,11 +1049,16 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
             <select
               value={selectedMic}
               onChange={(e) => handleDeviceChange("mic", e.target.value)}
-              className="dialog-select w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:ring-brandOrange focus:border-brandOrange"
+              className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:ring-brandOrange focus:border-brandOrange"
+              style={{ color: "white", backgroundColor: "#374151" }}
               aria-label="Select microphone"
             >
               {audioInputs.map((device) => (
-                <option key={device.deviceId} value={device.deviceId}>
+                <option
+                  key={device.deviceId}
+                  value={device.deviceId}
+                  style={{ backgroundColor: "white", color: "#1f2937" }}
+                >
                   {device.label}
                 </option>
               ))}
@@ -926,7 +1106,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 };
 
 // Helper CSS classes (consider moving to a global CSS or Tailwind plugin)
-const popoverItemClasses =
+const popoverItem =
   "flex items-center justify-between px-3 py-1.5 w-full text-xs text-left hover:bg-gray-700 text-white rounded-sm cursor-pointer";
 const dialogSelectClasses =
   "w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:ring-brandOrange focus:border-brandOrange";
