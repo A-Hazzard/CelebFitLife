@@ -1,26 +1,17 @@
 import { NextResponse } from "next/server";
-import twilio from "twilio";
+import { TwilioService } from "@/lib/services/TwilioService";
+import { handleApiError } from "@/lib/utils/errorHandler";
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const apiKey = process.env.TWILIO_API_KEY_SID;
-const apiSecret = process.env.TWILIO_API_KEY_SECRET;
+// Make sure this is a server-side route by using the 'use server' directive
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-// Validate Twilio credentials
-const validateTwilioCredentials = () => {
-  if (!accountSid || !apiKey || !apiSecret) {
-    throw new Error("Missing required Twilio credentials");
-  }
-  console.log("✓ Twilio credentials validated");
-
-  // Validate SID format
-  const sidPattern = /^[A-Z]{2}[a-f0-9]{32}$/i;
-  if (!sidPattern.test(accountSid) || !sidPattern.test(apiKey)) {
-    throw new Error("Invalid Twilio Account SID or API Key format");
-  }
-};
-
+/**
+ * POST handler for generating Twilio tokens for video rooms
+ */
 export async function POST(req: Request) {
   try {
+    // Parse request body
     let body;
     try {
       body = await req.json();
@@ -29,55 +20,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
+    // Validate required fields
     const { roomName, userName } = body;
-
     if (!roomName || !userName) {
       return NextResponse.json(
         { error: "roomName and userName are required" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    // Validate Twilio credentials before proceeding
-    try {
-      validateTwilioCredentials();
-    } catch (error) {
-      console.error("❌ Twilio credentials error:", error);
-      return NextResponse.json(
-        { error: "Invalid Twilio configuration" },
-        { status: 500 },
-      );
-    }
-    // Create an Access Token with the API Key as the issuer
-    if (!accountSid || !apiKey || !apiSecret) {
-      throw new Error("Missing required Twilio credentials");
-    }
-    const token = new twilio.jwt.AccessToken(accountSid, apiKey, apiSecret, {
-      identity: userName,
-      ttl: 14400, // Token expires in 4 hours
-    });
+    // Create TwilioService and generate token
+    const twilioService = new TwilioService();
+    const token = await twilioService.generateToken(roomName, userName);
 
-    // Create a Video grant and add it to the token
-    const videoGrant = new twilio.jwt.AccessToken.VideoGrant({
-      room: roomName,
-    });
-    token.addGrant(videoGrant);
-
-    // Generate the token
-    const jwt = token.toJwt();
-
-    // Log success (but not the actual token)
-    console.log(`✅ Successfully generated token for user: ${userName}`);
-
+    // Return token response
     return NextResponse.json({
-      token: jwt,
+      token,
       identity: userName,
     });
   } catch (error) {
-    console.error("Token generation error:", error);
-    return NextResponse.json(
-      { error: "Failed to generate access token" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }

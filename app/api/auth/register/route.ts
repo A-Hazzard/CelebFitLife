@@ -1,140 +1,44 @@
-import {adminDb} from "@/lib/config/firebaseAdmin";
-import {SessionManager} from "@/lib/session";
-import bcrypt from "bcryptjs";
-import {NextRequest, NextResponse} from "next/server";
+import { NextResponse } from "next/server";
+import { AuthService } from "@/lib/services/AuthService";
+import { UserCreateDTO } from "@/lib/models/User";
+import { handleApiError } from "@/lib/utils/errorHandler";
 
-const SALT_ROUNDS = 10;
+// Make sure this is a server-side route by using the 'use server' directive
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-/**
- * Validate that none of the required fields are empty and that the Terms have been accepted.
- * Returns a NextResponse error if validation fails, or true if everything is okay.
- */
-function validateInput(
-  input: Record<string, string>,
-  acceptedTnC: boolean
-): NextResponse | true {
-  const requiredFields = [
-    "email",
-    "password",
-    "username",
-    "phone",
-    "country",
-    "city",
-    "age",
-  ];
-
-  for (const field of requiredFields) {
-    const value = input[field];
-    if (value === undefined || value === null) {
-      return NextResponse.json(
-        { message: `${field} is required` },
-        { status: 400 }
-      );
-    }
-
-    // Convert numbers to strings for length validation
-    const strValue = String(value).trim();
-    if (strValue.length === 0) {
-      return NextResponse.json(
-        { message: `${field} cannot be empty` },
-        { status: 400 }
-      );
-    }
-  }
-
-  // Email validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(input.email)) {
-    return NextResponse.json(
-      { message: "Please enter a valid email address" },
-      { status: 400 }
-    );
-  }
-
-  // Password validation (at least 6 characters)
-  if (input.password.length < 6) {
-    return NextResponse.json(
-      { message: "Password must be at least 6 characters long" },
-      { status: 400 }
-    );
-  }
-
-  if (!acceptedTnC) {
-    return NextResponse.json(
-      { message: "You must accept the Terms & Conditions." },
-      { status: 400 }
-    );
-  }
-
-  return true;
-}
-
-export async function POST(request: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const data = await request.json();
+    // Parse request body
+    const body = await req.json();
 
-    // Validate all fields
-    const validationResult = validateInput(data, data.acceptedTnC);
-    if (validationResult !== true) {
-      return validationResult;
-    }
-
-    const { email, password, username, phone, country, city, age } = data;
-
-    // Check if user exists
-    const userDoc = await adminDb.collection("users").doc(email).get();
-    if (userDoc.exists) {
+    // Validate required fields
+    if (!body.email || !body.username || !body.password) {
       return NextResponse.json(
-        { error: "User already exists." },
+        { error: "Email, username, and password are required" },
         { status: 400 }
       );
     }
 
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-
-    // Create user object
-    const userData = {
-      username,
-      email,
-      password: hashedPassword,
-      phone,
-      country,
-      city,
-      age,
-      isStreamer: false,
-      isAdmin: false,
-      createdAt: new Date().toISOString(),
+    // Create a DTO object
+    const userData: UserCreateDTO = {
+      email: body.email,
+      username: body.username,
+      password: body.password,
+      age: body.age,
+      city: body.city,
+      country: body.country,
+      phone: body.phone,
+      role: body.role || { admin: false, streamer: false, viewer: true },
     };
 
-    // Save user in Firestore
-    await adminDb.collection("users").doc(email).set(userData);
-    console.log("Created user data object");
+    // Call the AuthService to register the user
+    const authService = new AuthService();
+    const user = await authService.register(userData);
 
-    // Create session token using SessionManager class
-    const sessionManager = new SessionManager();
-    const sessionData = {
-      email,
-      isStreamer: userData.isStreamer,
-      isAdmin: userData.isAdmin,
-    };
-    const token = await sessionManager.createSession(sessionData);
-    console.log(`Token created for ${userData.username}: ${token}`);
-
-    // Create response and set token in an HTTP-only cookie
-    const response = NextResponse.json({ success: true });
-    response.cookies.set("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days in seconds
-    });
-
-    return response;
-  } catch (error: unknown) {
-    console.error("Registration error:", error);
-    const errorMessage =
-        error instanceof Error ? error.message : "Internal Server Error";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    // Return success response
+    return NextResponse.json(user, { status: 201 });
+  } catch (error) {
+    return handleApiError(error);
   }
 }

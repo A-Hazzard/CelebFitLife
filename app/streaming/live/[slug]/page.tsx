@@ -21,6 +21,10 @@ import {
 } from "twilio-video";
 import { MicOff, VideoOff, Volume2, VolumeX } from "lucide-react";
 import { Countdown } from "@/components/streaming/Countdown";
+import { ClientTwilioService } from "@/lib/services/ClientTwilioService";
+
+// Create a static instance of ClientTwilioService for the client side
+const clientTwilioService = new ClientTwilioService();
 
 export default function LiveViewPage() {
   const pathname = usePathname();
@@ -422,6 +426,7 @@ export default function LiveViewPage() {
     let roomCleanup: (() => void) | null = null;
     let connectAttempts = 0;
     const maxAttempts = 3;
+    let debounceTimer: NodeJS.Timeout | null = null;
 
     const connectToRoom = async () => {
       try {
@@ -440,14 +445,21 @@ export default function LiveViewPage() {
           `[Connection] Connecting to room (attempt ${connectAttempts}):`,
           slug
         );
-        const response = await fetch("/api/twilio/connect", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            roomName: slug,
-            userName: currentUser.username || currentUser.email,
-          }),
-        });
+
+        // Use the client Twilio service instead of direct API call
+        let token;
+        try {
+          token = await clientTwilioService.getToken(
+            slug,
+            currentUser?.username || currentUser?.email || `user-${Date.now()}`
+          );
+          console.log("[Connection] Got token, connecting to Twilio room...");
+        } catch (error) {
+          console.error("[Connection] Error getting token:", error);
+          setVideoStatus("offline");
+          setIsConnecting(false);
+          return;
+        }
 
         if (!isSubscribed) {
           console.log(
@@ -457,17 +469,7 @@ export default function LiveViewPage() {
           return;
         }
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error("[Connection] Error getting token:", errorData);
-          setVideoStatus("offline");
-          setIsConnecting(false);
-          return;
-        }
-
-        const { token } = await response.json();
-        console.log("[Connection] Got token, connecting to Twilio room...");
-
+        // Connect to room using the token
         const room = await connect(token, {
           name: slug,
           tracks: [],
@@ -522,13 +524,21 @@ export default function LiveViewPage() {
       }
     };
 
-    connectToRoom();
+    // Debounce the connection request to prevent multiple calls
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    debounceTimer = setTimeout(connectToRoom, 300);
 
     return () => {
       console.log("[Connection] Cleaning up connection effect");
       isSubscribed = false;
       setIsConnecting(false);
       if (roomCleanup) roomCleanup();
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
     };
   }, [
     slug,

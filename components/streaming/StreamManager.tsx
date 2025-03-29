@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Settings, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Stream } from "@/lib/services/StreamService";
+import { Stream } from "@/lib/models/Stream";
 import { toast } from "sonner";
 import {
   Dialog,

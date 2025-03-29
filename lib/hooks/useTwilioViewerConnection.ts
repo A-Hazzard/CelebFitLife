@@ -302,17 +302,25 @@ export const useTwilioViewerConnection = (
     (participant: RemoteParticipant) => {
       logger.info(`Participant disconnected: ${participant.identity}`);
 
-      // Clean up participant event listeners
-      participant.removeAllListeners();
-
+      // Clear participant reference if it's the one disconnecting
       if (remoteParticipant?.identity === participant.identity) {
         setRemoteParticipant(null);
-      }
 
-      // Set video status to offline
-      setVideoStatus("offline");
+        // Clean up tracks for the disconnected participant
+        participant.tracks.forEach((publication) => {
+          if (publication.track) {
+            handleTrackUnsubscribed(publication.track);
+          }
+        });
+
+        // Remove event listeners from the participant
+        participant.removeAllListeners();
+
+        // Set video status to offline as the participant left
+        setVideoStatus("offline");
+      }
     },
-    [remoteParticipant]
+    [remoteParticipant, handleTrackUnsubscribed]
   );
 
   // Connect to the Twilio room

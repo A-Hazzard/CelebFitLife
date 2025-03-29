@@ -31,7 +31,10 @@
     "jose": "^5.9.6",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.474.0",
+    "nanoid": "^5.1.5",
     "next": "15.1.6",
+    "next-transpile-modules": "10.0.1",
+    "node-libs-browser": "2.2.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.54.2",
@@ -45,6 +48,7 @@
     "twilio": "^5.4.3",
     "twilio-video": "^2.29.0",
     "uuid": "^11.0.5",
+    "webpack": "5.98.0",
     "zod": "^3.24.1",
     "zustand": "^5.0.3"
   },
