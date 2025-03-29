@@ -226,178 +226,79 @@ export const prepareStreamStart = async (
 };
 
 /**
- * Safely detaches a track from all elements it's attached to.
- * Includes thorough error handling especially for NotFoundError that can happen
- * during DOM manipulation.
- *
- * @param track - The track to detach
+ * Safely detaches a track and removes its associated elements from the DOM.
+ * @param track The track to detach.
  */
-export const safelyDetachTrack = (
-  track: LocalAudioTrack | LocalVideoTrack | null
-): void => {
-  const logger = trackLogger.withContext("Detach");
+export const safelyDetachTrack = (track: LocalVideoTrack | LocalAudioTrack) => {
+  const logger = streamLogger.withContext("SafelyDetachTrack");
+  if (!track) {
+    logger.warn("Attempted to detach a null track.");
+    return;
+  }
 
+  logger.info(`Detaching track: ${track.kind} - ${track.id}`);
   try {
-    logger.info(`Starting track detachment process`);
+    // Stop the track first to release resources
+    track.stop();
+    logger.debug(`Track stopped: ${track.id}`);
 
-    if (!track) {
-      logger.warn("No track provided to safelyDetachTrack, skipping");
-      return;
-    }
+    // Detach the track from all elements it's attached to
+    const detachedElements = track.detach();
+    logger.debug(
+      `Track detached from ${detachedElements.length} elements: ${track.id}`
+    );
 
-    logger.debug(`Detaching ${track.kind} track (ID: ${track.id})`);
-
-    // Check if track is stopped before attempting to detach
-    if (
-      track.mediaStreamTrack &&
-      track.mediaStreamTrack.readyState === "ended"
-    ) {
-      logger.info(
-        `Track ${track.kind} (ID: ${track.id}) is already stopped, skipping detachment`
-      );
-      return;
-    }
-
-    // NEW: Capture and log the track state before detachment
-    logger.debug(`Track state before detachment:`, {
-      kind: track.kind,
-      id: track.id,
-      enabled: track.isEnabled,
-      readyState: track.mediaStreamTrack?.readyState,
-    });
-
-    // NEW: Check if the track has any attached elements before trying to detach
-    // Use a safer approach to find elements - both by data-track-id and by searching video/audio elements
-    try {
-      const elementsBySid = Array.from(
-        document.querySelectorAll(`[data-track-id="${track.id}"]`)
-      );
-
-      // Also search all media elements and check if they might be associated with this track
-      const mediaElements = Array.from(
-        document.querySelectorAll("video, audio")
-      );
-
-      logger.debug(
-        `Found ${elementsBySid.length} DOM elements with track ID ${track.id}`
-      );
-      logger.debug(`Found ${mediaElements.length} total media elements in DOM`);
-
-      // Store a count of attached elements for logging
-      let detachedElementsCount = 0;
-
-      // For each element we found in the DOM with the track SID, try to remove it
-      if (elementsBySid.length > 0) {
-        elementsBySid.forEach((element, index) => {
-          try {
-            logger.debug(
-              `Removing track element ${index + 1}/${
-                elementsBySid.length
-              } from DOM`
+    // Remove detached elements from the DOM safely
+    detachedElements.forEach((element) => {
+      if (element && element.parentNode) {
+        try {
+          // Check if parentNode is an Element before accessing tagName
+          const parentTagName =
+            element.parentNode instanceof Element
+              ? element.parentNode.tagName
+              : "unknown";
+          logger.debug(
+            `Removing detached element ${element.tagName} from parent ${parentTagName}`
+          );
+          element.parentNode.removeChild(element);
+        } catch (removeError: unknown) {
+          // Gracefully handle the error if the node is already removed
+          if (
+            removeError instanceof DOMException &&
+            removeError.name === "NotFoundError"
+          ) {
+            logger.warn(
+              `Failed to remove element ${element.tagName}: Node was not found in parent. Already removed?`
             );
-            if (element.parentNode) {
-              element.parentNode.removeChild(element);
-              detachedElementsCount++;
-              logger.debug(`Successfully removed element ${index + 1}`);
-            } else {
-              logger.warn(`Element ${index + 1} has no parent node`);
-            }
-          } catch (removeError: unknown) {
+          } else {
+            // Log other unexpected errors during removal
+            const error = toStreamingError(removeError);
             logger.error(
-              `Error removing element ${index + 1} from DOM:`,
-              removeError
-            );
-            logger.debug(`Element that failed removal:`, {
-              tagName: (element as Element).tagName,
-              id: (element as Element).id,
-              className: (element as Element).className,
-            });
-          }
-        });
-
-        logger.info(
-          `Manually removed ${detachedElementsCount}/${elementsBySid.length} elements from DOM`
-        );
-      }
-
-      // Now try to detach using Twilio's API - this may throw NotFoundError if elements
-      // were already removed, which is fine
-      try {
-        logger.debug(`Attempting Twilio track.detach() method`);
-        const twilioDetachedElements = track.detach();
-        logger.info(
-          `Twilio detached ${twilioDetachedElements.length} additional elements`
-        );
-
-        // Remove these elements too, in case Twilio didn't clean them up
-        twilioDetachedElements.forEach((element, index) => {
-          try {
-            logger.debug(
-              `Removing Twilio-detached element ${index + 1}/${
-                twilioDetachedElements.length
-              }`
-            );
-            if (element && element.parentNode) {
-              element.parentNode.removeChild(element);
-              logger.debug(
-                `Successfully removed Twilio-detached element ${index + 1}`
-              );
-            } else {
-              logger.warn(
-                `Twilio-detached element ${index + 1} has no parent node`
-              );
-            }
-          } catch (detachError: unknown) {
-            const error = toStreamingError(detachError);
-            logger.error(
-              `Error removing Twilio-detached element ${index + 1}:`,
+              `Unexpected error removing element ${element.tagName}:`,
               error
             );
           }
-        });
-      } catch (detachError: unknown) {
-        // Handle specific NotFoundError which can occur if the element was already detached
-        const error = toStreamingError(detachError);
-        if (error.name === "NotFoundError") {
-          logger.warn(
-            `NotFoundError when detaching ${track.kind} track (ID: ${track.id}) - this is normal if elements were already removed`
-          );
-          logger.debug(`NotFoundError details:`, error);
-        } else {
-          logger.error(
-            `Error in Twilio detach for ${track.kind} track (ID: ${track.id}):`,
-            error
-          );
         }
-      }
-    } catch (domError: unknown) {
-      logger.error(`DOM operation error during track detachment:`, domError);
-    }
-
-    // Finally, ensure the track is stopped to release resources
-    try {
-      logger.debug(`Stopping track to release hardware resources`);
-      if (
-        track.mediaStreamTrack &&
-        track.mediaStreamTrack.readyState !== "ended"
-      ) {
-        track.stop();
-        logger.info(
-          `Successfully stopped ${track.kind} track (ID: ${track.id})`
+      } else if (element) {
+        logger.warn(
+          `Detached element ${element.tagName} has no parentNode, cannot remove.`
         );
-      } else {
-        logger.debug(`Track was already stopped, no need to stop again`);
       }
-    } catch (stopError: unknown) {
-      const error = toStreamingError(stopError);
-      logger.error(`Error stopping track after detachment:`, error);
+    });
+    logger.info(`Finished detaching and cleaning up track: ${track.id}`);
+  } catch (detachError: unknown) {
+    const error = toStreamingError(detachError);
+    logger.error(`Error during track detachment for ${track.id}:`, error);
+    // Log specific error details if available
+    if ("cause" in error && error.cause) {
+      logger.error(`Underlying cause:`, error.cause);
     }
-
-    logger.info(`Track detachment process completed`);
-  } catch (error: unknown) {
-    const err = toStreamingError(error);
-    logger.error(`Critical error in safelyDetachTrack:`, err);
-    logger.trace(`Stack trace for critical error`);
+    // Attempt to stop again as a fallback
+    try {
+      track.stop();
+    } catch (stopErr) {
+      /* ignore secondary error */
+    }
   }
 };
 
@@ -598,6 +499,8 @@ export const updateStreamDeviceStatus = async (
  * @param currentMicId - The ID of the microphone device to use.
  * @param videoContainerRef - Reference to the video container DOM element.
  * @param initialState - Optional object with initial audioMuted and cameraOff values.
+ * @param addVideoTrackFn - Optional React hook function to handle video rendering
+ * @param addAudioTrackFn - Optional React hook function to handle audio rendering
  * @returns A promise resolving to an object with the room and tracks.
  */
 export const setupTwilioRoom = async (
@@ -606,7 +509,12 @@ export const setupTwilioRoom = async (
   currentCameraId: string,
   currentMicId: string,
   videoContainerRef: React.RefObject<HTMLDivElement>,
-  initialState?: { audioMuted?: boolean; cameraOff?: boolean }
+  initialState?: { audioMuted?: boolean; cameraOff?: boolean },
+  addVideoTrackFn?: (track: LocalVideoTrack) => void,
+  addAudioTrackFn?: (
+    track: LocalAudioTrack,
+    options?: { muted?: boolean }
+  ) => void
 ): Promise<{
   success: boolean;
   room: Room | null;
@@ -785,54 +693,83 @@ export const setupTwilioRoom = async (
       };
     }
 
-    // 4. Attach local video to video container (with robust error handling)
-    if (videoContainerRef.current && videoTrack) {
+    // 4. Handle local video rendering
+    if (videoTrack) {
       try {
-        logger.debug(`Attaching local video to container`);
+        logger.debug(`Handling local video rendering`);
 
-        // Safely clear any existing video elements first
-        logger.debug(`Clearing video container before attaching new video`);
-        clearVideoContainer(videoContainerRef.current);
+        // If a React add function was provided, use it (preferred)
+        if (addVideoTrackFn) {
+          logger.debug(`Using React hook to render video track`);
+          addVideoTrackFn(videoTrack);
+        }
+        // Legacy approach with direct DOM manipulation if no React function was provided
+        else if (videoContainerRef.current) {
+          logger.debug(`Using legacy DOM approach to render video track`);
 
-        // Create and attach the video element
-        logger.debug(`Creating video element for local track`);
-        const videoEl = videoTrack.attach();
-        videoEl.style.width = "100%";
-        videoEl.style.height = "100%";
-        videoEl.style.objectFit = "cover";
-        videoEl.setAttribute("data-track-id", videoTrack.id);
+          // Safely clear any existing video elements first
+          logger.debug(`Clearing video container before attaching new video`);
+          clearVideoContainer(videoContainerRef.current);
 
-        // Add to container and verify
-        logger.debug(`Appending video element to container`);
-        videoContainerRef.current.appendChild(videoEl);
-        logger.info(`Successfully attached video to container`);
+          // Create and attach the video element
+          logger.debug(`Creating video element for local track`);
+          const videoEl = videoTrack.attach();
+          videoEl.style.width = "100%";
+          videoEl.style.height = "100%";
+          videoEl.style.objectFit = "cover";
+          videoEl.setAttribute("data-track-id", videoTrack.id);
 
-        // Verify the attachment worked
-        const attachedElements =
-          videoContainerRef.current.querySelectorAll("video");
-        logger.debug(
-          `Container now has ${attachedElements.length} video elements`
-        );
+          // Add to container and verify
+          logger.debug(`Appending video element to container`);
+          videoContainerRef.current.appendChild(videoEl);
+          logger.info(`Successfully attached video to container`);
+
+          // Verify the attachment worked
+          const attachedElements =
+            videoContainerRef.current.querySelectorAll("video");
+          logger.debug(
+            `Container now has ${attachedElements.length} video elements`
+          );
+        } else {
+          if (!videoContainerRef.current) {
+            logger.warn(`Video container ref is null, cannot attach video`);
+          }
+        }
       } catch (attachError: unknown) {
         const error = toStreamingError(attachError);
-        logger.error(`Error attaching video to container:`, error);
-        if (error.name === "NotFoundError") {
-          logger.warn(
-            `NotFoundError occurred during video element attachment - this might be a DOM manipulation timing issue`
-          );
-        }
-        logger.trace(`Video attachment error stack trace`);
+        logger.error(`Error handling video rendering:`, error);
+        logger.trace(`Video rendering error stack trace`);
       }
     } else {
-      if (!videoContainerRef.current) {
-        logger.warn(`Video container ref is null, cannot attach video`);
-      }
-      if (!videoTrack) {
-        logger.warn(`Video track is null, cannot attach to container`);
-      }
+      logger.warn(`Video track is null, cannot render`);
     }
 
-    // 5. Apply initial state if provided
+    // 5. Handle audio track
+    if (audioTrack) {
+      try {
+        logger.debug(`Handling audio track setup`);
+
+        // If a React audio hook function was provided, use it
+        if (addAudioTrackFn) {
+          logger.debug(`Using React hook to handle audio track`);
+          const muted = initialState?.audioMuted || false;
+          addAudioTrackFn(audioTrack, { muted });
+        } else {
+          logger.debug(
+            `No React audio hook provided, audio will be handled automatically by Twilio`
+          );
+        }
+      } catch (audioError: unknown) {
+        const error = toStreamingError(audioError);
+        logger.error(`Error handling audio track:`, error);
+        logger.trace(`Audio handling error stack trace`);
+        // Continue despite audio error - not critical for streaming
+      }
+    } else {
+      logger.warn(`No audio track created, skipping audio setup`);
+    }
+
+    // 6. Apply initial state if provided
     if (initialState && room) {
       try {
         logger.debug(`Applying initial track states:`, initialState);
@@ -856,7 +793,7 @@ export const setupTwilioRoom = async (
       }
     }
 
-    // 6. Update stream device IDs in Firestore (non-critical operation)
+    // 7. Update stream device IDs in Firestore (non-critical operation)
     try {
       logger.debug(`Updating device IDs in Firestore`);
       await updateStreamDeviceStatus(slug, {

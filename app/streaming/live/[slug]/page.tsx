@@ -247,64 +247,97 @@ export default function LiveViewPage() {
         console.log("Track unsubscribed:", track.kind, track.name);
 
         if (track.kind === "video") {
-          // Don't immediately set video status to offline
-          // Instead, set a timer to check if we get a new track soon
-          console.log(
-            "Video track unsubscribed, waiting to see if a new one arrives"
-          );
-
-          // Clean up this specific track's elements
+          // Video track cleanup
           if (videoContainerRef.current) {
-            const videos = videoContainerRef.current.querySelectorAll(
-              `video[data-track-sid="${track.sid}"]`
+            const videos = Array.from(
+              videoContainerRef.current.querySelectorAll<HTMLVideoElement>(
+                `video[data-track-sid="${track.sid}"]`
+              )
             );
+
             videos.forEach((video) => {
-              console.log("Removing video element for unsubscribed track");
-              video.remove();
+              try {
+                console.log("Removing video element for unsubscribed track");
+
+                if (video?.isConnected) {
+                  // Clean up media resources
+                  if (video.srcObject instanceof MediaStream) {
+                    video.srcObject
+                      .getTracks()
+                      .forEach((track) => track.stop());
+                  }
+                  video.srcObject = null;
+                  video.pause();
+
+                  // Modern removal method
+                  video.remove();
+                }
+              } catch (videoErr) {
+                console.error("Error removing video element:", videoErr);
+              }
             });
           }
 
           // Clean up track event listeners
           if ("removeAllListeners" in track) {
-            (track as WithListeners).removeAllListeners();
+            try {
+              (track as WithListeners).removeAllListeners();
+            } catch (listenerErr) {
+              console.error("Error removing track listeners:", listenerErr);
+            }
           }
 
-          // Set a timer to mark as offline if no new track arrives
+          // Set timer logic remains the same...
           const offlineTimer = setTimeout(() => {
-            // Only update UI state if no new track arrives, but don't set to offline
-            // This prevents showing "Stream is Offline" when just switching cameras
             if (!remoteVideoTrack && videoStatus !== "offline") {
               console.log(
                 "No new video track received after timeout, but not setting to offline"
               );
-              setVideoStatus("active"); // Keep as active if hasStarted is true
-
-              // Clear the video container
+              setVideoStatus("active");
               clearVideoContainer(videoContainerRef.current);
             }
-          }, 5000); // Wait 5 seconds before checking
+          }, 5000);
 
-          // Store the timer ID so we can clear it if a new track arrives
           setOfflineTimerId(offlineTimer);
-
-          // Note: We're not setting remoteVideoTrack to null immediately
-          // to avoid flickering if a new track is coming soon
         } else if (track.kind === "audio") {
-          // Clean up audio elements
-          const audioElements = document.querySelectorAll(
-            `audio[data-track-sid="${track.sid}"]`
+          // Audio track cleanup
+          const audioElements = Array.from(
+            document.querySelectorAll<HTMLAudioElement>(
+              `audio[data-track-sid="${track.sid}"]`
+            )
           );
-          audioElements.forEach((element) => {
-            console.log("Removing audio element for unsubscribed track");
-            element.parentNode?.removeChild(element);
+
+          audioElements.forEach((audio) => {
+            try {
+              console.log("Removing audio element for unsubscribed track");
+
+              if (audio?.isConnected) {
+                // Clean up media resources
+                if (audio.srcObject instanceof MediaStream) {
+                  audio.srcObject.getTracks().forEach((track) => track.stop());
+                }
+                audio.srcObject = null;
+
+                // Modern removal method
+                audio.remove();
+              }
+            } catch (audioErr) {
+              console.error("Error removing audio element:", audioErr);
+            }
           });
 
           // Clean up event listeners
           if ("removeAllListeners" in track) {
-            (track as WithListeners).removeAllListeners();
+            try {
+              (track as WithListeners).removeAllListeners();
+            } catch (listenerErr) {
+              console.error(
+                "Error removing audio track listeners:",
+                listenerErr
+              );
+            }
           }
 
-          // Set the audio track to null
           if (remoteAudioTrack?.sid === track.sid) {
             setRemoteAudioTrack(null);
           }
@@ -417,156 +450,60 @@ export default function LiveViewPage() {
     [handleTrackSubscribed, videoContainerRef]
   );
 
-  const handleTrackUnpublished = useCallback(
-    (publication: RemoteTrackPublication) => {
-      try {
-        if (!publication) {
-          console.warn(
-            "handleTrackUnpublished called with undefined publication"
-          );
-          return;
-        }
-
-        const trackName = publication.trackName || "unknown";
-        console.log("Track unpublished:", trackName);
-
-        if (publication.track) {
-          handleTrackUnsubscribed(publication.track);
-        }
-
-        // Clean up any event listeners on the publication
-        if ("removeAllListeners" in publication) {
-          (publication as WithListeners).removeAllListeners();
-        }
-      } catch (error) {
-        console.error("Error in handleTrackUnpublished:", error);
-      }
-    },
-    [handleTrackUnsubscribed]
-  );
-
+  // Handler for participant connected
   const handleParticipantConnected = useCallback(
     (participant: RemoteParticipant) => {
       try {
-        if (!participant) {
-          console.warn(
-            "handleParticipantConnected called with undefined participant"
-          );
-          return;
-        }
-
-        console.log("Participant connected:", participant.identity);
-        console.log("Participant tracks:", participant.tracks.size);
+        console.log(
+          `Participant connected: ${participant.identity}, sid: ${participant.sid}`
+        );
         setRemoteParticipant(participant);
 
-        // Force subscription to all tracks
-        participant.tracks.forEach((publication) => {
-          if (!publication) return;
-
-          console.log(
-            "Checking publication:",
-            publication.trackName || "unknown",
-            "isSubscribed:",
-            publication.isSubscribed,
-            "isTrackEnabled:",
-            publication.track?.isEnabled
-          );
-
-          // Force subscribe to the track
-          try {
-            if (!publication.isSubscribed) {
-              console.log(
-                `Attempting to subscribe to track: ${publication.trackName}`
-              );
-              publication.on("subscribed", handleTrackSubscribed);
-
-              // We can't force subscription directly, but we can monitor for subscription
-              console.log(
-                `Waiting for track ${publication.trackName} to be subscribed automatically`
-              );
-            } else if (publication.track) {
-              console.log(
-                `Track already subscribed, handling: ${publication.trackName}`
-              );
-              handleTrackSubscribed(publication.track);
-            }
-          } catch (e) {
-            console.error("Error forcing track subscription:", e);
-          }
-        });
-
-        // Handle track events
-        participant.on("trackSubscribed", handleTrackSubscribed);
-        participant.on("trackUnsubscribed", handleTrackUnsubscribed);
+        // Handle participant tracks
+        participant.tracks.forEach(handleTrackPublished);
         participant.on("trackPublished", handleTrackPublished);
-        participant.on("trackUnpublished", handleTrackUnpublished);
 
-        // Set a timeout to check if we have received any tracks
-        setTimeout(() => {
-          if (
-            videoContainerRef.current &&
-            !videoContainerRef.current.querySelector("video")
-          ) {
-            console.log(
-              "No video element found after 2 seconds, attempting to resubscribe to tracks"
-            );
-            participant.tracks.forEach((publication) => {
-              if (
-                publication.track &&
-                publication.isSubscribed &&
-                publication.kind === "video"
-              ) {
-                console.log(
-                  `Resubscribing to video track: ${publication.trackName}`
-                );
-                handleTrackSubscribed(publication.track);
-              }
-            });
-          }
-        }, 2000);
+        // Disconnect logic
+        participant.on("disconnected", () => {
+          console.log(
+            `Participant disconnected: ${participant.identity}, sid: ${participant.sid}`
+          );
+          setRemoteParticipant(null);
+        });
       } catch (error) {
         console.error("Error in handleParticipantConnected:", error);
       }
     },
-    [
-      handleTrackSubscribed,
-      handleTrackUnsubscribed,
-      handleTrackPublished,
-      handleTrackUnpublished,
-    ]
+    [handleTrackPublished]
   );
 
+  // Handler for participant disconnected
   const handleParticipantDisconnected = useCallback(
     (participant: RemoteParticipant) => {
       try {
-        if (!participant) {
-          console.warn(
-            "handleParticipantDisconnected called with undefined participant"
-          );
-          return;
-        }
-
-        console.log("Participant disconnected:", participant.identity);
-
-        // Clean up all tracks
-        participant.tracks.forEach((publication) => {
-          if (publication && publication.track) {
-            handleTrackUnsubscribed(publication.track);
-          }
-        });
-
-        // Clean up all event listeners
-        try {
-          participant.removeAllListeners();
-        } catch (error) {
-          console.error("Error removing participant listeners:", error);
-        }
-
+        console.log(
+          `Participant disconnected: ${participant.identity}, sid: ${participant.sid}`
+        );
         setRemoteParticipant(null);
-        if (offlineTimerId) {
-          clearTimeout(offlineTimerId);
-          setOfflineTimerId(null);
+        setRemoteVideoTrack(null);
+        setRemoteAudioTrack(null);
+
+        // Clear the video container
+        if (videoContainerRef.current) {
+          clearVideoContainer(videoContainerRef.current);
         }
+
+        // Set a timeout to mark the stream as offline
+        if (offlineTimerId) clearTimeout(offlineTimerId);
+        setOfflineTimerId(
+          setTimeout(() => {
+            setVideoStatus("offline");
+            setOfflineTimerId(null);
+          }, 10000) // Wait 10 seconds
+        );
+
+        // Clean up participant listeners
+        participant.removeAllListeners();
       } catch (error) {
         console.error("Error in handleParticipantDisconnected:", error);
       }
@@ -767,68 +704,70 @@ export default function LiveViewPage() {
       handleTrackStatus(publication);
     };
 
-    const handleUnsubscribed = (
-      track: RemoteTrack,
-      publication: RemoteTrackPublication
-    ) => {
-      if (!publication || !track) {
-        console.warn(
-          "handleUnsubscribed called with undefined publication or track"
-        );
-        return;
-      }
-
-      console.log(
-        "Track unsubscribed event:",
-        publication.trackName || "unknown"
-      );
-      handleTrackStatus(publication);
-    };
-
-    const handleDisabled = (publication: RemoteTrackPublication) => {
-      if (!publication) {
-        console.warn("handleDisabled called with undefined publication");
-        return;
-      }
-
-      console.log("Track disabled event:", publication.trackName || "unknown");
-      handleTrackStatus(publication);
-    };
-
-    const handleEnabled = (publication: RemoteTrackPublication) => {
-      if (!publication) {
-        console.warn("handleEnabled called with undefined publication");
-        return;
-      }
-
-      console.log("Track enabled event:", publication.trackName || "unknown");
-      handleTrackStatus(publication);
-    };
-
-    // Safely iterate through tracks with null checks
+    // Handle existing tracks
     remoteParticipant.tracks.forEach((publication) => {
-      if (!publication) return;
-
+      if (publication.isSubscribed) {
+        handleTrackStatus(publication);
+      }
       publication.on("subscribed", handleSubscribed);
-      publication.on("unsubscribed", handleUnsubscribed);
-      publication.on("trackDisabled", handleDisabled);
-      publication.on("trackEnabled", handleEnabled);
+      publication.on("unsubscribed", handleTrackStatus);
     });
 
-    return () => {
-      // Safely remove event listeners with null checks
-      if (remoteParticipant) {
-        remoteParticipant.tracks.forEach((publication) => {
-          if (!publication) return;
+    // Monitor for new track publications
+    remoteParticipant.on("trackSubscribed", handleSubscribed);
+    remoteParticipant.on("trackUnsubscribed", handleTrackStatus);
 
-          publication.off("subscribed", handleSubscribed);
-          publication.off("unsubscribed", handleUnsubscribed);
-          publication.off("trackDisabled", handleDisabled);
-          publication.off("trackEnabled", handleEnabled);
-        });
-      }
+    // Monitor track enabled/disabled status changes
+    remoteParticipant.on("trackEnabled", handleTrackStatus);
+    remoteParticipant.on("trackDisabled", handleTrackStatus);
+
+    // Cleanup function
+    return () => {
+      remoteParticipant.tracks.forEach((publication) => {
+        publication.off("subscribed", handleSubscribed);
+        publication.off("unsubscribed", handleTrackStatus);
+      });
+      remoteParticipant.off("trackSubscribed", handleSubscribed);
+      remoteParticipant.off("trackUnsubscribed", handleTrackStatus);
+      remoteParticipant.off("trackEnabled", handleTrackStatus);
+      remoteParticipant.off("trackDisabled", handleTrackStatus);
     };
   }, [remoteParticipant]);
+
+  // Add periodic check for video tracks when camera is supposedly on
+  useEffect(() => {
+    if (!hasStarted || !remoteParticipant || streamerStatus.cameraOff) return;
+
+    const checkInterval = setInterval(() => {
+      const hasVideoElement =
+        videoContainerRef.current &&
+        !!videoContainerRef.current.querySelector("video");
+      if (!hasVideoElement) {
+        console.log(
+          "[Periodic Check] No video element found, attempting to resubscribe to tracks"
+        );
+        remoteParticipant.tracks.forEach((publication) => {
+          if (
+            publication.kind === "video" &&
+            publication.isSubscribed &&
+            publication.track
+          ) {
+            console.log(
+              `[Periodic Check] Resubscribing to video track: ${publication.trackName}`
+            );
+            handleTrackSubscribed(publication.track);
+          }
+        });
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(checkInterval);
+  }, [
+    hasStarted,
+    remoteParticipant,
+    streamerStatus.cameraOff,
+    handleTrackSubscribed,
+  ]);
 
   // Add connection status monitoring
   useEffect(() => {

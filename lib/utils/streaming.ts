@@ -70,16 +70,71 @@ export const getDefaultScheduleTime = (minutesFromNow: number = 10): Date => {
 };
 
 /**
- * Safely clears all child elements (typically video elements) from a container.
- * Includes detailed logging of the DOM operations and resource cleanup.
+ * Safely cleans up all media tracks associated with video and audio elements.
+ * This function is meant to be used inside a useEffect cleanup or before unmounting a component.
+ * Instead of directly manipulating the DOM, it focuses on releasing media resources.
  *
- * @param container - The HTMLDivElement to clear.
+ * @param tracks - An array of tracks to clean up, or null if no tracks to clean
+ */
+export const cleanupMediaTracks = (
+  tracks: (LocalVideoTrack | LocalAudioTrack | RemoteTrack)[] | null
+): void => {
+  const logger = domLogger.withContext("CleanupTracks");
+
+  if (!tracks || tracks.length === 0) {
+    logger.warn("No tracks provided for cleanup");
+    return;
+  }
+
+  logger.info(`Cleaning up ${tracks.length} media tracks`);
+
+  tracks.forEach((track, index) => {
+    try {
+      logger.debug(`Cleaning up track ${index + 1}/${tracks.length}`);
+
+      // Capture track details for debugging
+      logger.debug(`Track details:`, {
+        kind: track.kind,
+        // Handle different id/sid properties based on track type
+        trackId:
+          "id" in track ? track.id : "sid" in track ? track.sid : "unknown",
+        name: track.name,
+        enabled: track.isEnabled,
+      });
+
+      // Stop the track to release device access
+      if ("stop" in track) {
+        logger.debug(`Stopping ${track.kind} track`);
+        track.stop();
+        logger.debug(`Successfully stopped ${track.kind} track`);
+      }
+
+      // Detach from DOM elements for remote tracks
+      if ("detach" in track) {
+        logger.debug(`Detaching ${track.kind} track from DOM elements`);
+        track.detach();
+        logger.debug(`Successfully detached ${track.kind} track`);
+      }
+    } catch (trackErr) {
+      const error = toStreamingError(trackErr);
+      logger.error(`Error cleaning up ${track.kind} track:`, error);
+      logger.trace(`Full stack trace for track cleanup error`);
+    }
+  });
+
+  logger.info(`Media tracks cleaned up successfully`);
+};
+
+/**
+ * Legacy clearVideoContainer function for backward compatibility.
+ * This is deprecated and should be replaced by React state management in components.
+ * @deprecated Use React state to manage video elements instead of direct DOM manipulation
  */
 export const clearVideoContainer = (container: HTMLDivElement | null): void => {
   const logger = domLogger.withContext("ClearContainer");
 
-  if (!container) {
-    logger.warn("No container provided to clearVideoContainer");
+  if (!container || !container.isConnected) {
+    logger.warn("No container provided or container not in DOM");
     return;
   }
 
@@ -92,11 +147,10 @@ export const clearVideoContainer = (container: HTMLDivElement | null): void => {
 
   try {
     // First, try to clean up video srcObject to release MediaStream resources
-    const existingVideos = container.querySelectorAll("video");
+    const existingVideos = Array.from(container.querySelectorAll("video"));
     logger.info(`Found ${existingVideos.length} video elements to clean up`);
 
-    // Use Array.from to safely iterate through NodeList
-    Array.from(existingVideos).forEach((videoElement, index) => {
+    existingVideos.forEach((videoElement, index) => {
       try {
         logger.debug(
           `Cleaning up video element ${index + 1}/${existingVideos.length}`
@@ -153,10 +207,10 @@ export const clearVideoContainer = (container: HTMLDivElement | null): void => {
         logger.debug(`Pausing video element`);
         videoElement.pause();
 
-        // Remove element from DOM if it has a parent
-        if (videoElement.parentNode) {
+        // Modern safe removal
+        if (videoElement.isConnected) {
           logger.debug(`Removing video element from DOM`);
-          videoElement.parentNode.removeChild(videoElement);
+          videoElement.remove();
           logger.debug(
             `Successfully removed video element ${index + 1} from DOM`
           );
@@ -164,7 +218,7 @@ export const clearVideoContainer = (container: HTMLDivElement | null): void => {
           logger.warn(
             `Video element ${
               index + 1
-            } has no parent node, can't remove from DOM`
+            } is not connected to DOM, skipping removal`
           );
         }
       } catch (videoErr) {
@@ -174,15 +228,14 @@ export const clearVideoContainer = (container: HTMLDivElement | null): void => {
       }
     });
 
-    // As a safety measure, also clear innerHTML - but only after properly
-    // cleaning up media resources above
+    // As a safety measure, also clear children - but using a more modern approach
     try {
-      logger.debug(`Clearing container innerHTML as final cleanup step`);
-      container.innerHTML = "";
-      logger.debug(`Successfully cleared innerHTML`);
+      logger.debug(`Clearing container children as final cleanup step`);
+      container.replaceChildren(); // Modern alternative to removeChild looping
+      logger.debug(`Successfully cleared all children`);
     } catch (innerErr) {
       const error = toStreamingError(innerErr);
-      logger.error(`Error clearing container innerHTML:`, error);
+      logger.error(`Error clearing container children:`, error);
     }
 
     logger.info(`Video container cleared successfully`);
@@ -193,12 +246,12 @@ export const clearVideoContainer = (container: HTMLDivElement | null): void => {
 
     // Last resort fallback
     try {
-      logger.warn(`Attempting last resort innerHTML clear`);
-      container.innerHTML = "";
-      logger.info(`Last resort innerHTML clear successful`);
+      logger.warn(`Attempting last resort container clearing`);
+      container.replaceChildren(); // Modern alternative to innerHTML = ""
+      logger.info(`Last resort container clearing successful`);
     } catch (fallbackErr) {
       const error = toStreamingError(fallbackErr);
-      logger.error(`Even fallback innerHTML clear failed:`, error);
+      logger.error(`Even fallback clearing failed:`, error);
     }
   }
 };

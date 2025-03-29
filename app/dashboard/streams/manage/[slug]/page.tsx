@@ -5,7 +5,6 @@ import ShareButton from "@/components/ui/ShareButton";
 import { db } from "@/lib/config/firebase";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import {
-  clearVideoContainer,
   switchCamera,
   switchMic,
   switchVideoQuality,
@@ -36,6 +35,11 @@ import {
   useTwilioTrackEvents,
 } from "@/lib/hooks/useTwilioTrackEvents";
 import { toStreamingError } from "@/lib/types/streaming";
+import {
+  useVideoContainer,
+  VideoTrackRenderer,
+} from "@/lib/hooks/useVideoContainer";
+import { useAudioTracks, AudioTrackRenderer } from "@/lib/hooks/useAudioTracks";
 
 // Create page-specific logger
 const pageLogger = createLogger("ManagePage");
@@ -46,8 +50,25 @@ const ManageStreamPage = () => {
   const slug = useMemo(() => pathname?.split("/").pop() || "", [pathname]);
   const { currentUser } = useAuthStore();
 
-  const videoContainerRef = useRef<HTMLDivElement>(null);
-  const roomRef = useRef<Room | null>(null);
+  // Use our new video container hook
+  const {
+    videoElements,
+    addVideo,
+    removeVideo,
+    clearVideos,
+    videoContainerRef,
+  } = useVideoContainer();
+
+  // Use our new audio tracks hook
+  const {
+    audioElements,
+    isGloballyMuted,
+    addAudio,
+    removeAudio,
+    toggleTrackMute,
+    toggleGlobalMute,
+    clearAudios,
+  } = useAudioTracks();
 
   // State declarations
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
@@ -63,6 +84,9 @@ const ManageStreamPage = () => {
     useState<LocalAudioTrack | null>(null);
   const [showEndConfirmation, setShowEndConfirmation] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
+
+  // Room ref
+  const roomRef = useRef<Room | null>(null);
 
   // Use custom hooks
   const { streamData, loading } = useStreamData(slug);
@@ -157,12 +181,18 @@ const ManageStreamPage = () => {
       );
 
       if (result.success && result.track) {
+        // Update the video in our container
+        if (currentVideoTrack) {
+          removeVideo(currentVideoTrack.id);
+        }
+        addVideo(result.track, { replaceExisting: true });
+
         setCurrentVideoTrack(result.track);
         setCurrentCameraId(deviceId);
         setShowCameraOptions(false);
       }
     },
-    [currentVideoTrack, slug, setCurrentCameraId]
+    [currentVideoTrack, slug, setCurrentCameraId, addVideo, removeVideo]
   );
 
   // Handle mic switch
@@ -176,12 +206,25 @@ const ManageStreamPage = () => {
       );
 
       if (result.success && result.track) {
+        // Update the audio in our container
+        if (currentAudioTrack) {
+          removeAudio(currentAudioTrack.id);
+        }
+        addAudio(result.track, { muted: !isAudioEnabled });
+
         setCurrentAudioTrack(result.track);
         setCurrentMicId(deviceId);
         setShowMicOptions(false);
       }
     },
-    [currentAudioTrack, slug, setCurrentMicId]
+    [
+      currentAudioTrack,
+      slug,
+      setCurrentMicId,
+      addAudio,
+      removeAudio,
+      isAudioEnabled,
+    ]
   );
 
   // Handle stream start
@@ -233,7 +276,7 @@ const ManageStreamPage = () => {
 
       logger.info(`Stream preparation successful, token received`);
 
-      // Step 2: Setup Twilio room
+      // Step 2: Setup Twilio room, now using our add functions for both video and audio
       logger.debug(`Setting up Twilio room...`);
       const roomResult = await setupTwilioRoom(
         slug,
@@ -244,7 +287,11 @@ const ManageStreamPage = () => {
         {
           audioMuted: !isAudioEnabled,
           cameraOff: !isVideoEnabled,
-        }
+        },
+        // Pass the addVideo function to handle video rendering
+        (videoTrack) => addVideo(videoTrack, { replaceExisting: true }),
+        // Pass the addAudio function to handle audio rendering
+        (audioTrack, options) => addAudio(audioTrack, options)
       );
 
       if (!roomResult.success) {
@@ -280,7 +327,7 @@ const ManageStreamPage = () => {
           roomRef.current = null;
 
           logger.debug(`Clearing video container`);
-          clearVideoContainer(videoContainerRef.current);
+          clearVideos();
         }
       );
 
@@ -320,7 +367,8 @@ const ManageStreamPage = () => {
     currentMicId,
     isAudioEnabled,
     isVideoEnabled,
-    videoContainerRef,
+    addVideo,
+    addAudio,
   ]);
 
   const handleEndStream = useCallback(async () => {
@@ -329,11 +377,6 @@ const ManageStreamPage = () => {
 
     try {
       logger.info("Ending stream...");
-
-      // First, manually clean up video container to avoid DOM-related errors
-      if (videoContainerRef.current) {
-        clearVideoContainer(videoContainerRef.current);
-      }
 
       // Safely clean up current tracks before ending stream
       if (currentVideoTrack) {
@@ -383,6 +426,10 @@ const ManageStreamPage = () => {
         roomRef.current = null;
       }
 
+      // Clear both video and audio elements using our React functions
+      clearVideos();
+      clearAudios();
+
       // After small delay, redirect to dashboard
       setTimeout(() => {
         router.push("/dashboard/streams");
@@ -392,7 +439,14 @@ const ManageStreamPage = () => {
       logger.error("Critical error in handleEndStream:", error);
       alert("Failed to end stream properly. Please try again.");
     }
-  }, [slug, currentVideoTrack, currentAudioTrack, router]);
+  }, [
+    slug,
+    currentVideoTrack,
+    currentAudioTrack,
+    router,
+    clearVideos,
+    clearAudios,
+  ]);
 
   const handleToggleAudio = useCallback(async () => {
     if (!currentAudioTrack) return;
@@ -405,7 +459,12 @@ const ManageStreamPage = () => {
     setIsAudioEnabled(newState);
     // Update Firestore
     await updateStreamDeviceStatus(slug, { audioMuted: !newState });
-  }, [currentAudioTrack, isAudioEnabled, slug]);
+
+    // Use our hook's function to update audio state
+    if (currentAudioTrack) {
+      toggleTrackMute(currentAudioTrack.id);
+    }
+  }, [currentAudioTrack, isAudioEnabled, slug, toggleTrackMute]);
 
   const handleToggleVideo = useCallback(async () => {
     if (!currentVideoTrack) return;
@@ -479,8 +538,14 @@ const ManageStreamPage = () => {
           {/* Video Preview */}
           <div
             ref={videoContainerRef}
-            className="aspect-video bg-brandGray rounded-lg relative overflow-hidden border border-brandOrange/30"
+            className="mt-4 bg-black rounded-lg aspect-video relative overflow-hidden"
           >
+            {/* Render video elements from our hook state */}
+            {videoElements.map(({ id, track, style }) => (
+              <VideoTrackRenderer key={id} track={track} style={style} />
+            ))}
+
+            {/* Overlay for camera off state */}
             {(!isConnected || !isVideoEnabled) && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70">
                 <VideoOff className="w-16 h-16 text-brandGray mb-4" />
@@ -489,6 +554,13 @@ const ManageStreamPage = () => {
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Render audio elements hidden from view */}
+          <div className="hidden">
+            {audioElements.map(({ id, track, muted }) => (
+              <AudioTrackRenderer key={id} track={track} muted={muted} />
+            ))}
           </div>
 
           {/* Controls */}
