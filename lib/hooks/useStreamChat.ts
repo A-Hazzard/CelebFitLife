@@ -8,8 +8,10 @@ import {
   addDoc,
   onSnapshot,
   serverTimestamp,
+  getDocs,
 } from "firebase/firestore";
 import { useAuthStore } from "@/lib/store/useAuthStore";
+import { toast } from "sonner";
 
 export interface ChatMessage {
   id: string;
@@ -32,6 +34,8 @@ export const useStreamChat = (slug: string) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuthStore();
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
 
   // Load and subscribe to messages
   useEffect(() => {
@@ -51,40 +55,102 @@ export const useStreamChat = (slug: string) => {
       orderBy("createdAt", "asc")
     );
 
-    // Create a listener for real-time updates
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const chatMessages: ChatMessage[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          chatMessages.push({
-            id: doc.id,
-            createdAt: data.createdAt?.toDate?.()
-              ? data.createdAt.toDate().toISOString()
-              : new Date().toISOString(),
-            sender: data.senderName || "Anonymous",
-            message: data.message || "",
-            isHost: data.isHost || false,
+    // Initial fetch to handle the case where onSnapshot fails but data exists
+    const fetchInitialMessages = async () => {
+      try {
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const chatMessages: ChatMessage[] = [];
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            chatMessages.push({
+              id: doc.id,
+              createdAt: data.createdAt?.toDate?.()
+                ? data.createdAt.toDate().toISOString()
+                : new Date().toISOString(),
+              sender: data.senderName || "Anonymous",
+              message: data.message || "",
+              isHost: data.isHost || false,
+            });
           });
-        });
-        setMessages(chatMessages);
-        setIsLoading(false);
-      },
-      (err) => {
-        console.error("Error listening to chat messages:", err);
-        setError(
-          "Failed to load chat messages. Please try refreshing the page."
-        );
-        setIsLoading(false);
+          setMessages(chatMessages);
+          setIsLoading(false);
+          setError(null);
+          return true;
+        }
+        return false;
+      } catch (err) {
+        console.error("Error fetching initial messages:", err);
+        return false;
       }
-    );
+    };
+
+    // Set up listener for real-time updates
+    const setupListener = () => {
+      // Create a listener for real-time updates
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const chatMessages: ChatMessage[] = [];
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            chatMessages.push({
+              id: doc.id,
+              createdAt: data.createdAt?.toDate?.()
+                ? data.createdAt.toDate().toISOString()
+                : new Date().toISOString(),
+              sender: data.senderName || "Anonymous",
+              message: data.message || "",
+              isHost: data.isHost || false,
+            });
+          });
+          setMessages(chatMessages);
+          setIsLoading(false);
+          setError(null); // Clear any previous errors
+          setRetryCount(0); // Reset retry count on success
+        },
+        async (err) => {
+          console.error("Error listening to chat messages:", err);
+
+          // Try to fetch messages directly if listener fails
+          const fetchSuccess = await fetchInitialMessages();
+
+          if (!fetchSuccess) {
+            if (retryCount < maxRetries) {
+              // Retry connecting
+              setRetryCount((prev) => prev + 1);
+              console.log(
+                `Retrying chat connection (${retryCount + 1}/${maxRetries})...`
+              );
+
+              // Wait a bit before retrying
+              setTimeout(() => {
+                setupListener();
+              }, 2000);
+            } else {
+              // Don't set error if we have messages already cached
+              if (messages.length === 0) {
+                setError(
+                  "Failed to load chat messages. Please try refreshing the page."
+                );
+              }
+              setIsLoading(false);
+            }
+          }
+        }
+      );
+
+      return unsubscribe;
+    };
+
+    // Start the listener
+    const unsubscribe = setupListener();
 
     // Clean up the listener on unmount
     return () => {
       unsubscribe();
     };
-  }, [slug]);
+  }, [slug, retryCount]);
 
   // Send a new message
   const sendMessage = useCallback(async () => {
@@ -115,6 +181,7 @@ export const useStreamChat = (slug: string) => {
     } catch (err) {
       console.error("Error sending chat message:", err);
       setError("Failed to send your message. Please try again.");
+      toast.error("Failed to send message. Please try again.");
     }
   }, [newMessage, slug, currentUser]);
 
@@ -138,6 +205,13 @@ export const useStreamChat = (slug: string) => {
     [sendMessage]
   );
 
+  // Manual retry function that users can call
+  const retryConnection = useCallback(() => {
+    setIsLoading(true);
+    setError(null);
+    setRetryCount(0); // Reset retry count to trigger useEffect
+  }, []);
+
   return {
     messages,
     newMessage,
@@ -147,5 +221,6 @@ export const useStreamChat = (slug: string) => {
     handleKeyPress,
     isLoading,
     error,
+    retryConnection,
   };
 };

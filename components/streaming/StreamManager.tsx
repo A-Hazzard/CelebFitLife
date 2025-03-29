@@ -1,8 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Share, Video, VideoOff, Mic, MicOff } from "lucide-react";
+import { Share, Video, VideoOff, Mic, MicOff, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Stream } from "@/lib/services/StreamService";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface StreamManagerProps {
   stream: Stream;
@@ -19,6 +27,8 @@ const StreamManager: React.FC<StreamManagerProps> = ({
   const [title, setTitle] = useState(stream.title);
   const [shareUrl, setShareUrl] = useState("");
   const [showEndConfirmation, setShowEndConfirmation] = useState(false);
+  const [streamingTimer, setStreamingTimer] = useState(0);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -29,6 +39,32 @@ const StreamManager: React.FC<StreamManagerProps> = ({
       setShareUrl(`${window.location.origin}/streaming/live/${stream.slug}`);
     }
   }, [stream.slug]);
+
+  // Timer for streaming duration
+  useEffect(() => {
+    if (isStreaming && !timerIntervalRef.current) {
+      timerIntervalRef.current = setInterval(() => {
+        setStreamingTimer((prevTime) => prevTime + 1);
+      }, 1000);
+    }
+
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+    };
+  }, [isStreaming]);
+
+  // Format the timer as HH:MM:SS
+  const formatTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
 
   // Start streaming
   const startStream = async () => {
@@ -46,11 +82,16 @@ const StreamManager: React.FC<StreamManagerProps> = ({
 
       localStreamRef.current = stream;
       setIsStreaming(true);
+      setStreamingTimer(0);
+      toast.success("Stream started successfully!");
 
       // In a real implementation, we would update hasStarted in the database
       console.log("Stream started for:", stream.slug);
     } catch (error) {
       console.error("Error starting stream:", error);
+      toast.error(
+        "Failed to start stream. Please check your camera and microphone permissions."
+      );
     }
   };
 
@@ -68,6 +109,7 @@ const StreamManager: React.FC<StreamManagerProps> = ({
 
     setIsStreaming(false);
     setShowEndConfirmation(false);
+    toast.info("Stream ended");
 
     // In a real implementation, we would update hasStarted in the database
     console.log("Stream ended for:", stream.slug);
@@ -81,6 +123,7 @@ const StreamManager: React.FC<StreamManagerProps> = ({
         track.enabled = !isMicEnabled;
       });
       setIsMicEnabled(!isMicEnabled);
+      toast.info(isMicEnabled ? "Microphone muted" : "Microphone unmuted");
     }
   };
 
@@ -92,6 +135,7 @@ const StreamManager: React.FC<StreamManagerProps> = ({
         track.enabled = !isVideoEnabled;
       });
       setIsVideoEnabled(!isVideoEnabled);
+      toast.info(isVideoEnabled ? "Camera turned off" : "Camera turned on");
     }
   };
 
@@ -99,7 +143,7 @@ const StreamManager: React.FC<StreamManagerProps> = ({
   const updateStreamInfo = () => {
     // In a real implementation, this would update the stream info in the database
     console.log("Updated stream info:", { title });
-    alert("Stream info updated!");
+    toast.success("Stream info updated!");
   };
 
   // Share stream
@@ -116,7 +160,7 @@ const StreamManager: React.FC<StreamManagerProps> = ({
       // Fallback
       navigator.clipboard
         .writeText(shareUrl)
-        .then(() => alert("Stream URL copied to clipboard!"))
+        .then(() => toast.success("Stream URL copied to clipboard!"))
         .catch((err) => console.error("Failed to copy:", err));
     }
   };
@@ -124,7 +168,7 @@ const StreamManager: React.FC<StreamManagerProps> = ({
   return (
     <div className={`flex flex-col ${className}`}>
       {/* Video Preview */}
-      <div className="aspect-video bg-black rounded-lg relative overflow-hidden mb-4">
+      <div className="aspect-video bg-gray-900 rounded-lg relative overflow-hidden mb-4">
         <video
           ref={videoRef}
           autoPlay
@@ -135,7 +179,7 @@ const StreamManager: React.FC<StreamManagerProps> = ({
 
         {!isStreaming && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
-            <div className="text-white text-center">
+            <div className="text-brandWhite text-center">
               <VideoOff size={48} className="mx-auto mb-2" />
               <p>Stream Offline</p>
             </div>
@@ -144,18 +188,33 @@ const StreamManager: React.FC<StreamManagerProps> = ({
 
         {isStreaming && !isVideoEnabled && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
-            <div className="text-white text-center">
+            <div className="text-brandWhite text-center">
               <VideoOff size={48} className="mx-auto mb-2" />
               <p>Camera Off</p>
+            </div>
+          </div>
+        )}
+
+        {/* Stream Status Indicators */}
+        {isStreaming && (
+          <div className="absolute top-4 left-4 flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-white text-sm">
+              <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+              LIVE
+            </div>
+            <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-white text-sm">
+              {formatTime(streamingTimer)}
             </div>
           </div>
         )}
       </div>
 
       {/* Stream Controls */}
-      <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
-        <div className="flex justify-between mb-4">
-          <h2 className="text-lg font-semibold">Stream Controls</h2>
+      <div className="bg-gray-900 p-4 rounded-lg shadow-md mb-4 border border-gray-800">
+        <div className="flex justify-between mb-6">
+          <h2 className="text-lg font-semibold text-brandWhite">
+            Stream Controls
+          </h2>
 
           <div className="flex gap-2">
             <Button
@@ -163,6 +222,7 @@ const StreamManager: React.FC<StreamManagerProps> = ({
               size="icon"
               onClick={shareStream}
               title="Share stream"
+              className="border-gray-700 text-brandWhite hover:bg-gray-800"
             >
               <Share size={18} />
             </Button>
@@ -175,7 +235,10 @@ const StreamManager: React.FC<StreamManagerProps> = ({
                 End Stream
               </Button>
             ) : (
-              <Button variant="default" onClick={startStream}>
+              <Button
+                className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+                onClick={startStream}
+              >
                 Start Streaming
               </Button>
             )}
@@ -183,25 +246,37 @@ const StreamManager: React.FC<StreamManagerProps> = ({
         </div>
 
         {isStreaming && (
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-4 mb-6 justify-center">
             <Button
-              variant={isMicEnabled ? "default" : "secondary"}
-              size="icon"
+              variant="outline"
+              size="lg"
               onClick={toggleMic}
-              className="rounded-full"
-              title={isMicEnabled ? "Mute microphone" : "Unmute microphone"}
+              className={`flex flex-col items-center gap-2 p-6 ${
+                isMicEnabled
+                  ? "bg-gray-800 text-brandWhite border-gray-700"
+                  : "bg-gray-800 text-brandOrange border-brandOrange/30"
+              }`}
             >
-              {isMicEnabled ? <Mic size={18} /> : <MicOff size={18} />}
+              {isMicEnabled ? <Mic size={24} /> : <MicOff size={24} />}
+              <span className="text-xs">
+                {isMicEnabled ? "Mic On" : "Mic Off"}
+              </span>
             </Button>
 
             <Button
-              variant={isVideoEnabled ? "default" : "secondary"}
-              size="icon"
+              variant="outline"
+              size="lg"
               onClick={toggleVideo}
-              className="rounded-full"
-              title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}
+              className={`flex flex-col items-center gap-2 p-6 ${
+                isVideoEnabled
+                  ? "bg-gray-800 text-brandWhite border-gray-700"
+                  : "bg-gray-800 text-brandOrange border-brandOrange/30"
+              }`}
             >
-              {isVideoEnabled ? <Video size={18} /> : <VideoOff size={18} />}
+              {isVideoEnabled ? <Video size={24} /> : <VideoOff size={24} />}
+              <span className="text-xs">
+                {isVideoEnabled ? "Camera On" : "Camera Off"}
+              </span>
             </Button>
           </div>
         )}
@@ -211,7 +286,7 @@ const StreamManager: React.FC<StreamManagerProps> = ({
           <div>
             <label
               htmlFor="title"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gray-300 mb-1"
             >
               Stream Title
             </label>
@@ -220,13 +295,14 @@ const StreamManager: React.FC<StreamManagerProps> = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter stream title"
+              className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
             />
           </div>
 
           <Button
             variant="outline"
             onClick={updateStreamInfo}
-            className="w-full"
+            className="w-full bg-gray-800 border-gray-700 text-brandWhite hover:bg-gray-700"
           >
             Update Stream Info
           </Button>
@@ -234,28 +310,29 @@ const StreamManager: React.FC<StreamManagerProps> = ({
       </div>
 
       {/* End Stream Confirmation Modal */}
-      {showEndConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg max-w-md">
-            <h3 className="text-xl font-bold mb-4">End Stream?</h3>
-            <p className="mb-6">
-              Are you sure you want to end this stream? This action cannot be
-              undone.
-            </p>
-            <div className="flex justify-end gap-4">
-              <Button
-                variant="outline"
-                onClick={() => setShowEndConfirmation(false)}
-              >
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={endStream}>
-                End Stream
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={showEndConfirmation} onOpenChange={setShowEndConfirmation}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-brandOrange">End Stream?</DialogTitle>
+          </DialogHeader>
+          <p className="mb-6">
+            Are you sure you want to end this stream? This action cannot be
+            undone.
+          </p>
+          <DialogFooter className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowEndConfirmation(false)}
+              className="border-gray-600 text-white hover:bg-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={endStream}>
+              End Stream
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -23,6 +23,7 @@ import {
   Room,
 } from "twilio-video";
 import { Countdown } from "@/components/streaming/Countdown";
+import StreamChat from "@/components/streaming/StreamChat";
 
 export default function LiveViewPage() {
   const pathname = usePathname();
@@ -1021,7 +1022,7 @@ export default function LiveViewPage() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-brandBlack text-brandWhite overflow-hidden">
-      <div className="flex items-center justify-between py-2 px-4 border-b border-brandOrange">
+      <div className="flex items-center justify-between py-2 px-4 border-b border-gray-800">
         <div className="flex items-center space-x-4">
           <div className="h-8 w-8 rounded overflow-hidden flex-shrink-0 bg-brandGray">
             <Image
@@ -1039,58 +1040,80 @@ export default function LiveViewPage() {
           </div>
           <h1 className="text-lg font-bold text-brandWhite">{streamTitle}</h1>
         </div>
-        <p>
-          Stream Status:{" "}
-          <span className="font-bold">
-            {hasStarted ? "Live" : "Not started yet"}
-          </span>
-        </p>
+
+        {hasStarted && (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-red-600 px-2 py-0.5 rounded-full text-white text-xs">
+              <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+              LIVE
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-2.5rem)]">
         {/* Video Section */}
         <div className="flex-1 p-2 md:p-4 h-full">
-          <div className="relative w-full h-full">
+          <div className="relative w-full h-full rounded-lg overflow-hidden bg-gray-900">
             <div ref={videoContainerRef} className="w-full h-full" />
 
             {/* Status Overlays */}
             {videoStatus === "waiting" && !hasStarted && (
-              <div className="absolute inset-0 bg-black flex flex-col items-center justify-center">
-                <p className="text-brandOrange text-2xl font-semibold">
+              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center">
+                <p className="text-brandOrange text-2xl font-semibold mb-2">
                   Stream Starting Soon
+                </p>
+                <p className="text-gray-400 text-center max-w-md px-4">
+                  The host will start the stream shortly. You'll be
+                  automatically connected when it begins.
                 </p>
               </div>
             )}
 
             {videoStatus === "connecting" && (
-              <div className="absolute inset-0 bg-black flex flex-col items-center justify-center">
-                <p className="text-brandOrange">Connecting...</p>
+              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center">
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-6 w-6 border-2 border-t-brandOrange border-gray-600"></div>
+                  <p className="text-brandOrange">Connecting to stream...</p>
+                </div>
               </div>
             )}
 
             {/* Only show offline message if hasStarted is false */}
             {!hasStarted && !isScheduled && (
-              <div className="absolute inset-0 bg-black flex flex-col items-center justify-center">
-                <p className="text-brandOrange">Stream is Offline</p>
+              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center">
+                <p className="text-brandOrange text-xl font-semibold mb-2">
+                  Stream is Offline
+                </p>
+                <p className="text-gray-400 text-center max-w-md px-4">
+                  This stream is currently offline. Please check back later.
+                </p>
               </div>
             )}
 
             {videoStatus === "ended" && (
-              <div className="absolute inset-0 bg-black flex flex-col items-center justify-center">
-                <p className="text-brandOrange">Stream has Ended</p>
+              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center">
+                <p className="text-brandOrange text-xl font-semibold mb-2">
+                  Stream has Ended
+                </p>
+                <p className="text-gray-400 text-center max-w-md px-4">
+                  Thank you for watching! This stream has ended.
+                </p>
               </div>
             )}
 
             {/* Show camera/mic status - only when hasStarted is true */}
             {hasStarted && streamerStatus.cameraOff && (
-              <div className="absolute inset-0 bg-black flex flex-col items-center justify-center">
-                <VideoOff className="w-12 h-12 text-brandOrange mb-2" />
-                <p className="text-brandOrange">Camera is Off</p>
+              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center">
+                <VideoOff className="w-16 h-16 text-brandOrange mb-4" />
+                <p className="text-brandOrange text-xl font-semibold">
+                  Camera is Off
+                </p>
               </div>
             )}
 
             {hasStarted && streamerStatus.audioMuted && (
-              <div className="absolute top-4 left-4 bg-black/50 px-3 py-1 rounded-full flex items-center gap-2">
+              <div className="absolute top-4 left-4 bg-black/70 px-3 py-1 rounded-full flex items-center gap-2">
                 <MicOff className="w-4 h-4 text-brandOrange" />
                 <span className="text-sm text-brandOrange">Audio Muted</span>
               </div>
@@ -1100,7 +1123,7 @@ export default function LiveViewPage() {
             <div className="absolute bottom-4 right-4 flex items-center gap-2">
               <button
                 onClick={toggleAudioMute}
-                className="p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors"
+                className="p-3 rounded-full bg-black/70 hover:bg-black/90 transition-colors"
               >
                 {isAudioMuted ? (
                   <VolumeX className="w-5 h-5 text-brandOrange" />
@@ -1109,8 +1132,9 @@ export default function LiveViewPage() {
                 )}
               </button>
             </div>
+
             {isScheduled && !hasStarted && scheduledTime && (
-              <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/80">
+              <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/90">
                 <Countdown scheduledTime={scheduledTime} />
               </div>
             )}
@@ -1118,40 +1142,8 @@ export default function LiveViewPage() {
         </div>
 
         {/* Chat Section */}
-        <div className="w-full md:w-[400px] flex flex-col border-l border-brandOrange/20 bg-brandGray/10 h-full">
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="space-y-3">
-              {messages.map((msg, index) => (
-                <div key={index} className="bg-brandBlack/80 p-3 rounded-lg">
-                  <strong className="text-brandOrange text-sm block">
-                    {msg.userName}:
-                  </strong>
-                  <p className="text-brandWhite text-sm mt-1">{msg.content}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <form
-            onSubmit={handleSendMessage}
-            className="p-4 border-t border-brandOrange/20"
-          >
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Type your message..."
-                className="flex-1 bg-brandBlack text-brandWhite px-4 py-2 rounded-lg border border-brandOrange/20 focus:outline-none focus:border-brandOrange"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 bg-brandOrange text-brandBlack rounded-lg hover:bg-brandOrange/90 transition-colors"
-              >
-                Send
-              </button>
-            </div>
-          </form>
+        <div className="w-full md:w-96 h-full p-2 md:p-4">
+          <StreamChat slug={slug} className="h-full" />
         </div>
       </div>
     </div>

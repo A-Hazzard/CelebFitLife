@@ -13,28 +13,39 @@ const AudioLevelMeter: React.FC<AudioLevelMeterProps> = ({
   type = "microphone",
   className = "",
 }) => {
-  // Determine color based on level
-  const getColor = (level: number) => {
-    if (level < 30) return "bg-green-500";
-    if (level < 70) return "bg-yellow-500";
-    return "bg-red-500";
-  };
+  // Create an array of segments for the level meter
+  const segments = Array.from({ length: 16 }, (_, i) => {
+    const segmentThreshold = (i + 1) * (100 / 16);
+    const isActive = level >= segmentThreshold;
+
+    // Determine color based on segment position
+    let color = "bg-green-500";
+    if (i >= 11) color = "bg-red-500";
+    else if (i >= 6) color = "bg-yellow-500";
+
+    return { isActive, color };
+  });
 
   return (
-    <div
-      className={`relative w-full h-6 bg-gray-200 rounded-lg overflow-hidden ${className}`}
-    >
-      {/* Level bar */}
-      <div
-        className={`absolute h-full ${
-          isActive ? getColor(level) : "bg-gray-400"
-        } transition-all duration-100 ease-out`}
-        style={{ width: `${isActive ? level : 0}%` }}
-      />
+    <div className={`relative w-full ${className}`}>
+      {/* Level meter container */}
+      <div className="flex h-6 gap-1 items-center">
+        {segments.map((segment, index) => (
+          <div
+            key={index}
+            className={`h-full flex-1 rounded-sm transition-all duration-75 ${
+              isActive && segment.isActive ? segment.color : "bg-gray-700"
+            }`}
+            style={{
+              height: `${Math.max(30, 60 + index * 2)}%`,
+            }}
+          />
+        ))}
+      </div>
 
-      {/* Show level text only when active */}
+      {/* Text indicator */}
       {isActive && (
-        <div className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white z-10">
+        <div className="absolute top-0 right-0 text-xs font-medium text-white bg-black/40 px-2 py-0.5 rounded">
           {level}%
         </div>
       )}

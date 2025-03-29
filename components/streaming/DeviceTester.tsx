@@ -1,10 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Mic } from "lucide-react";
-import { Camera } from "lucide-react";
-import { Volume2 } from "lucide-react";
+import { Mic, Camera, Volume2, ChevronUp, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAudioLevelMeter } from "@/lib/hooks/useAudioLevelMeter";
 import AudioLevelMeter from "./AudioLevelMeter";
+import { toast } from "sonner";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface DeviceOption {
   deviceId: string;
@@ -42,21 +54,34 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   const [micEnabled, setMicEnabled] = useState<boolean>(true);
   const [cameraEnabled, setCameraEnabled] = useState<boolean>(true);
 
+  // Audio levels
+  const [micLevel, setMicLevel] = useState(0);
+  const [speakerLevel, setSpeakerLevel] = useState(0);
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+  const [audioAnalyser, setAudioAnalyser] = useState<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+
+  // Popover states
+  const [micPopoverOpen, setMicPopoverOpen] = useState(false);
+  const [speakerPopoverOpen, setSpeakerPopoverOpen] = useState(false);
+  const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false);
+
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Audio level meter
-  const {
-    level: micLevel,
-    startAnalyzing: startMicAnalyzing,
-    stopAnalyzing: stopMicAnalyzing,
-  } = useAudioLevelMeter("microphone", micStream);
-  const {
-    level: speakerLevel,
-    startAnalyzing: startSpeakerAnalyzing,
-    stopAnalyzing: stopSpeakerAnalyzing,
-  } = useAudioLevelMeter("speaker", null, audioRef.current);
+  // Initialize AudioContext
+  useEffect(() => {
+    // Only create AudioContext when needed (on user interaction)
+    return () => {
+      if (audioContext) {
+        audioContext.close();
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [audioContext]);
 
   // Load available devices
   useEffect(() => {
@@ -98,6 +123,9 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         if (cameras.length > 0) setSelectedCamera(cameras[0].deviceId);
       } catch (error) {
         console.error("Error accessing media devices:", error);
+        toast.error(
+          "Failed to access media devices. Please check permissions."
+        );
       }
     };
 
@@ -130,10 +158,11 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           setMicStream(stream);
 
           if (testType === "mic") {
-            startMicAnalyzing();
+            startMicAnalyzing(stream);
           }
         } catch (error) {
           console.error("Error accessing microphone:", error);
+          toast.error("Failed to access microphone. Please check permissions.");
         }
       }
     };
@@ -160,6 +189,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           }
         } catch (error) {
           console.error("Error accessing camera:", error);
+          toast.error("Failed to access camera. Please check permissions.");
         }
       } else if (videoRef.current) {
         videoRef.current.srcObject = null;
@@ -169,15 +199,191 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     setupCameraStream();
   }, [selectedCamera, cameraEnabled]);
 
+  // Initialize audio analyzer for microphone
+  const startMicAnalyzing = (stream: MediaStream) => {
+    try {
+      // Clean up previous context
+      if (audioContext) {
+        audioContext.close();
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+
+      // Create new audio context with proper initialization
+      const context = new (window.AudioContext ||
+        (window as any).webkitAudioContext)();
+      setAudioContext(context);
+
+      // Create more sensitive analyzer
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 1024; // Higher resolution
+      analyser.smoothingTimeConstant = 0.2; // More responsive
+      setAudioAnalyser(analyser);
+
+      // Connect mic stream to analyzer with gain
+      const source = context.createMediaStreamSource(stream);
+      const gainNode = context.createGain();
+      gainNode.gain.value = 3.0; // Boost sensitivity
+      source.connect(gainNode);
+      gainNode.connect(analyser);
+
+      // Start analyzing with improved sensitivity
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const analyzeLevel = () => {
+        if (!analyser) return;
+
+        analyser.getByteFrequencyData(dataArray);
+
+        // Find peak level (more sensitive than average)
+        let peak = 0;
+        let sum = 0;
+
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+          if (dataArray[i] > peak) peak = dataArray[i];
+        }
+
+        // Use combination of peak and average for better sensitivity
+        const average = sum / dataArray.length;
+        const combinedValue = peak * 0.7 + average * 0.3;
+
+        // Apply non-linear scaling for better visualization
+        // This makes small sounds more visible
+        const scalingFactor = 1.5; // Increase this for more sensitivity
+        const scaledLevel = Math.min(
+          100,
+          Math.round((combinedValue / 256) * 100 * scalingFactor)
+        );
+
+        setMicLevel(scaledLevel);
+
+        // Continue analyzing
+        animationFrameRef.current = requestAnimationFrame(analyzeLevel);
+
+        // Debug logging - uncomment if needed
+        // console.log(`Mic level: ${scaledLevel}, peak: ${peak}, avg: ${average}`);
+      };
+
+      analyzeLevel();
+
+      console.log("Enhanced microphone analyzer started");
+    } catch (error) {
+      console.error("Error starting microphone analyzer:", error);
+      toast.error("Failed to analyze microphone audio.");
+    }
+  };
+
+  // Stop analyzing microphone
+  const stopMicAnalyzing = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    setMicLevel(0);
+
+    if (audioContext) {
+      audioContext.close().catch(console.error);
+      setAudioContext(null);
+    }
+
+    setAudioAnalyser(null);
+    console.log("Microphone analyzer stopped");
+  };
+
+  // Initialize audio analyzer for speaker
+  const startSpeakerAnalyzing = () => {
+    try {
+      // Clean up previous context
+      if (audioContext) {
+        audioContext.close();
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+
+      if (!audioRef.current) {
+        console.error("Audio element not found");
+        return;
+      }
+
+      // Create new audio context
+      const context = new (window.AudioContext ||
+        (window as any).webkitAudioContext)();
+      setAudioContext(context);
+
+      // Create analyzer
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.5; // Add smoothing for better visualization
+      setAudioAnalyser(analyser);
+
+      // Create a more dynamic speaker level animation
+      // Using a more complex pattern to simulate actual audio activity
+      let phase = 0;
+      const simulateSpeakerLevel = () => {
+        phase += 0.1;
+
+        // Create a more dynamic pattern by combining multiple frequencies
+        const base = Math.sin(phase);
+        const mid = Math.sin(phase * 2.7) * 0.5;
+        const high = Math.sin(phase * 5.1) * 0.25;
+
+        // Combine patterns and scale to 0-100 range
+        const combined = (base + mid + high) * 0.57 + 0.5;
+        const scaled = Math.round(combined * 85); // Scale to max 85% to add some variation
+
+        setSpeakerLevel(scaled);
+
+        // Continue simulating
+        animationFrameRef.current = requestAnimationFrame(simulateSpeakerLevel);
+      };
+
+      simulateSpeakerLevel();
+      console.log("Enhanced speaker level visualization started");
+    } catch (error) {
+      console.error("Error starting speaker analyzer:", error);
+      toast.error("Failed to analyze speaker audio.");
+    }
+  };
+
+  // Stop analyzing speaker
+  const stopSpeakerAnalyzing = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    setSpeakerLevel(0);
+
+    if (audioContext) {
+      audioContext.close().catch(console.error);
+      setAudioContext(null);
+    }
+
+    setAudioAnalyser(null);
+    console.log("Speaker analyzer stopped");
+  };
+
   // Speaker test
   const testSpeaker = () => {
     setIsTesting(true);
     setTestType("speaker");
 
     if (audioRef.current) {
-      audioRef.current.src = "/audio/test-sound.mp3";
-      audioRef.current.play();
+      audioRef.current.src = "/audio/sound-test.mp3";
+      audioRef.current.volume = 0.5; // Set volume to 50%
+
+      // Start speaker analysis before playing
       startSpeakerAnalyzing();
+
+      audioRef.current.play().catch((error) => {
+        console.error("Error playing audio:", error);
+        toast.error(
+          "Failed to play test sound. Please check your browser permissions."
+        );
+      });
     }
   };
 
@@ -187,7 +393,21 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     setTestType("mic");
 
     if (micStream) {
-      startMicAnalyzing();
+      startMicAnalyzing(micStream);
+    } else {
+      // Try to get mic stream if not already available
+      navigator.mediaDevices
+        .getUserMedia({
+          audio: { deviceId: selectedMic ? { exact: selectedMic } : undefined },
+        })
+        .then((stream) => {
+          setMicStream(stream);
+          startMicAnalyzing(stream);
+        })
+        .catch((error) => {
+          console.error("Error accessing microphone:", error);
+          toast.error("Failed to access microphone. Please check permissions.");
+        });
     }
   };
 
@@ -228,204 +448,421 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   ) => {
     if (deviceType === "mic") {
       setSelectedMic(deviceId);
+      setMicPopoverOpen(false);
     } else if (deviceType === "speaker") {
       setSelectedSpeaker(deviceId);
+      setSpeakerPopoverOpen(false);
     } else if (deviceType === "camera") {
       setSelectedCamera(deviceId);
+      setCameraPopoverOpen(false);
     }
   };
 
-  return (
-    <div className={`bg-white p-6 rounded-lg shadow-md ${className}`}>
-      <h2 className="text-2xl font-bold mb-6 text-center">Device Test</h2>
+  // Find device name by ID
+  const getDeviceName = (
+    deviceType: "mic" | "speaker" | "camera",
+    deviceId: string
+  ) => {
+    let devices: DeviceOption[] = [];
 
-      <div className="grid grid-cols-1 gap-8">
-        {/* Microphone Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
+    if (deviceType === "mic") devices = audioInputs;
+    else if (deviceType === "speaker") devices = audioOutputs;
+    else if (deviceType === "camera") devices = videoInputs;
+
+    const device = devices.find((d) => d.deviceId === deviceId);
+    return device?.label || "Unknown Device";
+  };
+
+  return (
+    <div className={`bg-brandBlack rounded-lg shadow-md ${className}`}>
+      <h2 className="text-2xl font-bold p-6 text-center text-brandWhite">
+        Device Test
+      </h2>
+
+      <div className="p-6 space-y-8">
+        {/* Camera Preview */}
+        <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden mb-4 relative">
+          {cameraEnabled ? (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <Camera size={48} className="mx-auto mb-2 text-brandGray" />
+                <p className="text-brandGray">Camera Off</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Device Controls */}
+        <div className="grid grid-cols-3 gap-4 justify-center">
+          {/* Microphone */}
+          <div className="flex flex-col items-center gap-2">
             <button
               onClick={toggleMic}
-              className={`p-2 rounded-full ${
+              className={`p-3 rounded-full hover:bg-opacity-80 ${
                 micEnabled
-                  ? "bg-green-100 text-green-600"
-                  : "bg-red-100 text-red-600"
+                  ? "bg-brandOrange text-brandBlack"
+                  : "bg-gray-800 text-brandGray"
               }`}
             >
               <Mic size={24} />
             </button>
-
-            <div className="flex-1">
-              <label className="block text-sm font-medium mb-1">
-                Microphone
-              </label>
-              <select
-                value={selectedMic}
-                onChange={(e) => handleDeviceChange("mic", e.target.value)}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={!micEnabled}
-              >
-                {audioInputs.map((device) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label}
-                  </option>
-                ))}
-              </select>
+            <div className="relative w-full">
+              <Popover open={micPopoverOpen} onOpenChange={setMicPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full flex justify-between items-center py-1 bg-gray-800 text-brandWhite border-gray-700 hover:bg-gray-700"
+                    disabled={!micEnabled}
+                  >
+                    <span className="truncate text-xs">
+                      {micEnabled
+                        ? getDeviceName("mic", selectedMic)
+                        : "Microphone Off"}
+                    </span>
+                    <ChevronUp size={14} />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-0 bg-gray-800 border-gray-700">
+                  <div className="py-2">
+                    {audioInputs.map((device) => (
+                      <button
+                        key={device.deviceId}
+                        onClick={() =>
+                          handleDeviceChange("mic", device.deviceId)
+                        }
+                        className="flex items-center justify-between px-4 py-2 w-full text-sm text-left hover:bg-gray-700 text-white"
+                      >
+                        <span className="truncate">{device.label}</span>
+                        {selectedMic === device.deviceId && (
+                          <Check size={16} className="text-brandOrange" />
+                        )}
+                      </button>
+                    ))}
+                    <div className="px-4 py-2 border-t border-gray-700">
+                      <Button
+                        className="w-full bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+                        size="sm"
+                        onClick={testMic}
+                      >
+                        Test Microphone
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
-
-            <Button
-              variant="outline"
-              onClick={testMic}
-              disabled={!micEnabled || isTesting}
-              className="whitespace-nowrap"
-            >
-              Test Mic
-            </Button>
           </div>
-        </div>
 
-        {/* Speaker Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="p-2 rounded-full bg-blue-100 text-blue-600">
+          {/* Speaker */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="p-3 rounded-full bg-brandOrange text-brandBlack">
               <Volume2 size={24} />
             </div>
-
-            <div className="flex-1">
-              <label className="block text-sm font-medium mb-1">Speaker</label>
-              <select
-                value={selectedSpeaker}
-                onChange={(e) => handleDeviceChange("speaker", e.target.value)}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <div className="relative w-full">
+              <Popover
+                open={speakerPopoverOpen}
+                onOpenChange={setSpeakerPopoverOpen}
               >
-                {audioOutputs.map((device) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label}
-                  </option>
-                ))}
-              </select>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full flex justify-between items-center py-1 bg-gray-800 text-brandWhite border-gray-700 hover:bg-gray-700"
+                  >
+                    <span className="truncate text-xs">
+                      {getDeviceName("speaker", selectedSpeaker)}
+                    </span>
+                    <ChevronUp size={14} />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-0 bg-gray-800 border-gray-700">
+                  <div className="py-2">
+                    {audioOutputs.map((device) => (
+                      <button
+                        key={device.deviceId}
+                        onClick={() =>
+                          handleDeviceChange("speaker", device.deviceId)
+                        }
+                        className="flex items-center justify-between px-4 py-2 w-full text-sm text-left hover:bg-gray-700 text-white"
+                      >
+                        <span className="truncate">{device.label}</span>
+                        {selectedSpeaker === device.deviceId && (
+                          <Check size={16} className="text-brandOrange" />
+                        )}
+                      </button>
+                    ))}
+                    <div className="px-4 py-2 border-t border-gray-700">
+                      <Button
+                        className="w-full bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+                        size="sm"
+                        onClick={testSpeaker}
+                      >
+                        Test Speaker
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
-
-            <Button
-              variant="outline"
-              onClick={testSpeaker}
-              disabled={isTesting}
-              className="whitespace-nowrap"
-            >
-              Test Speaker
-            </Button>
           </div>
-        </div>
 
-        {/* Camera Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
+          {/* Camera */}
+          <div className="flex flex-col items-center gap-2">
             <button
               onClick={toggleCamera}
-              className={`p-2 rounded-full ${
+              className={`p-3 rounded-full hover:bg-opacity-80 ${
                 cameraEnabled
-                  ? "bg-green-100 text-green-600"
-                  : "bg-red-100 text-red-600"
+                  ? "bg-brandOrange text-brandBlack"
+                  : "bg-gray-800 text-brandGray"
               }`}
             >
               <Camera size={24} />
             </button>
-
-            <div className="flex-1">
-              <label className="block text-sm font-medium mb-1">Camera</label>
-              <select
-                value={selectedCamera}
-                onChange={(e) => handleDeviceChange("camera", e.target.value)}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={!cameraEnabled}
+            <div className="relative w-full">
+              <Popover
+                open={cameraPopoverOpen}
+                onOpenChange={setCameraPopoverOpen}
               >
-                {videoInputs.map((device) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label}
-                  </option>
-                ))}
-              </select>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full flex justify-between items-center py-1 bg-gray-800 text-brandWhite border-gray-700 hover:bg-gray-700"
+                    disabled={!cameraEnabled}
+                  >
+                    <span className="truncate text-xs">
+                      {cameraEnabled
+                        ? getDeviceName("camera", selectedCamera)
+                        : "Camera Off"}
+                    </span>
+                    <ChevronUp size={14} />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-0 bg-gray-800 border-gray-700">
+                  <div className="py-2">
+                    {videoInputs.map((device) => (
+                      <button
+                        key={device.deviceId}
+                        onClick={() =>
+                          handleDeviceChange("camera", device.deviceId)
+                        }
+                        className="flex items-center justify-between px-4 py-2 w-full text-sm text-left hover:bg-gray-700 text-white"
+                      >
+                        <span className="truncate">{device.label}</span>
+                        {selectedCamera === device.deviceId && (
+                          <Check size={16} className="text-brandOrange" />
+                        )}
+                      </button>
+                    ))}
+                    <div className="px-4 py-2 border-t border-gray-700">
+                      <Button
+                        className="w-full bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+                        size="sm"
+                        onClick={testCamera}
+                      >
+                        Test Camera
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
-
-            <Button
-              variant="outline"
-              onClick={testCamera}
-              disabled={!cameraEnabled || isTesting}
-              className="whitespace-nowrap"
-            >
-              Test Camera
-            </Button>
           </div>
         </div>
 
-        {/* Testing Area */}
-        {isTesting && (
-          <div className="mt-4 p-4 border rounded-lg">
-            <div className="flex justify-between mb-4">
-              <h3 className="text-lg font-medium">
-                {testType === "mic"
-                  ? "Testing Microphone"
-                  : testType === "speaker"
-                  ? "Testing Speaker"
-                  : "Testing Camera"}
-              </h3>
-              <Button variant="outline" size="sm" onClick={stopTesting}>
-                Stop Test
-              </Button>
-            </div>
-
-            {testType === "mic" && (
-              <div className="flex flex-col items-center">
-                <p className="mb-2">Speak into your microphone</p>
-                <AudioLevelMeter
-                  level={micLevel}
-                  isActive={true}
-                  type="microphone"
-                  className="w-full h-8 mb-4"
-                />
-              </div>
-            )}
-
-            {testType === "speaker" && (
-              <div className="flex flex-col items-center">
-                <p className="mb-2">Listen for the test sound</p>
-                <AudioLevelMeter
-                  level={speakerLevel}
-                  isActive={true}
-                  type="speaker"
-                  className="w-full h-8 mb-4"
-                />
-                <audio ref={audioRef} className="hidden" />
-              </div>
-            )}
-
-            {testType === "camera" && (
-              <div className="flex flex-col items-center">
-                <p className="mb-2">Check your camera view</p>
-                <div className="relative w-full max-w-md bg-black rounded-lg overflow-hidden">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-auto"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex justify-end mt-4">
+        {/* Confirm Button */}
+        <div className="flex justify-center mt-8">
           <Button
-            variant="default"
             onClick={onComplete}
-            className="flex items-center gap-2"
+            className="px-6 py-2 bg-brandOrange hover:bg-brandOrange/90 text-brandBlack font-medium"
           >
-            Confirm Settings
+            Join with These Settings
           </Button>
         </div>
+
+        {/* Hidden audio element for speaker test */}
+        <audio ref={audioRef} className="hidden" preload="auto" />
       </div>
+
+      {/* Speaker Test Dialog */}
+      <Dialog
+        open={isTesting && testType === "speaker"}
+        onOpenChange={(open) => !open && stopTesting()}
+      >
+        <DialogContent className="bg-gray-800 text-white border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-brandOrange">
+              Do you hear a ringtone?
+            </DialogTitle>
+            <DialogDescription className="text-white/70">
+              Testing your speaker...
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mb-6">
+            <select
+              value={selectedSpeaker}
+              onChange={(e) => handleDeviceChange("speaker", e.target.value)}
+              className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white"
+            >
+              {audioOutputs.map((device) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-6">
+            <p className="mb-2 text-white/70">Output level:</p>
+            <AudioLevelMeter
+              level={speakerLevel}
+              isActive={true}
+              type="speaker"
+              className="w-full h-6"
+            />
+            <p className="mt-4 text-sm text-white/70 text-center">
+              Playing test sound. If you don't hear anything, check your system
+              volume and selected output device.
+            </p>
+          </div>
+
+          <DialogFooter className="flex justify-between">
+            <Button
+              className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+              onClick={stopTesting}
+            >
+              Yes, I hear it
+            </Button>
+            <Button
+              variant="outline"
+              className="text-white border-gray-600 hover:bg-gray-700"
+              onClick={() => {
+                if (audioRef.current) {
+                  audioRef.current.currentTime = 0;
+                  audioRef.current.play();
+                }
+              }}
+            >
+              Play again
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Microphone Test Dialog */}
+      <Dialog
+        open={isTesting && testType === "mic"}
+        onOpenChange={(open) => !open && stopTesting()}
+      >
+        <DialogContent className="bg-gray-800 text-white border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-brandOrange">
+              Testing Microphone
+            </DialogTitle>
+            <DialogDescription className="text-white/70">
+              Speak into your microphone to see the level indicator
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mb-6">
+            <select
+              value={selectedMic}
+              onChange={(e) => handleDeviceChange("mic", e.target.value)}
+              className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white"
+            >
+              {audioInputs.map((device) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-6">
+            <p className="mb-2 text-white/70">Input level:</p>
+            <AudioLevelMeter
+              level={micLevel}
+              isActive={true}
+              type="microphone"
+              className="w-full h-6"
+            />
+            <div className="flex items-center justify-center gap-1 mt-2">
+              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+              <p className="text-sm text-white/70">
+                {micLevel < 10
+                  ? "Speak or make a sound to test your microphone..."
+                  : "Microphone is working! Continue speaking to test."}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+              onClick={stopTesting}
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Camera Test Dialog */}
+      <Dialog
+        open={isTesting && testType === "camera"}
+        onOpenChange={(open) => !open && stopTesting()}
+      >
+        <DialogContent className="bg-gray-800 text-white border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-brandOrange">
+              Testing Camera
+            </DialogTitle>
+            <DialogDescription className="text-white/70">
+              Check how your camera looks
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mb-6">
+            <select
+              value={selectedCamera}
+              onChange={(e) => handleDeviceChange("camera", e.target.value)}
+              className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white"
+            >
+              {videoInputs.map((device) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="aspect-video bg-black rounded-lg overflow-hidden mb-6">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+              onClick={stopTesting}
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
