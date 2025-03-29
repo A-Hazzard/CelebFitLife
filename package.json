@@ -37,6 +37,7 @@
     "react-slick": "^0.30.0",
     "recharts": "^2.15.1",
     "slick-carousel": "^1.8.1",
+    "sonner": "^2.0.2",
     "sooner": "^1.1.4",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",

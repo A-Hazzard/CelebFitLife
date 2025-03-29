@@ -1,10 +1,23 @@
-import { useState, useCallback, useEffect } from "react";
-import { listenToMessages, sendChatMessage } from "@/lib/services/ChatService";
-import { ChatMessage } from "@/lib/types/stream";
+import { useState, useEffect, useCallback } from "react";
+import { db } from "@/lib/config/firebase";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  addDoc,
+  onSnapshot,
+  serverTimestamp,
+} from "firebase/firestore";
 import { useAuthStore } from "@/lib/store/useAuthStore";
-import { createLogger } from "@/lib/utils/logger";
 
-const logger = createLogger("StreamChat");
+export interface ChatMessage {
+  id: string;
+  createdAt: string;
+  sender: string;
+  message: string;
+  isHost: boolean;
+}
 
 /**
  * Custom hook to manage chat functionality for streams.
@@ -16,68 +29,102 @@ const logger = createLogger("StreamChat");
 export const useStreamChat = (slug: string) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuthStore();
 
-  // Set up message listener
+  // Load and subscribe to messages
   useEffect(() => {
     if (!slug) {
-      logger.warn("No slug provided to useStreamChat hook");
+      console.error("No slug provided to useStreamChat hook");
       return;
     }
 
-    logger.info(`Setting up chat listener for stream: ${slug}`);
+    setIsLoading(true);
     setError(null);
 
-    const unsubscribe = listenToMessages(slug, (newMessages) => {
-      setMessages(newMessages);
-      logger.debug(
-        `Received ${newMessages.length} messages for stream: ${slug}`
-      );
-    });
+    // Create a query against the stream_chat collection
+    const chatRef = collection(db, "stream_chat");
+    const q = query(
+      chatRef,
+      where("streamSlug", "==", slug),
+      orderBy("createdAt", "asc")
+    );
 
+    // Create a listener for real-time updates
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const chatMessages: ChatMessage[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          chatMessages.push({
+            id: doc.id,
+            createdAt: data.createdAt?.toDate?.()
+              ? data.createdAt.toDate().toISOString()
+              : new Date().toISOString(),
+            sender: data.senderName || "Anonymous",
+            message: data.message || "",
+            isHost: data.isHost || false,
+          });
+        });
+        setMessages(chatMessages);
+        setIsLoading(false);
+      },
+      (err) => {
+        console.error("Error listening to chat messages:", err);
+        setError(
+          "Failed to load chat messages. Please try refreshing the page."
+        );
+        setIsLoading(false);
+      }
+    );
+
+    // Clean up the listener on unmount
     return () => {
-      logger.debug(`Cleaning up chat listener for stream: ${slug}`);
       unsubscribe();
     };
   }, [slug]);
 
-  // Handle sending messages
-  const handleSendMessage = useCallback(
-    async (e?: React.FormEvent) => {
-      if (e) e.preventDefault();
+  // Send a new message
+  const sendMessage = useCallback(async () => {
+    if (!newMessage.trim() || !currentUser) return;
 
-      if (!newMessage.trim()) {
-        logger.debug("Attempted to send empty message, ignoring");
-        return;
-      }
-
-      if (!currentUser) {
-        logger.warn("Attempted to send message without being logged in");
-        setError("You must be logged in to send messages");
-        return;
-      }
-
-      logger.debug(`Sending message to stream: ${slug}`);
+    try {
       setError(null);
 
-      try {
-        await sendChatMessage(
-          slug,
-          currentUser.username || currentUser.email || "Anonymous",
-          newMessage
-        );
+      // Check if user is host or admin
+      const isHost =
+        currentUser.role &&
+        (currentUser.role.streamer === true || currentUser.role.admin === true);
 
-        logger.debug("Message sent successfully");
-        setNewMessage("");
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Unknown error sending message";
-        logger.error(`Error sending message: ${errorMessage}`, err);
-        setError(errorMessage);
-      }
+      // Add a new document to the stream_chat collection
+      await addDoc(collection(db, "stream_chat"), {
+        streamSlug: slug,
+        senderId: currentUser.uid,
+        senderName:
+          currentUser.username ||
+          currentUser.email?.split("@")[0] ||
+          "Anonymous",
+        message: newMessage.trim(),
+        isHost: isHost || false,
+        createdAt: serverTimestamp(),
+      });
+
+      setNewMessage("");
+    } catch (err) {
+      console.error("Error sending chat message:", err);
+      setError("Failed to send your message. Please try again.");
+    }
+  }, [newMessage, slug, currentUser]);
+
+  // Handle form submission
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      sendMessage();
     },
-    [slug, newMessage, currentUser]
+    [sendMessage]
   );
 
   // Handle enter key press
@@ -85,18 +132,20 @@ export const useStreamChat = (slug: string) => {
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        handleSendMessage();
+        sendMessage();
       }
     },
-    [handleSendMessage]
+    [sendMessage]
   );
 
   return {
     messages,
     newMessage,
     setNewMessage,
-    handleSendMessage,
+    sendMessage,
+    handleSubmit,
     handleKeyPress,
+    isLoading,
     error,
   };
 };
