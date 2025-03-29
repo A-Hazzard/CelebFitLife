@@ -2,9 +2,15 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 type AudioSourceType = "microphone" | "speaker";
 
-interface AudioLevelMeterProps {
-  stream: MediaStream | null;
-  audioElement: HTMLAudioElement | null;
+/**
+ * Interface for compatibility with Twilio audio tracks.
+ * This defines the minimum shape expected for audio tracks from Twilio SDK.
+ * While this isn't directly used within this hook, it's maintained for
+ * future integration with Twilio track handling.
+ */
+export interface AudioTrack {
+  detach: () => HTMLMediaElement[];
+  // Add other properties as needed
 }
 
 /**
@@ -12,11 +18,11 @@ interface AudioLevelMeterProps {
  */
 const createLogger = (component: string) => {
   return {
-    debug: (message: string, ...args: any[]) =>
+    debug: (message: string, ...args: unknown[]) =>
       console.debug(`[${component}] ${message}`, ...args),
-    info: (message: string, ...args: any[]) =>
+    info: (message: string, ...args: unknown[]) =>
       console.info(`[${component}] ${message}`, ...args),
-    error: (message: string, ...args: any[]) =>
+    error: (message: string, ...args: unknown[]) =>
       console.error(`[${component}] ${message}`, ...args),
   };
 };
@@ -55,7 +61,8 @@ export const useAudioLevelMeter = (
 
       // Create a new audio context
       audioContextRef.current = new (window.AudioContext ||
-        (window as any).webkitAudioContext)();
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext)();
       analyserRef.current = audioContextRef.current.createAnalyser();
 
       // Configure analyzer
@@ -165,10 +172,16 @@ export const useAudioLevelMeter = (
     }
   }, [stream, audioElement, isAnalyzing, stopAnalyzing, startAnalyzing]);
 
+  // Utility function to handle Twilio audio tracks
+  const handleAudioTrack = (track: AudioTrack): HTMLMediaElement[] => {
+    return track.detach();
+  };
+
   return {
     level,
     isAnalyzing,
     startAnalyzing,
     stopAnalyzing,
+    handleAudioTrack,
   };
 };

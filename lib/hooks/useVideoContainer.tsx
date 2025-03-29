@@ -14,6 +14,28 @@ const logger = createLogger("useVideoContainer");
 type VideoTrack = LocalVideoTrack | RemoteVideoTrack;
 type AudioTrack = LocalAudioTrack | RemoteAudioTrack;
 
+// Extended interface for Twilio tracks
+interface TrackWithSid {
+  sid?: string;
+  id?: string;
+}
+
+// Type guard to check if a track has sid
+function hasTrackSid(
+  track: VideoTrack | AudioTrack
+): track is VideoTrack & TrackWithSid {
+  return "sid" in track;
+}
+
+interface TrackWithId {
+  id: string;
+}
+
+// Type guard to check if a track has id
+function hasTrackId(track: unknown): track is TrackWithId {
+  return typeof track === "object" && track !== null && "id" in track;
+}
+
 interface VideoElement {
   id: string;
   track: VideoTrack;
@@ -56,7 +78,9 @@ export const useVideoContainer = () => {
     );
 
     // Generate a unique ID for this track
-    const trackId = `video-${track.name || track.sid || Date.now()}`;
+    const trackId = `video-${
+      track.name || (hasTrackSid(track) ? track.sid : "") || Date.now()
+    }`;
 
     // Add to active tracks for cleanup
     activeTracksRef.current = [...activeTracksRef.current, track];
@@ -93,17 +117,24 @@ export const useVideoContainer = () => {
     const trackToRemove = videoElements.find(
       (e) =>
         e.id === trackIdOrSid ||
-        e.track.sid === trackIdOrSid ||
-        (e.track as any).id === trackIdOrSid
+        (hasTrackSid(e.track) && e.track.sid === trackIdOrSid) ||
+        (hasTrackId(e.track) && e.track.id === trackIdOrSid)
     );
 
     if (trackToRemove) {
       // Remove from active tracks
-      activeTracksRef.current = activeTracksRef.current.filter(
-        (t) =>
-          (t as any).id !== (trackToRemove.track as any).id &&
-          (t as any).sid !== trackToRemove.track.sid
-      );
+      activeTracksRef.current = activeTracksRef.current.filter((t) => {
+        const trackId = hasTrackId(t) ? t.id : "";
+        const removeTrackId = hasTrackId(trackToRemove.track)
+          ? trackToRemove.track.id
+          : "";
+        return (
+          trackId !== removeTrackId &&
+          (!hasTrackSid(t) ||
+            t.sid !==
+              (hasTrackSid(trackToRemove.track) ? trackToRemove.track.sid : ""))
+        );
+      });
 
       // Remove from state
       setVideoElements((prev) => prev.filter((e) => e.id !== trackToRemove.id));
@@ -156,12 +187,15 @@ export const VideoTrackRenderer = ({
     // Attach the track to the video element
     track.attach(videoRef.current);
 
+    // Capture videoRef.current in a variable inside the effect
+    const videoElement = videoRef.current;
+
     // Cleanup function
     return () => {
-      if (videoRef.current) {
+      if (videoElement) {
         // Detach the track if the component unmounts
         try {
-          track.detach(videoRef.current);
+          track.detach(videoElement);
         } catch (err) {
           logger.error("Error detaching track:", err);
         }

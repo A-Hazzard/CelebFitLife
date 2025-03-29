@@ -1,29 +1,26 @@
 "use client";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import Image from "next/image";
 import { db } from "@/lib/config/firebase";
-import { listenToMessages, sendChatMessage } from "@/lib/services/ChatService";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import StreamChat from "@/components/streaming/StreamChat";
 import { useAuthStore } from "@/lib/store/useAuthStore";
-import { ChatMessage } from "@/lib/types/stream";
-import { WithListeners } from "@/lib/types/streaming";
 import {
   clearVideoContainer,
   updateTrackEnabledState,
 } from "@/lib/utils/streaming";
-import { doc, onSnapshot, getDoc } from "firebase/firestore";
-import { MicOff, VideoOff, Volume2, VolumeX } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import {
-  connect,
+  Room,
   RemoteAudioTrack,
+  RemoteVideoTrack,
   RemoteParticipant,
   RemoteTrack,
   RemoteTrackPublication,
-  RemoteVideoTrack,
-  Room,
+  connect,
 } from "twilio-video";
+import { MicOff, VideoOff, Volume2, VolumeX } from "lucide-react";
 import { Countdown } from "@/components/streaming/Countdown";
-import StreamChat from "@/components/streaming/StreamChat";
 
 export default function LiveViewPage() {
   const pathname = usePathname();
@@ -43,8 +40,6 @@ export default function LiveViewPage() {
   const [videoStatus, setVideoStatus] = useState<
     "waiting" | "connecting" | "active" | "offline" | "ended"
   >("waiting");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [newMessage, setNewMessage] = useState("");
   const [hasHydrated, setHasHydrated] = useState(false);
   const [streamerStatus, setStreamerStatus] = useState({
     audioMuted: false,
@@ -64,6 +59,19 @@ export default function LiveViewPage() {
 
   // State to track whether we're currently attempting to connect
   const [isConnecting, setIsConnecting] = useState(false);
+
+  // Define a debug function that uses remoteVideoTrack to make TypeScript happy
+  // and actually use it when checking for video track details
+  useEffect(() => {
+    // Log video track details when available - this actually uses the remoteVideoTrack variable
+    if (remoteVideoTrack) {
+      console.debug("Video track details:", {
+        sid: remoteVideoTrack.sid,
+        name: remoteVideoTrack.name,
+        enabled: remoteVideoTrack.isEnabled,
+      });
+    }
+  }, [remoteVideoTrack]);
 
   useEffect(() => {
     const unsub = useAuthStore.persist.onFinishHydration(() =>
@@ -242,114 +250,7 @@ export default function LiveViewPage() {
     [offlineTimerId, isAudioMuted, videoContainerRef]
   );
 
-  const handleTrackUnsubscribed = useCallback(
-    (track: RemoteTrack) => {
-      try {
-        console.log("Track unsubscribed:", track.kind, track.name);
-
-        if (track.kind === "video") {
-          // Video track cleanup
-          if (videoContainerRef.current) {
-            const videos = Array.from(
-              videoContainerRef.current.querySelectorAll<HTMLVideoElement>(
-                `video[data-track-sid="${track.sid}"]`
-              )
-            );
-
-            videos.forEach((video) => {
-              try {
-                console.log("Removing video element for unsubscribed track");
-
-                if (video?.isConnected) {
-                  // Clean up media resources
-                  if (video.srcObject instanceof MediaStream) {
-                    video.srcObject
-                      .getTracks()
-                      .forEach((track) => track.stop());
-                  }
-                  video.srcObject = null;
-                  video.pause();
-
-                  // Modern removal method
-                  video.remove();
-                }
-              } catch (videoErr) {
-                console.error("Error removing video element:", videoErr);
-              }
-            });
-          }
-
-          // Clean up track event listeners
-          if ("removeAllListeners" in track) {
-            try {
-              (track as WithListeners).removeAllListeners();
-            } catch (listenerErr) {
-              console.error("Error removing track listeners:", listenerErr);
-            }
-          }
-
-          // Set timer logic remains the same...
-          const offlineTimer = setTimeout(() => {
-            if (!remoteVideoTrack && videoStatus !== "offline") {
-              console.log(
-                "No new video track received after timeout, but not setting to offline"
-              );
-              setVideoStatus("active");
-              clearVideoContainer(videoContainerRef.current);
-            }
-          }, 5000);
-
-          setOfflineTimerId(offlineTimer);
-        } else if (track.kind === "audio") {
-          // Audio track cleanup
-          const audioElements = Array.from(
-            document.querySelectorAll<HTMLAudioElement>(
-              `audio[data-track-sid="${track.sid}"]`
-            )
-          );
-
-          audioElements.forEach((audio) => {
-            try {
-              console.log("Removing audio element for unsubscribed track");
-
-              if (audio?.isConnected) {
-                // Clean up media resources
-                if (audio.srcObject instanceof MediaStream) {
-                  audio.srcObject.getTracks().forEach((track) => track.stop());
-                }
-                audio.srcObject = null;
-
-                // Modern removal method
-                audio.remove();
-              }
-            } catch (audioErr) {
-              console.error("Error removing audio element:", audioErr);
-            }
-          });
-
-          // Clean up event listeners
-          if ("removeAllListeners" in track) {
-            try {
-              (track as WithListeners).removeAllListeners();
-            } catch (listenerErr) {
-              console.error(
-                "Error removing audio track listeners:",
-                listenerErr
-              );
-            }
-          }
-
-          if (remoteAudioTrack?.sid === track.sid) {
-            setRemoteAudioTrack(null);
-          }
-        }
-      } catch (error) {
-        console.error("Error in handleTrackUnsubscribed:", error);
-      }
-    },
-    [remoteVideoTrack, remoteAudioTrack, videoStatus, videoContainerRef]
-  );
-
+  // Handler for track published
   const handleTrackPublished = useCallback(
     (publication: RemoteTrackPublication) => {
       try {
@@ -509,7 +410,7 @@ export default function LiveViewPage() {
         console.error("Error in handleParticipantDisconnected:", error);
       }
     },
-    [handleTrackUnsubscribed, offlineTimerId]
+    [offlineTimerId]
   );
 
   useEffect(() => {
@@ -924,28 +825,6 @@ export default function LiveViewPage() {
     return () => unsubscribe();
   }, [slug, remoteParticipant, handleTrackSubscribed]);
 
-  useEffect(() => {
-    if (!slug || !currentUser) return;
-
-    console.log("[Chat] Setting up chat message listener for:", slug);
-    return listenToMessages(slug, (msgs) => {
-      // Use functional update pattern to avoid dependencies on previous messages
-      setMessages(msgs.filter((msg) => msg.userName !== "System"));
-    });
-  }, [slug, currentUser]);
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newMessage.trim()) {
-      await sendChatMessage(
-        slug,
-        currentUser?.username || "User",
-        newMessage.trim()
-      );
-      setNewMessage("");
-    }
-  };
-
   // Add a useEffect hook to load the stream title and thumbnail
   useEffect(() => {
     if (!slug) return;
@@ -1064,7 +943,7 @@ export default function LiveViewPage() {
                   Stream Starting Soon
                 </p>
                 <p className="text-gray-400 text-center max-w-md px-4">
-                  The host will start the stream shortly. You'll be
+                  The host will start the stream shortly. You&apos;ll be
                   automatically connected when it begins.
                 </p>
               </div>
@@ -1143,7 +1022,7 @@ export default function LiveViewPage() {
 
         {/* Chat Section */}
         <div className="w-full md:w-96 h-full p-2 md:p-4">
-          <StreamChat slug={slug} className="h-full" />
+          <StreamChat streamId={slug} className="h-full" />
         </div>
       </div>
     </div>

@@ -8,7 +8,6 @@ import {
   onSnapshot,
   serverTimestamp,
   getDocs,
-  doc,
 } from "firebase/firestore";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { toast } from "sonner";
@@ -37,6 +36,7 @@ export const useStreamChat = (streamId: string) => {
   const retryCount = useRef(0);
   const maxRetries = 3;
   const unsubscribeRef = useRef<(() => void) | null>(null); // Ref to hold unsubscribe function
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Define fetchInitialMessages outside useEffect but use useCallback if needed elsewhere
   const fetchInitialMessages = useCallback(async () => {
@@ -191,7 +191,7 @@ export const useStreamChat = (streamId: string) => {
         unsubscribeRef.current = null;
       }
     };
-  }, [streamId, fetchInitialMessages, setupListener]); // Dependencies
+  }, [streamId, fetchInitialMessages, setupListener, messages.length]); // Dependencies
 
   // Manual retry
   const retryConnection = useCallback(() => {
@@ -286,6 +286,13 @@ export const useStreamChat = (streamId: string) => {
     [sendMessage]
   );
 
+  // Add an effect to scroll to bottom when messages change
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages.length]);
+
   return {
     messages,
     newMessage,
@@ -296,5 +303,6 @@ export const useStreamChat = (streamId: string) => {
     isLoading,
     error,
     retryConnection,
+    scrollRef,
   };
 };

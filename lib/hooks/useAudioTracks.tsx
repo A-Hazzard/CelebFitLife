@@ -8,6 +8,25 @@ const logger = createLogger("useAudioTracks");
 
 type AudioTrack = LocalAudioTrack | RemoteAudioTrack;
 
+// Extended interface for Twilio tracks
+interface TrackWithSid {
+  sid: string;
+}
+
+interface TrackWithId {
+  id: string;
+}
+
+// Type guard to check if a track has sid
+function hasTrackSid(track: AudioTrack): track is AudioTrack & TrackWithSid {
+  return "sid" in track;
+}
+
+// Type guard to check if a track has id
+function hasTrackId(track: unknown): track is TrackWithId {
+  return typeof track === "object" && track !== null && "id" in track;
+}
+
 interface AudioElement {
   id: string;
   track: AudioTrack;
@@ -37,7 +56,9 @@ export const useAudioTracks = () => {
     logger.info(`Adding ${track.kind} track (${track.name || "unnamed"})`);
 
     // Generate a unique ID for this track
-    const trackId = `audio-${track.name || track.sid || Date.now()}`;
+    const trackId = `audio-${
+      track.name || (hasTrackSid(track) ? track.sid : "") || Date.now()
+    }`;
 
     // Add to active tracks for cleanup
     activeTracksRef.current = [...activeTracksRef.current, track];
@@ -69,16 +90,23 @@ export const useAudioTracks = () => {
     const trackToRemove = audioElements.find(
       (e) =>
         e.id === trackIdOrSid ||
-        e.track.sid === trackIdOrSid ||
-        (e.track as any).id === trackIdOrSid
+        (hasTrackSid(e.track) && e.track.sid === trackIdOrSid) ||
+        (hasTrackId(e.track) && e.track.id === trackIdOrSid)
     );
 
     if (trackToRemove) {
       // Remove from active tracks
       activeTracksRef.current = activeTracksRef.current.filter(
         (t) =>
-          (t as any).id !== (trackToRemove.track as any).id &&
-          (t as any).sid !== trackToRemove.track.sid
+          !(
+            hasTrackId(t) &&
+            trackToRemove.track &&
+            hasTrackId(trackToRemove.track) &&
+            t.id === trackToRemove.track.id
+          ) &&
+          (!hasTrackSid(t) ||
+            !hasTrackSid(trackToRemove.track) ||
+            t.sid !== trackToRemove.track.sid)
       );
 
       // Remove from state
@@ -96,8 +124,8 @@ export const useAudioTracks = () => {
       prev.map((audio) => {
         if (
           audio.id === trackIdOrSid ||
-          audio.track.sid === trackIdOrSid ||
-          (audio.track as any).id === trackIdOrSid
+          (hasTrackSid(audio.track) && audio.track.sid === trackIdOrSid) ||
+          (hasTrackId(audio.track) && audio.track.id === trackIdOrSid)
         ) {
           return { ...audio, muted: !audio.muted };
         }
@@ -176,11 +204,14 @@ export const AudioTrackRenderer = ({
     // Set initial muted state
     audioRef.current.muted = muted;
 
+    // Capture audioRef.current in a variable inside the effect
+    const audioElement = audioRef.current;
+
     // Cleanup function
     return () => {
-      if (audioRef.current) {
+      if (audioElement) {
         try {
-          track.detach(audioRef.current);
+          track.detach(audioElement);
         } catch (err) {
           logger.error("Error detaching audio track:", err);
         }

@@ -1,13 +1,5 @@
 import { db } from "@/lib/config/firebase";
-import {
-  doc,
-  collection,
-  getDocs,
-  getDoc,
-  query,
-  where,
-  orderBy,
-} from "firebase/firestore";
+import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
 
 export interface Stream {
   id: string;

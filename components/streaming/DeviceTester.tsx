@@ -33,7 +33,7 @@ const SMOOTHING_MIC = 0.3;
 const GAIN_MIC = 2.0; // Adjusted gain
 const FFT_SIZE_SPEAKER = 256;
 const SMOOTHING_SPEAKER = 0.6;
-const VERBOSE_LOGGING = true; // TEMPORARY: Enable logging for debugging
+const VERBOSE_LOGGING = false; // Disable verbose logging for production
 
 const DeviceTester: React.FC<DeviceTesterProps> = ({
   onComplete,
@@ -78,7 +78,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Update refs for audio nodes (keep these as refs)
   const micAnalyserRef = useRef<AnalyserNode | null>(null);
@@ -87,55 +87,35 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   const speakerAnalyserRef = useRef<AnalyserNode | null>(null);
   const speakerSourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
 
+  // Add ref for speaker analysis cleanup function
+  const speakerAnalysisCleanupRef = useRef<(() => void) | null>(null);
+
   // --- Utility Functions ---
   const cleanupMicAnalysis = useCallback(() => {
-    if (VERBOSE_LOGGING) console.log("Cleaning up mic analysis resources");
-
-    // Cancel animation frame first
+    // Cancel any running animation frame
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
 
-    // Disconnect audio nodes in reverse order
+    // Return mic level to 0
+    setMicLevel(0);
+
+    // Disconnect audio nodes to free resources
+    if (micSourceNodeRef.current) {
+      micSourceNodeRef.current.disconnect();
+      micSourceNodeRef.current = null;
+    }
+
     if (micGainNodeRef.current) {
-      try {
-        micGainNodeRef.current.disconnect();
-      } catch (e) {
-        if (VERBOSE_LOGGING) console.warn("Error disconnecting gain node:", e);
-      }
+      micGainNodeRef.current.disconnect();
       micGainNodeRef.current = null;
     }
 
     if (micAnalyserRef.current) {
-      try {
-        micAnalyserRef.current.disconnect();
-      } catch (e) {
-        if (VERBOSE_LOGGING)
-          console.warn("Error disconnecting analyser node:", e);
-      }
+      micAnalyserRef.current.disconnect();
       micAnalyserRef.current = null;
     }
-
-    if (micSourceNodeRef.current) {
-      try {
-        micSourceNodeRef.current.disconnect();
-      } catch (e) {
-        if (VERBOSE_LOGGING)
-          console.warn("Error disconnecting source node:", e);
-      }
-      micSourceNodeRef.current = null;
-    }
-
-    // Stop audio tracks
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach((track) => {
-        track.stop();
-      });
-      micStreamRef.current = null;
-    }
-
-    setMicLevel(0);
   }, []);
 
   const cleanupSpeakerAnalysis = useCallback(() => {
@@ -170,6 +150,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
     // Reset levels
     setSpeakerLevel(0);
+    currentSpeakerLevelRef.current = 0; // Reset speaker level ref
   }, []);
 
   const closeAudioContext = useCallback(() => {
@@ -187,12 +168,14 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     if (!currentContext || currentContext.state === "closed") {
       try {
         currentContext = new (window.AudioContext ||
-          (window as any).webkitAudioContext)();
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext)();
         setAudioContext(currentContext);
         if (VERBOSE_LOGGING)
           console.log("Created new AudioContext. State:", currentContext.state);
-      } catch (e) {
-        console.error("Failed to create AudioContext:", e);
+      } catch (error: unknown) {
+        const err = error as { name?: string; message?: string }; // Assert type for err
+        console.error("Failed to create AudioContext:", err.message);
         toast.error("Web Audio API is not supported or blocked.");
         return null;
       }
@@ -229,7 +212,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
       }
 
       // Get new stream
-      let constraints: MediaStreamConstraints = {
+      const constraints: MediaStreamConstraints = {
         audio: deviceId
           ? {
               deviceId: { exact: deviceId },
@@ -354,27 +337,17 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
   // --- Test Initiation ---
   const handleTestSpeaker = useCallback(() => {
-    setSpeakerLevel(0);
-    setTestType("speaker");
     setIsTesting(true);
-
+    setTestType("speaker");
     // Note: The actual audio setup and analysis is now handled by the useEffect
     if (VERBOSE_LOGGING) console.log("Test speaker requested");
   }, []);
 
-  const handleTestMic = useCallback(async () => {
-    setMicLevel(0);
-    setTestType("mic");
+  const handleTestMic = useCallback(() => {
     setIsTesting(true);
-
+    setTestType("mic");
     // Note: The actual stream acquisition and analysis is now handled by the useEffect
     if (VERBOSE_LOGGING) console.log("Test mic requested");
-  }, []);
-
-  const handleTestCamera = useCallback(() => {
-    setIsTesting(true);
-    setTestType("camera");
-    // No specific action needed other than opening the dialog
   }, []);
 
   const stopTesting = useCallback(() => {
@@ -391,8 +364,6 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     // Cleanup analysis resources
     cleanupMicAnalysis();
     cleanupSpeakerAnalysis();
-    // Consider closing context only if BOTH are fully stopped and no longer needed
-    // closeAudioContext();
   }, [cleanupMicAnalysis, cleanupSpeakerAnalysis]);
 
   // --- Analysis Logic ---
@@ -559,7 +530,11 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
               // Apply level calculation with better scaling for visualization
               const average = sum / dataArray.length;
 
-              console.log(`DEBUG - Peak: ${peak}, Avg: ${average.toFixed(1)}`);
+              if (VERBOSE_LOGGING) {
+                console.log(
+                  `DEBUG - Peak: ${peak}, Avg: ${average.toFixed(1)}`
+                );
+              }
 
               // Apply a noise floor threshold - any signal below this is considered noise
               const noiseFloor = 10; // Lower threshold to allow more sensitivity
@@ -577,11 +552,13 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                 );
               }
 
-              console.log(
-                `DEBUG - Adjusted Peak: ${adjustedPeak}, Calculated Level: ${level.toFixed(
-                  1
-                )}`
-              );
+              if (VERBOSE_LOGGING) {
+                console.log(
+                  `DEBUG - Adjusted Peak: ${adjustedPeak}, Calculated Level: ${level.toFixed(
+                    1
+                  )}`
+                );
+              }
 
               // Use the ref for comparison instead of the state dependency
               if (
@@ -630,122 +607,145 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   }, [getAudioContext, cleanupMicAnalysis]);
 
   const startSpeakerAnalysis = useCallback(() => {
+    if (!audioContext || !audioRef.current) {
+      console.warn(
+        "Cannot start speaker analysis: AudioContext or audio element not ready."
+      );
+      return;
+    }
+
+    // Declare analyser and sourceNode at the function scope
+    let analyser: AnalyserNode | null = null;
+    let sourceNode:
+      | MediaStreamAudioSourceNode
+      | MediaElementAudioSourceNode
+      | null = null;
+
+    // Ensure speaker source node ref is cleared
+    speakerSourceNodeRef.current = null;
+
     try {
-      if (VERBOSE_LOGGING) console.log("Starting speaker analysis");
-      const context = getAudioContext();
-      if (!context) {
-        console.error("Failed to get audio context");
-        toast.error("Failed to initialize audio context for speaker test");
-        return;
-      }
+      // Create Analyser node
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = FFT_SIZE_SPEAKER;
+      analyser.smoothingTimeConstant = SMOOTHING_SPEAKER;
+      speakerAnalyserRef.current = analyser;
 
-      if (!audioRef.current) {
-        console.error("No audio element available for speaker analysis");
-        toast.error("Speaker test audio not ready");
-        return;
-      }
+      // Create MediaElementSourceNode
+      console.log("Creating source node from audio element");
+      sourceNode = audioContext.createMediaElementSource(audioRef.current);
+      speakerSourceNodeRef.current = sourceNode; // Store in ref
+    } catch (error: unknown) {
+      const err = error as { name?: string; message?: string };
+      console.error("Error creating initial audio nodes:", err.message);
 
-      // Clean up existing analyzer
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
+      if (err.name === "InvalidStateError") {
+        console.error(
+          "Audio element already connected. Recreating audio element and source node."
+        );
+        // Recreate audio element
+        const newAudioEl = new Audio("/audio/test-speaker.mp3");
+        newAudioEl.loop = true;
+        if (audioRef.current) audioRef.current.pause();
+        audioRef.current = newAudioEl;
 
-      speakerSourceNodeRef.current?.disconnect();
-      speakerAnalyserRef.current?.disconnect();
-
-      try {
-        if (VERBOSE_LOGGING)
-          console.log("Creating source node from audio element");
-        const sourceNode = context.createMediaElementSource(audioRef.current);
-        speakerSourceNodeRef.current = sourceNode;
-
-        const analyser = context.createAnalyser();
-        analyser.fftSize = FFT_SIZE_SPEAKER;
-        analyser.smoothingTimeConstant = SMOOTHING_SPEAKER;
-        speakerAnalyserRef.current = analyser;
-
-        // Connect audio to both analyzer and speakers
-        sourceNode.connect(analyser);
-        sourceNode.connect(context.destination);
-        if (VERBOSE_LOGGING)
-          console.log("Speaker audio nodes connected successfully");
-
-        // Create visualization
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        let time = 0;
-        let frameCount = 0;
-
-        const runVisualization = () => {
-          if (!speakerAnalyserRef.current) {
-            if (VERBOSE_LOGGING)
-              console.log("Speaker analysis loop stopping: Analyser cleared");
-            return;
-          }
-
+        if (audioRef.current) {
+          audioRef.current.oncanplaythrough = () => {
+            audioRef.current
+              ?.play()
+              .catch((e) => console.error("Play error:", e));
+          };
+          // Try recreating source node
           try {
-            speakerAnalyserRef.current.getByteFrequencyData(dataArray);
-
-            // Calculate real level from frequency data
-            let sum = 0;
-            let peak = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-              sum += dataArray[i];
-              if (dataArray[i] > peak) peak = dataArray[i];
+            if (!audioContext || !audioRef.current) {
+              throw new Error(
+                "Context or element null during source recreation."
+              );
             }
-
-            // Also add a sine wave pattern for visual feedback
-            const baseLevel = (sum / dataArray.length / 255) * 80;
-            time += 0.1;
-
-            // Combine real audio data with a sine wave for better visual feedback
-            // This helps even if the audio is quiet or browser doesn't provide real data
-            const pulseFactor = (Math.sin(time) + 1) / 2; // 0 to 1 range
-            const pulseAmount = 20; // Max additional percentage to add
-
-            // Final level with pulse effect
-            const level = Math.min(100, baseLevel + pulseFactor * pulseAmount);
-
-            if (
-              frameCount % 2 === 0 ||
-              Math.abs(level - currentSpeakerLevelRef.current) > 1
-            ) {
-              currentSpeakerLevelRef.current = level; // Update ref
-              setSpeakerLevel(level);
-              if (VERBOSE_LOGGING && frameCount % 15 === 0) {
-                console.log(
-                  `Speaker level: ${level.toFixed(
-                    1
-                  )}, Base: ${baseLevel.toFixed(1)}, Pulse: ${(
-                    pulseFactor * pulseAmount
-                  ).toFixed(1)}`
-                );
-              }
-            }
-
-            frameCount++;
-            animationFrameRef.current = requestAnimationFrame(runVisualization);
-          } catch (error) {
-            console.error("Error in speaker visualization loop:", error);
-            setSpeakerLevel(0);
-            currentSpeakerLevelRef.current = 0; // Reset ref on error
+            // Assign to the higher-scoped sourceNode
+            sourceNode = audioContext.createMediaElementSource(
+              audioRef.current
+            );
+            speakerSourceNodeRef.current = sourceNode; // Update ref
+            console.info("Successfully recreated media element source node.");
+          } catch (recreateError: unknown) {
+            const errRecreate = recreateError as { message?: string };
+            console.error(
+              "Error recreating media element source:",
+              errRecreate.message
+            );
+            sourceNode = null; // Ensure sourceNode is null on error
+            speakerSourceNodeRef.current = null;
           }
-        };
+        } else {
+          console.error("Failed to create new audio element.");
+          sourceNode = null; // Ensure sourceNode is null if element creation failed
+          speakerSourceNodeRef.current = null;
+        }
+      } else {
+        // For other errors during initial node creation
+        console.error("Unhandled error during speaker analysis setup:", err);
+        toast.error("Failed to set up speaker test");
+        cleanupSpeakerAnalysis();
+        return; // Stop execution if initial setup failed critically
+      }
+    }
 
-        // Start visualization loop
-        runVisualization();
-        if (VERBOSE_LOGGING) console.log("Speaker visualization started");
-      } catch (error) {
-        console.error("Failed to create speaker analysis nodes:", error);
-        toast.error("Failed to initialize speaker analyzer");
+    // Connect nodes if sourceNode and analyser were successfully created/recreated
+    if (sourceNode && analyser) {
+      try {
+        sourceNode.connect(analyser);
+        analyser.connect(audioContext.destination);
+        console.log("Connected speaker source -> analyser -> destination");
+
+        // Start analysis loop
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let animationFrameId: number;
+
+        const analyse = () => {
+          if (!analyser) return;
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const average = sum / dataArray.length;
+          const level = Math.min(
+            100,
+            Math.round((average / 255) * 100 * GAIN_MIC)
+          );
+
+          // Update speaker level only if it changed significantly
+          if (Math.abs(level - currentSpeakerLevelRef.current) > 0.5) {
+            currentSpeakerLevelRef.current = level; // Update ref
+            setSpeakerLevel(level);
+          }
+
+          animationFrameId = requestAnimationFrame(analyse);
+        };
+        animationFrameId = requestAnimationFrame(analyse);
+
+        // Store cleanup function for animation frame
+        speakerAnalysisCleanupRef.current = () => {
+          cancelAnimationFrame(animationFrameId);
+        };
+      } catch (connectError: unknown) {
+        const errConnect = connectError as { message?: string };
+        console.error(
+          "Error connecting speaker analysis nodes:",
+          errConnect.message
+        );
+        toast.error("Failed to connect speaker analyzer");
         cleanupSpeakerAnalysis();
       }
-    } catch (error) {
-      console.error("Critical error in startSpeakerAnalysis:", error);
-      toast.error("Failed to set up speaker test");
+    } else {
+      console.error(
+        "Failed to create source or analyser node, cannot start analysis."
+      );
+      toast.error("Failed to initialize speaker analyzer components.");
       cleanupSpeakerAnalysis();
     }
-  }, [getAudioContext, cleanupSpeakerAnalysis]);
+  }, [audioContext, cleanupSpeakerAnalysis]);
 
   // Update the microphone related useEffect with better error handling
   useEffect(() => {
@@ -780,6 +780,9 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         cleanupMicAnalysis();
       };
     }
+
+    // Return empty cleanup function when not testing microphone
+    return () => {};
   }, [
     isTesting,
     testType,
@@ -840,6 +843,15 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
       if (VERBOSE_LOGGING) console.log("Setting up speaker test");
       let hasErrored = false; // Flag to prevent multiple error toasts
 
+      // Clean up any previous audio element and connections
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
+
+      // Clean up existing analyzer and nodes
+      cleanupSpeakerAnalysis();
+
       // Audio element for speaker test
       const audioEl = new Audio("/audio/test-speaker.mp3");
       if (VERBOSE_LOGGING)
@@ -852,7 +864,6 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
             console.log(
               `Attempting to set audio output device to: ${selectedSpeaker}`
             );
-          // @ts-ignore - setSinkId exists but TypeScript doesn't know about it
           if (audioEl.setSinkId && typeof audioEl.setSinkId === "function") {
             audioEl
               .setSinkId(selectedSpeaker)
@@ -874,6 +885,9 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           console.error("Error setting audio sink:", err);
         }
       }
+
+      // Save reference for cleanup
+      audioRef.current = audioEl;
 
       audioEl.oncanplaythrough = () => {
         if (VERBOSE_LOGGING)
@@ -902,19 +916,19 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         }
       };
 
-      // Save reference for cleanup
-      audioRef.current = audioEl;
-
       return () => {
         if (VERBOSE_LOGGING) console.log("Cleaning up speaker test");
+        cleanupSpeakerAnalysis();
         if (audioRef.current) {
           audioRef.current.pause();
           audioRef.current.src = "";
           audioRef.current = null;
         }
-        cleanupSpeakerAnalysis();
       };
     }
+
+    // Return empty cleanup function when not testing speaker
+    return () => {};
   }, [
     isTesting,
     testType,
@@ -924,10 +938,6 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   ]);
 
   // --- UI Handlers ---
-  const togglePopover = (type: "mic" | "speaker" | "camera") => {
-    setPopoverStates((prev) => ({ ...prev, [type]: !prev[type] }));
-  };
-
   const handleDeviceChange = (
     deviceType: "mic" | "speaker" | "camera",
     deviceId: string
@@ -1232,8 +1242,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
               />
             </div>
             <p className="text-xs text-gray-400 text-center pt-2">
-              If you don't hear anything, check system volume and the selected
-              output device.
+              If you don&apos;t hear anything, check system volume and the
+              selected output device.
             </p>
           </div>
           <DialogFooter className="justify-between sm:justify-between">
@@ -1241,11 +1251,29 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
               variant="outline"
               className="text-gray-300 border-gray-600 hover:bg-gray-700"
               onClick={() => {
+                // Complete reset for "Play Again"
                 if (audioRef.current) {
+                  // First stop and clean up everything
+                  cleanupSpeakerAnalysis();
+                  audioRef.current.pause();
+
+                  // Reset the audio element
                   audioRef.current.currentTime = 0;
+
+                  // Play again and restart analysis - Add null check
                   audioRef.current
-                    .play()
-                    .catch((err) => console.error("Replay failed:", err));
+                    ?.play()
+                    .then(() => {
+                      startSpeakerAnalysis();
+                    })
+                    .catch((err) => {
+                      console.error("Replay failed:", err);
+                      toast.error("Failed to replay test sound");
+                    });
+                } else {
+                  console.warn(
+                    "Play Again clicked but audio element ref is null."
+                  );
                 }
               }}
             >
@@ -1336,17 +1364,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   );
 };
 
-// Helper CSS classes (consider moving to a global CSS or Tailwind plugin)
+// Helper CSS classes for UI components
 const popoverItem =
   "flex items-center justify-between px-3 py-1.5 w-full text-xs text-left hover:bg-gray-700 text-white rounded-sm cursor-pointer";
-const dialogSelectClasses =
-  "w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:ring-brandOrange focus:border-brandOrange";
-
-// Inject helper classes (Example - requires setup for actual injection or use Tailwind directly)
-// For demonstration, assume these classes exist or are applied inline/via CSS modules
-/*
-.popover-item { @apply flex items-center justify-between px-3 py-1.5 w-full text-xs text-left hover:bg-gray-700 text-white rounded-sm cursor-pointer; }
-.dialog-select { @apply w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:ring-brandOrange focus:border-brandOrange; }
-*/
 
 export default DeviceTester;

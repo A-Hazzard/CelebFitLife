@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Share, Video, VideoOff, Mic, MicOff, X } from "lucide-react";
+import { Settings, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Stream } from "@/lib/services/StreamService";
 import { toast } from "sonner";
@@ -71,16 +71,16 @@ const StreamManager: React.FC<StreamManagerProps> = ({
     try {
       // In a real implementation, this would connect to Twilio or other streaming service
       // For now, we'll just show local video as a placeholder
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: true,
         video: true,
       });
 
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        videoRef.current.srcObject = mediaStream;
       }
 
-      localStreamRef.current = stream;
+      localStreamRef.current = mediaStream;
       setIsStreaming(true);
       setStreamingTimer(0);
       toast.success("Stream started successfully!");
@@ -224,7 +224,7 @@ const StreamManager: React.FC<StreamManagerProps> = ({
               title="Share stream"
               className="border-gray-700 text-brandWhite hover:bg-gray-800"
             >
-              <Share size={18} />
+              <Settings size={18} />
             </Button>
 
             {isStreaming ? (

@@ -49,8 +49,8 @@ export default function ManageStreamPage() {
         <div className="text-center p-8">
           <h2 className="text-2xl font-bold mb-4">Stream Not Found</h2>
           <p className="text-gray-400">
-            The stream you're looking for doesn't exist or you don't have
-            permission to access it.
+            The stream you&apos;re looking for doesn&apos;t exist or you
+            don&apos;t have permission to access it.
           </p>
         </div>
       </div>

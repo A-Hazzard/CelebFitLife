@@ -296,7 +296,7 @@ export const safelyDetachTrack = (track: LocalVideoTrack | LocalAudioTrack) => {
     // Attempt to stop again as a fallback
     try {
       track.stop();
-    } catch (stopErr) {
+    } catch {
       /* ignore secondary error */
     }
   }

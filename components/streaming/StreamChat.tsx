@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useRef, useEffect } from "react";
 import { useStreamChat } from "@/lib/hooks/useStreamChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,6 @@ const StreamChat: React.FC<StreamChatProps> = ({
     messages,
     newMessage,
     setNewMessage,
-    sendMessage,
     handleSubmit,
     handleKeyPress,
     isLoading,
@@ -36,7 +35,8 @@ const StreamChat: React.FC<StreamChatProps> = ({
   // Helper to format time - consider moving to a utils file if used elsewhere
   const formatTime = (timestamp: string) => {
     try {
-      return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+      const date = new Date(timestamp);
+      return formatDistanceToNow(date, { addSuffix: true });
     } catch (e) {
       console.warn("Error formatting time:", e);
       return "Just now";
