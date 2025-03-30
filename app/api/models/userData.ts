@@ -43,4 +43,5 @@ export interface UserData {
     maxStreamers: number;
   }
   selectedPlan?: string;
+  userId?: string;
 }

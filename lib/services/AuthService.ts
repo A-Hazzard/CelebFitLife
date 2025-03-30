@@ -2,6 +2,7 @@ import { UserService } from "./UserService";
 import { UserCreateDTO, UserLoginDTO, UserResponseDTO } from "../models/User";
 import { ApiError, ErrorTypes } from "../utils/errorHandler";
 import { comparePasswords, createUserResponse } from "../utils/authUtils";
+import { RegistrationData } from "@/lib/types/auth";
 
 /**
  * Service for handling authentication operations
@@ -31,16 +32,23 @@ export class AuthService {
 
   async login(credentials: UserLoginDTO): Promise<UserResponseDTO> {
     try {
+      console.log("Attempting to log in with:", credentials);
       const user = await this.userService.findByEmail(credentials.email);
       
-      if (!user) throw ErrorTypes.UNAUTHORIZED("Invalid email or password");
+      if (!user) {
+        console.error("User not found");
+        throw ErrorTypes.UNAUTHORIZED("Invalid email or password");
+      }
       
       const isPasswordValid = await comparePasswords(
         credentials.password,
         user.password!
       );
 
-      if (!isPasswordValid) throw ErrorTypes.UNAUTHORIZED("Invalid email or password");
+      if (!isPasswordValid) {
+        console.error("Invalid password");
+        throw ErrorTypes.UNAUTHORIZED("Invalid email or password");
+      }
       
       return createUserResponse(user, true);
     } catch (error) {
@@ -69,4 +77,48 @@ export class AuthService {
     }
   }
 
+  async registerUser(data: RegistrationData): Promise<void> {
+    try {
+      // API call to register user
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Registration failed');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw error;
+    }
+  }
+
+  async loginUser(email: string, password: string): Promise<UserResponseDTO> {
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Login failed');
+      }
+
+      return await response.json(); // Assuming the response is of type UserResponseDTO
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
+  }
 }

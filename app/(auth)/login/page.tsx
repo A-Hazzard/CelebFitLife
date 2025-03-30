@@ -129,16 +129,7 @@ function LoginPageContent() {
               animate="visible"
               custom={1}
             >
-              <div className="flex gap-4">
-                <Input
-                  placeholder="First Name"
-                  className="flex-1 bg-[#111827] text-white border border-gray-700 px-4 py-3 rounded"
-                />
-                <Input
-                  placeholder="Last Name"
-                  className="flex-1 bg-[#111827] text-white border border-gray-700 px-4 py-3 rounded"
-                />
-              </div>
+              
             </motion.div>
 
             <motion.div

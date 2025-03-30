@@ -2,6 +2,7 @@ import { db, convertDocToObj } from "../utils/firebaseAdmin";
 import { User, UserCreateDTO } from "../models/User";
 import { ApiError, ErrorTypes } from "../utils/errorHandler";
 import { hashPassword } from "../utils/authUtils";
+import { getAuth } from "firebase/auth"; // Import Firebase Auth
 
 /**
  * Service for managing users in the database
@@ -25,18 +26,21 @@ export class UserService {
 
 
   async findByEmail(email: string): Promise<User | null> {
-    try {
-      const snapshot = await this.usersCollection
-        .where("email", "==", email)
-        .limit(1)
-        .get();
-      if (snapshot.empty) return null;
-      
-      return convertDocToObj<User>(snapshot.docs[0]);
-    } catch (error) {
-      console.error("Error finding user by email:", error);
-      throw error;
+    const auth = getAuth(); // Get the current authentication instance
+    const user = auth.currentUser; // Get the currently logged-in user
+
+    if (!user) {
+      throw new Error("User is not authenticated");
     }
+
+    const snapshot = await this.usersCollection
+      .where("email", "==", email)
+      .limit(1)
+      .get(); // Remove the headers argument
+
+    if (snapshot.empty) return null;
+
+    return convertDocToObj<User>(snapshot.docs[0]);
   }
 
   async findByUsername(username: string): Promise<User | null> {

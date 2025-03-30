@@ -2,69 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useSignupStore } from "@/lib/store/useSignupStore";
-import { useRouter } from "next/navigation";
-import {FormEvent, useState} from "react";
-import { registerUser } from "@/lib/helpers/auth";
-import { RegistrationData } from "@/lib/types/auth";
+import { useRegistrationForm } from "@/lib/hooks/useRegistrationForm";
 
 export default function BasicInfo() {
-  const { nextStep } = useSignupStore();
-  const router = useRouter();
-
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
-  const [country, setCountry] = useState("");
-  const [city, setCity] = useState("");
-  const [age, setAge] = useState("");
-  const [acceptedTnC, setAcceptedTnC] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    try {
-      const ageNum = parseInt(age, 10);
-      const registrationData: RegistrationData = {
-        username,
-        email,
-        password,
-        phone,
-        country,
-        city,
-        age: ageNum,
-        acceptedTnC,
-      };
-      await registerUser(registrationData);
-
-      nextStep({
-        username,
-        email,
-        password,
-        phone,
-        country,
-        city,
-        age: ageNum,
-        role: {
-          viewer: true,
-          streamer: false,
-          admin: false
-        }
-      });
-
-      router.push("/login");
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { formData, error, loading, handleInputChange, handleSubmit } = useRegistrationForm();
 
   return (
     <div>
@@ -76,59 +17,67 @@ export default function BasicInfo() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           type="text"
+          name="username"
           placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          value={formData.username}
+          onChange={handleInputChange}
           required
         />
         <Input
           type="email"
+          name="email"
           placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={formData.email}
+          onChange={handleInputChange}
           required
         />
         <Input
           type="password"
+          name="password"
           placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          value={formData.password}
+          onChange={handleInputChange}
           required
         />
         <Input
           type="text"
+          name="phone"
           placeholder="Phone Number"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          value={formData.phone}
+          onChange={handleInputChange}
           required
         />
         <Input
           type="text"
+          name="country"
           placeholder="Country"
-          value={country}
-          onChange={(e) => setCountry(e.target.value)}
+          value={formData.country}
+          onChange={handleInputChange}
           required
         />
         <Input
           type="text"
+          name="city"
           placeholder="City"
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
+          value={formData.city}
+          onChange={handleInputChange}
           required
         />
         <Input
           type="number"
+          name="age"
           placeholder="Age"
-          value={age}
-          onChange={(e) => setAge(e.target.value)}
+          value={formData.age}
+          onChange={handleInputChange}
           required
         />
 
         <label className="flex items-center space-x-2">
           <input
             type="checkbox"
-            checked={acceptedTnC}
-            onChange={() => setAcceptedTnC(!acceptedTnC)}
+            name="acceptedTnC"
+            checked={formData.acceptedTnC}
+            onChange={handleInputChange}
           />
           <span className="text-sm">I accept the Terms & Conditions</span>
         </label>

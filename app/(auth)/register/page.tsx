@@ -10,15 +10,27 @@ import Stepper from '@/components/ui/Stepper';
 export default function RegisterPage() {
   const { step } = useSignupStore();
 
+  // Render different step components based on current step
+  const renderStepComponent = () => {
+    switch (step) {
+      case 1:
+        return <BasicInfo />;
+      case 2:
+        return <SelectPlan />;
+      case 3:
+        return <Payment />;
+      case 4:
+        return <SelectStreamers />;
+      default:
+        return <BasicInfo />;
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-brandBlack text-brandWhite">
       <div className="w-full max-w-md px-6 py-8">
         <Stepper currentStep={step} />
-
-        {step === 1 && <BasicInfo />}
-        {step === 2 && <SelectPlan />}
-        {step === 3 && <Payment />}
-        {step === 4 && <SelectStreamers />}
+        {renderStepComponent()}
       </div>
     </div>
   );

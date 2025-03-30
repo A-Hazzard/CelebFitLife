@@ -18,13 +18,32 @@ export type StreamingProfileData = {
 };
 
 // Streaming page types
+export type Stream = {
+  id: string;
+  title: string;
+  createdAt?: string;
+  endedAt?: string;
+  hasEnded?: boolean;
+  [key: string]: any;
+};
+
 export type Streamer = {
-  name: string;
-  quote: string;
-  tags: string[];
-  followers: number;
-  specialty: string;
-  imageUrl: string;
+  id: string;
+  streamerName: string;
+  email: string;
+  Category: string;
+  Tags: string[];
+  streamID: string;
+  streams: Stream[];
+  categoryName?: string;
+  tagNames?: string[];
+  thumbnail?: string;
+  quote?: string;
+};
+
+export type EnrichedStreamer = Streamer & {
+  categoryName: string;
+  tagNames: string[];
 };
 
 // Stream data for creation

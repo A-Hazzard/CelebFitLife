@@ -1,28 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
-import { Laptop, Users, DollarSign, Play, X, LogOut } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Laptop, Users, DollarSign, Play, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import DashboardAreaChart from "@/components/dashboard/AreaChart";
 import {
-  STREAM_CATEGORIES,
-  STREAM_TAGS,
   DASHBOARD_METRICS_DATA,
 } from "@/lib/uiConstants";
 import { StreamingProfileData } from "@/lib/types/streaming";
 import { createStreamProfile } from "@/lib/helpers/streaming";
+import { Category, Tag, fetchCategoriesWithTags } from "@/lib/store/categoriesStore";
 
-// Streaming Profile Modal
-const StreamingProfileModal = ({
-  isOpen,
-  onClose,
-  onSubmit,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (data: StreamingProfileData) => void;
-}) => {
+export default function DashboardPage() {
+  const router = useRouter();
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [profileData, setProfileData] = useState<StreamingProfileData>({
     streamName: "",
     category: "",
@@ -34,6 +28,25 @@ const StreamingProfileModal = ({
       twitter: "",
     },
   });
+  const { clearUser } = useAuthStore();
+
+  useEffect(() => {
+    const loadCategoriesAndTags = async () => {
+      try {
+        const result = await fetchCategoriesWithTags();
+        if (result.success) {
+          setCategories(result.categoriesWithTags);
+          setTags(result.categoriesWithTags.flatMap(category => category.tags)); // Extract tags from categories
+        } else {
+          console.error("Failed to fetch categories and tags");
+        }
+      } catch (error) {
+        console.error("Error loading categories and tags:", error);
+      }
+    };
+
+    loadCategoriesAndTags();
+  }, []);
 
   const handleTagToggle = (tag: string) => {
     setProfileData((prev) => ({
@@ -45,184 +58,17 @@ const StreamingProfileModal = ({
   };
 
   const handleSubmit = () => {
-    // Basic validation
     if (profileData.streamName && profileData.category) {
-      onSubmit(profileData);
-      onClose();
+      createStreamProfile(profileData);
+      setIsProfileModalOpen(false);
     } else {
       alert("Please fill in stream name and category");
     }
   };
 
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-      <div className="bg-brandBlack border border-brandOrange/30 rounded-xl p-8 w-full max-w-md relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-brandWhite hover:text-brandOrange"
-        >
-          <X className="w-6 h-6" />
-        </button>
-        <h2 className="text-3xl font-bold text-brandOrange mb-6 text-center">
-          Set Up Your Stream Profile
-        </h2>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-brandWhite mb-2">Stream Name</label>
-            <input
-              type="text"
-              value={profileData.streamName}
-              onChange={(e) =>
-                setProfileData((prev) => ({
-                  ...prev,
-                  streamName: e.target.value,
-                }))
-              }
-              className="w-full px-4 py-3 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
-              placeholder="Enter your stream name"
-            />
-          </div>
-
-          <div>
-            <label className="block text-brandWhite mb-2">
-              Stream Category
-            </label>
-            <select
-              value={profileData.category}
-              onChange={(e) =>
-                setProfileData((prev) => ({
-                  ...prev,
-                  category: e.target.value,
-                }))
-              }
-              className="w-full px-4 py-3 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
-            >
-              <option value="">Select Category</option>
-              {STREAM_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-brandWhite mb-2">
-              Stream Description
-            </label>
-            <textarea
-              value={profileData.description}
-              onChange={(e) =>
-                setProfileData((prev) => ({
-                  ...prev,
-                  description: e.target.value,
-                }))
-              }
-              className="w-full px-4 py-3 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
-              placeholder="Describe your stream"
-              rows={3}
-            />
-          </div>
-
-          <div>
-            <label className="block text-brandWhite mb-2">Stream Tags</label>
-            <div className="flex flex-wrap gap-2">
-              {STREAM_TAGS.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => handleTagToggle(tag)}
-                  className={`
-                    px-3 py-1 rounded-full text-sm transition-all
-                    ${
-                      profileData.tags.includes(tag)
-                        ? "bg-brandOrange text-brandBlack"
-                        : "bg-brandBlack border border-brandOrange/30 text-brandWhite"
-                    }
-                  `}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-brandWhite mb-2">
-              Social Links (Optional)
-            </label>
-            <input
-              type="text"
-              value={profileData.socialLinks.instagram}
-              onChange={(e) =>
-                setProfileData((prev) => ({
-                  ...prev,
-                  socialLinks: {
-                    ...prev.socialLinks,
-                    instagram: e.target.value,
-                  },
-                }))
-              }
-              className="w-full px-4 py-3 mb-2 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
-              placeholder="Instagram Profile URL"
-            />
-            <input
-              type="text"
-              value={profileData.socialLinks.youtube}
-              onChange={(e) =>
-                setProfileData((prev) => ({
-                  ...prev,
-                  socialLinks: { ...prev.socialLinks, youtube: e.target.value },
-                }))
-              }
-              className="w-full px-4 py-3 mb-2 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
-              placeholder="YouTube Channel URL"
-            />
-            <input
-              type="text"
-              value={profileData.socialLinks.twitter}
-              onChange={(e) =>
-                setProfileData((prev) => ({
-                  ...prev,
-                  socialLinks: { ...prev.socialLinks, twitter: e.target.value },
-                }))
-              }
-              className="w-full px-4 py-3 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
-              placeholder="Twitter Profile URL"
-            />
-          </div>
-
-          <button
-            onClick={handleSubmit}
-            className="w-full bg-brandOrange text-brandBlack py-3 rounded-full hover:opacity-90 transition-all"
-          >
-            Save Stream Profile
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default function DashboardPage() {
-  const router = useRouter();
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const { clearUser } = useAuthStore();
-
-  const handleGoLive = () => {
-    router.push("/dashboard/streams/new");
-  };
-
-  const handleStreamProfileSubmit = async (data: StreamingProfileData) => {
-    await createStreamProfile(data);
-  };
-
   const handleLogout = () => {
-    clearUser(); // Clear user from auth store
-    router.push("/login"); // Redirect to login page
+    clearUser();
+    router.push("/login");
   };
 
   const statsCards = [
@@ -263,13 +109,13 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => setIsProfileModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-brandWhite text-brandBlack
+            className="flex items-center gap-2 px-6 py-3 bg-brandOrange text-brandBlack
             rounded-full font-semibold hover:bg-opacity-90 transition-colors"
           >
-            Set Up Stream
+            Set Up Stream Profile
           </button>
           <button
-            onClick={handleGoLive}
+            onClick={() => router.push("/dashboard/streams/new")}
             className="flex items-center gap-2 px-6 py-3 bg-brandOrange text-brandBlack
             rounded-full font-semibold hover:bg-opacity-90 transition-colors"
           >
@@ -302,11 +148,152 @@ export default function DashboardPage() {
         <DashboardAreaChart data={DASHBOARD_METRICS_DATA} />
       </div>
 
-      <StreamingProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-        onSubmit={handleStreamProfileSubmit}
-      />
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-brandBlack border border-brandOrange/30 rounded-xl p-6 sm:p-8 w-full max-w-lg relative">
+            <button
+              onClick={() => setIsProfileModalOpen(false)}
+              className="absolute top-4 right-4 text-brandWhite hover:text-brandOrange"
+            >
+              X
+            </button>
+            <h2 className="text-2xl sm:text-3xl font-bold text-brandOrange mb-4 text-center">
+              Set Up Your Stream Profile
+            </h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-brandWhite mb-2">Stream Name</label>
+                <input
+                  type="text"
+                  value={profileData.streamName}
+                  onChange={(e) =>
+                    setProfileData((prev) => ({
+                      ...prev,
+                      streamName: e.target.value,
+                    }))
+                  }
+                  className="w-full px-4 py-3 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
+                  placeholder="Enter your stream name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-brandWhite mb-2">Stream Category</label>
+                <select
+                  value={profileData.category}
+                  onChange={(e) =>
+                    setProfileData((prev) => ({
+                      ...prev,
+                      category: e.target.value,
+                    }))
+                  }
+                  className="w-full px-4 py-3 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
+                >
+                  <option value="">Select Category</option>
+                  {categories.map((category) => (
+                    <option key={category.name} value={category.name}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-brandWhite mb-2">Stream Description</label>
+                <textarea
+                  value={profileData.description}
+                  onChange={(e) =>
+                    setProfileData((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
+                  className="w-full px-4 py-3 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
+                  placeholder="Describe your stream"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <label className="block text-brandWhite mb-2">Stream Tags</label>
+                <div className="flex flex-wrap gap-2">
+                  {tags && tags.length > 0 ? (
+                    tags.map((tag) => (
+                      <button
+                        key={tag.name}
+                        type="button"
+                        onClick={() => handleTagToggle(tag.name)}
+                        className={`px-3 py-1 rounded-full text-sm transition-all ${
+                          profileData.tags.includes(tag.name)
+                            ? "bg-brandOrange text-brandBlack"
+                            : "bg-brandBlack border border-brandOrange/30 text-brandWhite"
+                        }`}
+                      >
+                        {tag.name}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="text-brandWhite">No tags available</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-brandWhite mb-2">
+                  Social Links (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={profileData.socialLinks.instagram}
+                  onChange={(e) =>
+                    setProfileData((prev) => ({
+                      ...prev,
+                      socialLinks: {
+                        ...prev.socialLinks,
+                        instagram: e.target.value,
+                      },
+                    }))
+                  }
+                  className="w-full px-4 py-3 mb-2 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
+                  placeholder="Instagram Profile URL"
+                />
+                <input
+                  type="text"
+                  value={profileData.socialLinks.youtube}
+                  onChange={(e) =>
+                    setProfileData((prev) => ({
+                      ...prev,
+                      socialLinks: { ...prev.socialLinks, youtube: e.target.value },
+                    }))
+                  }
+                  className="w-full px-4 py-3 mb-2 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
+                  placeholder="YouTube Channel URL"
+                />
+                <input
+                  type="text"
+                  value={profileData.socialLinks.twitter}
+                  onChange={(e) =>
+                    setProfileData((prev) => ({
+                      ...prev,
+                      socialLinks: { ...prev.socialLinks, twitter: e.target.value },
+                    }))
+                  }
+                  className="w-full px-4 py-3 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-lg"
+                  placeholder="Twitter Profile URL"
+                />
+              </div>
+
+              <button
+                onClick={handleSubmit}
+                className="w-full bg-brandOrange text-brandBlack py-3 rounded-full hover:opacity-90 transition-all"
+              >
+                Save Stream Profile
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

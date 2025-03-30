@@ -1,121 +1,53 @@
 "use client";
-import { Search, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
+
+import {
+  Search,
+  ChevronDown,
+  ChevronUp,
+  ChevronRight,
+} from "lucide-react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
-import React, { useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { fetchCategoriesWithTags } from "@/lib/store/categoriesStore";
 import { Category, Tag } from "@/lib/store/categoriesStore";
-import {
-  MOCK_STREAMERS,
-  DISCOVER_STREAMERS,
-  SLIDER_SETTINGS,
-} from "@/lib/uiConstants";
-import { Streamer } from "@/lib/types/streaming";
-import { filterStreamers } from "@/lib/utils/streaming";
-
-const StreamerCard: React.FC<{ streamer: Streamer }> = ({ streamer }) => {
-  return (
-    <div className="bg-brandBlack border border-brandOrange/30 p-4 md:p-5 rounded-xl shadow-lg hover:shadow-2xl">
-      <div className="flex items-center mb-4 space-x-3 md:space-x-4">
-        <div
-          className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-cover bg-center border-2 border-brandOrange/30"
-          style={{ backgroundImage: `url(${streamer.imageUrl})` }}
-        />
-        <div>
-          <div className="flex items-center space-x-2">
-            <h3 className="text-base md:text-lg font-bold text-brandWhite">
-              {streamer.name}
-            </h3>
-            <span className="bg-brandOrange text-brandBlack text-xs px-2 py-1 rounded-full">
-              {streamer.specialty}
-            </span>
-          </div>
-          <p className="text-xs md:text-sm text-brandOrange/70">
-            {streamer.followers.toLocaleString()} Followers
-          </p>
-        </div>
-      </div>
-
-      <p className="text-xs md:text-sm text-brandWhite/70 italic mb-4">
-        &ldquo;{streamer.quote}&rdquo;
-      </p>
-
-      <div className="flex space-x-2 overflow-x-auto pb-1">
-        {streamer.tags.map((tag: string, tagIndex: number) => (
-          <span
-            key={tagIndex}
-            className="flex-shrink-0 bg-brandBlack border border-brandOrange/30 text-xs px-2 py-1 rounded-full text-brandOrange"
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-};
+import { SLIDER_SETTINGS } from "@/lib/uiConstants";
+import { useStreamerStore } from "@/lib/store/useStreamerStore";
+import StreamerCard from "@/components/streamPage/StreamerCard";
 
 export default function UserDashboard() {
-  const [visibleDiscoverStreamers, setVisibleDiscoverStreamers] =
-    React.useState(3);
-  const [isTagsOpen, setIsTagsOpen] = React.useState(false);
-  const [categories, setCategories] = React.useState<
-    (Category & { tags: Tag[] })[]
-  >([]);
-  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
-  const [expandedCategory, setExpandedCategory] = React.useState<string | null>(
-    null
-  );
-  const [selectedCategories, setSelectedCategories] = React.useState<string[]>(
+  const [visibleDiscoverStreamers, setVisibleDiscoverStreamers] = useState(6);
+  const [isTagsOpen, setIsTagsOpen] = useState(false);
+  const [categories, setCategories] = useState<(Category & { tags: Tag[] })[]>(
     []
   );
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  
 
-  const filteredStreamers = useMemo(
-    () => filterStreamers(MOCK_STREAMERS, selectedCategories, selectedTags),
-    [selectedCategories, selectedTags]
-  );
+  const { streamers, fetchAll } = useStreamerStore();
 
-  const filteredDiscoverStreamers = useMemo(
-    () => filterStreamers(DISCOVER_STREAMERS, selectedCategories, selectedTags),
-    [selectedCategories, selectedTags]
-  );
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const loadCategoriesAndTags = async () => {
-      try {
-        const result = await fetchCategoriesWithTags();
-        if (result.success) {
-          setCategories(
-            result.categoriesWithTags as (Category & { tags: Tag[] })[]
-          );
-        } else {
-          console.error("Failed to fetch categories and tags");
-          alert("Failed to load categories and tags");
-        }
-      } catch (error) {
-        console.error("Error in loadCategoriesAndTags:", error);
+      const result = await fetchCategoriesWithTags();
+      if (result.success) {
+        setCategories(result.categoriesWithTags);
+      } else {
+        alert("Failed to load categories and tags");
       }
     };
 
     loadCategoriesAndTags();
   }, []);
 
-  const loadMoreStreamers = () => {
-    setVisibleDiscoverStreamers((prev) =>
-      Math.min(prev + 3, DISCOVER_STREAMERS.length)
-    );
-  };
-
   const toggleCategory = (categoryName: string) => {
-    // If the category is already expanded, collapse it
-    if (expandedCategory === categoryName) {
-      setExpandedCategory(null);
-    } else {
-      // Set the new expanded category
-      setExpandedCategory(categoryName);
-    }
-
-    // Toggle category selection
+    setExpandedCategory((prev) => (prev === categoryName ? null : categoryName));
     setSelectedCategories((prev) =>
       prev.includes(categoryName)
         ? prev.filter((cat) => cat !== categoryName)
@@ -131,52 +63,59 @@ export default function UserDashboard() {
     );
   };
 
-  React.useEffect(() => {
-    if (categories.length > 0) {
-      // This is just for demo purposes - to ensure streamers match available categories
-      console.log("Categories loaded:", categories);
-    }
-  }, [categories]);
+  const loadMoreStreamers = () => {
+    setVisibleDiscoverStreamers((prev) => prev + 3);
+  };
+
+  // Filter streamers based on selected categories
+  const filteredStreamers = streamers.filter((streamer) =>
+    selectedCategories.length === 0 || 
+    (streamer.categoryName && selectedCategories.includes(streamer.categoryName))
+  );
+  const uniqueStreamers = Array.from(
+    new Map(streamers.map(s => [s.streamID, s])).values()
+  );
+  
 
   return (
     <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite font-inter">
+      {/* 🔍 Search Header */}
       <header className="flex items-center justify-between p-4 md:p-6 bg-brandBlack border-b border-brandOrange/30">
-        <div className="w-10 md:w-1/4"></div>
-
+        <div className="w-10 md:w-1/4" />
         <div className="relative w-full max-w-md mx-auto">
           <input
             type="text"
-            placeholder="Search streamers, workouts, tags..."
-            className="w-full px-3 py-2 md:px-4 md:py-2 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-full focus:outline-none focus:ring-2 focus:ring-brandOrange text-sm md:text-base"
+            placeholder="Search streamers..."
+            className="w-full px-4 py-2 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-full focus:outline-none focus:ring-2 focus:ring-brandOrange text-sm"
           />
-          <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-brandOrange w-4 h-4 md:w-5 md:h-5" />
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-brandOrange w-5 h-5" />
         </div>
-
-        <div className="flex items-center space-x-2 md:space-x-4 justify-end w-10 md:w-1/4">
-          <div className="w-8 h-8 md:w-10 md:h-10 bg-brandOrange/20 rounded-full"></div>
-          <div className="w-8 h-8 md:w-10 md:h-10 bg-brandOrange/20 rounded-full"></div>
-          <div className="w-8 h-8 md:w-10 md:h-10 bg-brandOrange/20 rounded-full"></div>
+        <div className="flex items-center space-x-2 justify-end w-10 md:w-1/4">
+          <div className="w-8 h-8 bg-brandOrange/20 rounded-full" />
+          <div className="w-8 h-8 bg-brandOrange/20 rounded-full" />
+          <div className="w-8 h-8 bg-brandOrange/20 rounded-full" />
         </div>
       </header>
 
+      {/* 🧱 Main Layout */}
       <main className="flex flex-col p-4 md:p-6 space-y-6">
         <div className="flex flex-col md:flex-row space-y-6 md:space-y-0 md:space-x-6">
+          {/* 🎞 MY STREAMERS */}
           <section className="w-full md:w-3/4 space-y-6">
             <h2 className="text-xl md:text-2xl font-bold text-brandWhite">
               MY STREAMERS
             </h2>
             <Slider {...SLIDER_SETTINGS}>
-              {filteredStreamers.map((streamer, index) => (
-                <div
-                  key={index}
-                  className="p-2 md:p-4 transform transition-all duration-300 hover:scale-105"
-                >
-                  <StreamerCard streamer={streamer} />
-                </div>
-              ))}
-            </Slider>
+  {uniqueStreamers.slice(0, 3).map((streamer, index) => (
+    <div key={index} className="px-2 md:p-4 transform transition-all duration-300 hover:scale-105">
+      <StreamerCard streamer={streamer} />
+    </div>
+  ))}
+</Slider>
+
           </section>
 
+          {/* 🎛 CATEGORY SIDEBAR */}
           <aside className="w-full md:w-1/5 bg-brandBlack border border-brandOrange/30 rounded-xl">
             <div
               className="flex justify-between items-center p-3 cursor-pointer md:cursor-default"
@@ -195,33 +134,19 @@ export default function UserDashboard() {
             </div>
 
             <div
-              className={`
-              ${isTagsOpen ? "block" : "hidden"} 
-              md:block 
-              space-y-1 p-2 pt-0
-            `}
+              className={`${isTagsOpen ? "block" : "hidden"} md:block space-y-1 p-2 pt-0`}
             >
               {categories.map((category) => (
                 <div key={category.name} className="mb-1">
                   <div
-                    className={`
-                      flex justify-between items-center 
-                      bg-brandBlack border border-brandOrange/30 
-                      p-2 rounded-lg hover:bg-brandOrange/10 
-                      transition-colors cursor-pointer
-                      ${
-                        selectedCategories.includes(category.name)
-                          ? "bg-brandOrange/20"
-                          : ""
-                      }
-                    `}
+                    className={`flex justify-between items-center bg-brandBlack border border-brandOrange/30 p-2 rounded-lg hover:bg-brandOrange/10 transition-colors cursor-pointer ${
+                      selectedCategories.includes(category.name) ? "bg-brandOrange/20" : ""
+                    }`}
                     onClick={() => toggleCategory(category.name)}
                   >
-                    <div className="flex items-center space-x-1">
-                      <span className="text-xs font-semibold text-brandWhite">
-                        {category.name}
-                      </span>
-                    </div>
+                    <span className="text-xs font-semibold text-brandWhite">
+                      {category.name}
+                    </span>
                     <ChevronRight
                       className={`text-brandOrange transform transition-transform ${
                         expandedCategory === category.name ? "rotate-90" : ""
@@ -239,16 +164,11 @@ export default function UserDashboard() {
                             e.stopPropagation();
                             toggleTagSelection(tag.name);
                           }}
-                          className={`
-                            bg-brandBlack border border-brandOrange/30 
-                            text-[10px] p-1 rounded-lg 
-                            hover:bg-brandOrange/20 transition-colors
-                            ${
-                              selectedTags.includes(tag.name)
-                                ? "bg-brandOrange text-brandBlack"
-                                : "text-brandWhite"
-                            }
-                          `}
+                          className={`bg-brandBlack border border-brandOrange/30 text-[10px] p-1 rounded-lg hover:bg-brandOrange/20 transition-colors ${
+                            selectedTags.includes(tag.name)
+                              ? "bg-brandOrange text-brandBlack"
+                              : "text-brandWhite"
+                          }`}
                         >
                           {tag.name}
                         </button>
@@ -261,62 +181,31 @@ export default function UserDashboard() {
           </aside>
         </div>
 
+        {/* 🔥 DISCOVER SECTION (cleaned up!) */}
         <section className="space-y-6">
-          <h2 className="text-xl md:text-2xl font-bold text-brandWhite">
-            DISCOVER
-          </h2>
+          <h2 className="text-xl md:text-2xl font-bold text-brandWhite">DISCOVER</h2>
           <p className="text-xs md:text-sm text-brandOrange/70">
             What fits your needs from your previous tags?
           </p>
+
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
-            {filteredDiscoverStreamers
-              .slice(0, visibleDiscoverStreamers)
-              .map((streamer, index) => (
-                <div
-                  key={index}
-                  className="transform transition-all duration-300 hover:scale-105"
-                >
-                  <div className="bg-brandBlack border border-brandOrange/30 p-4 md:p-5 rounded-xl shadow-lg hover:shadow-2xl">
-                    <div className="flex items-center mb-4 space-x-3 md:space-x-4">
-                      <div
-                        className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-cover bg-center border-2 border-brandOrange/30"
-                        style={{ backgroundImage: `url(${streamer.imageUrl})` }}
-                      />
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h3 className="text-base md:text-lg font-bold text-brandWhite">
-                            {streamer.name}
-                          </h3>
-                          <span className="bg-brandOrange text-brandBlack text-xs px-2 py-1 rounded-full">
-                            {streamer.specialty}
-                          </span>
-                        </div>
-                        <p className="text-xs md:text-sm text-brandOrange/70">
-                          {streamer.followers.toLocaleString()} Followers
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="text-xs md:text-sm text-brandWhite/70 italic mb-4">
-                      &ldquo;{streamer.quote}&rdquo;
-                    </p>
-
-                    <div className="flex space-x-2 overflow-x-auto pb-1">
-                      {streamer.tags.map((tag, tagIndex) => (
-                        <span
-                          key={tagIndex}
-                          className="flex-shrink-0 bg-brandBlack border border-brandOrange/30 text-xs px-2 py-1 rounded-full text-brandOrange"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
+            {filteredStreamers.slice(0, visibleDiscoverStreamers).map((streamer, index) => (
+              <div
+                key={index}
+                className="transform transition-all duration-300 hover:scale-105"
+              >
+                <StreamerCard streamer={{
+                  ...streamer,
+                  streams: streamer.streams.map(stream => ({
+                    ...stream,
+                    hasEnded: stream.hasEnded || false
+                  }))
+                }} />
+              </div>
+            ))}
           </div>
 
-          {visibleDiscoverStreamers < DISCOVER_STREAMERS.length && (
+          {visibleDiscoverStreamers < filteredStreamers.length && (
             <div className="flex justify-center mt-6">
               <button
                 onClick={loadMoreStreamers}
