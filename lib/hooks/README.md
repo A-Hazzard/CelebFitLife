@@ -70,7 +70,7 @@ const {
 
 ### `useTwilioViewerConnection`
 
-Manages viewer-side Twilio video connections.
+Manages viewer-side Twilio video connections with automatic reconnection handling.
 
 **Usage:**
 ```tsx
@@ -78,6 +78,7 @@ const {
   isConnected,
   isConnecting,
   error,
+  reconnectAttempts,
   disconnect,
 } = useTwilioViewerConnection(slug, userName, videoContainerRef);
 ```
@@ -109,6 +110,68 @@ const {
 } = useStreamSchedule(scheduledAt, isLive);
 ```
 
+### `useStreamerControls`
+
+Manages the streamer's camera and microphone controls with Firestore synchronization.
+
+**Usage:**
+```tsx
+const {
+  isMicEnabled,
+  isVideoEnabled,
+  toggleMic,
+  toggleVideo,
+  streamState,
+} = useStreamerControls(streamId, localMediaStream);
+```
+
+### `useStreamStatusMonitor`
+
+Monitors stream status updates for viewers with real-time updates for camera and mic status.
+
+**Usage:**
+```tsx
+const {
+  streamerStatus,
+  hasStarted,
+  hasEnded,
+  streamDuration,
+} = useStreamStatusMonitor(streamId);
+```
+
+### `useStreamConnection`
+
+Manages connection to a Twilio room with retry logic and error handling.
+
+**Usage:**
+```tsx
+const {
+  room,
+  remoteParticipant,
+  connectionState,
+  connectionError,
+  connect,
+  disconnect,
+} = useStreamConnection(streamId, userName);
+```
+
+### `useMountedRef`
+
+Utility hook that provides a ref indicating if a component is mounted, useful for preventing updates after unmount.
+
+**Usage:**
+```tsx
+const isMountedRef = useMountedRef();
+
+useEffect(() => {
+  fetchData().then(data => {
+    if (isMountedRef.current) {
+      setState(data);
+    }
+  });
+}, []);
+```
+
 ## File Structure
 
 Each hook should be in its own file, named after the hook:
@@ -120,6 +183,10 @@ Each hook should be in its own file, named after the hook:
 - `useTwilioViewerConnection.ts` - For managing viewer connections to streams
 - `useStreamChat.ts` - For managing chat functionality
 - `useStreamSchedule.ts` - For handling scheduled streams and countdowns
+- `useStreamerControls.ts` - For managing streamer's camera and mic controls
+- `useStreamStatusMonitor.ts` - For monitoring stream status in real-time
+- `useStreamConnection.ts` - For managing Twilio room connections
+- `useMountedRef.ts` - For component mount state tracking
 
 Additionally, we may have index files to organize and export related hooks:
 
@@ -135,6 +202,9 @@ Additionally, we may have index files to organize and export related hooks:
 5. **Documentation**: Document each hook with JSDoc comments explaining its purpose, parameters, and return values.
 6. **Error Handling**: Include error handling and loading states where appropriate.
 7. **Testing**: Write unit tests for hooks using React Testing Library.
+8. **Use Refs for Cleanup Flags**: Consider using refs like `isMountedRef` to prevent state updates after unmount.
+9. **Handle Device Changes**: For media hooks, handle device changes (connect/disconnect) gracefully.
+10. **Optimize Re-renders**: Memoize return values and callback functions where appropriate.
 
 ## Adding New Hooks
 
@@ -142,4 +212,6 @@ When adding new hooks, consider:
 1. Is the hook focused on a single responsibility?
 2. Can it be reused across multiple components?
 3. Is it properly typed and documented?
-4. Does it handle cleanup properly? 
+4. Does it handle cleanup properly?
+5. Does it handle error states and loading states?
+6. Is it responsive to changes in its dependencies? 

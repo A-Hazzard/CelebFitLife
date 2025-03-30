@@ -8,7 +8,7 @@ export interface User {
   id?: string;
   email: string;
   username: string;
-  password?: string; // Only used for registration/login, not stored in response objects
+  password?: string; 
   createdAt: string;
   age?: number;
   city?: string;
@@ -44,5 +44,5 @@ export interface UserResponseDTO {
   phone?: string;
   role: Role;
   isAdmin: boolean;
-  token?: string; // JWT token
+  token?: string; 
 }

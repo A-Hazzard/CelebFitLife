@@ -6,7 +6,7 @@ import React, {
   useImperativeHandle,
 } from "react";
 import { Button } from "@/components/ui/button";
-import { Settings, Mic, MicOff, Video, VideoOff, Share2 } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, Share2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Stream } from "@/lib/models/Stream";
 import { toast } from "sonner";

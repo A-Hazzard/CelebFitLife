@@ -1,12 +1,9 @@
 import bcrypt from "bcryptjs";
-// Re-import with Secret type
 import jwt, { Secret } from "jsonwebtoken";
 import { User, UserResponseDTO } from "../models/User";
 
-// Environment variables for JWT
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
-// Define JWT payload type
 interface JwtPayload {
   id?: string;
   email: string;
@@ -103,9 +100,7 @@ export function createUserResponse(
     isAdmin: user.isAdmin,
   };
 
-  if (includeToken) {
-    response.token = generateToken(user);
-  }
+  if (includeToken) response.token = generateToken(user);
 
   return response;
 }

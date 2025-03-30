@@ -31,6 +31,28 @@ await handleAutoReconnect(
 );
 ```
 
+#### `handleMediaTrackErrors`
+Handles errors related to media tracks to provide user-friendly error messages.
+```typescript
+const errorMessage = handleMediaTrackErrors(error);
+```
+
+#### `setupLocalMediaTracks`
+Creates and configures local media tracks based on device settings and preferences.
+```typescript
+const { videoTrack, audioTrack } = await setupLocalMediaTracks(
+  cameraId, 
+  micId, 
+  { isVideoEnabled, isAudioEnabled }
+);
+```
+
+#### `formatDuration`
+Formats a duration in seconds to a human-readable string (HH:MM:SS).
+```typescript
+const formattedTime = formatDuration(durationInSeconds);
+```
+
 ### Media Utilities (`media.ts`)
 
 #### `DEFAULT_STREAM_THUMBNAIL`
@@ -63,6 +85,21 @@ const thumbnailDataUrl = await generateVideoThumbnail(
 );
 ```
 
+#### `detectMediaDeviceChanges`
+Monitors changes in media devices (camera/microphone connect/disconnect) and provides callbacks.
+```typescript
+const stopDetecting = detectMediaDeviceChanges(
+  onDevicesChanged,
+  onDevicesError
+);
+```
+
+#### `getDevicePermissionStatus`
+Checks if the user has granted camera and microphone permissions.
+```typescript
+const { camera, microphone } = await getDevicePermissionStatus();
+```
+
 ### Authentication Utilities (`auth.ts`)
 
 #### `getCurrentUser`
@@ -77,11 +114,34 @@ Formats a user's display name for consistent presentation.
 const formattedName = formatUserName(user.displayName);
 ```
 
+### Error Handling Utilities (`errors.ts`)
+
+#### `parseFirebaseError`
+Parses Firebase error codes into user-friendly messages.
+```typescript
+const errorMessage = parseFirebaseError(error);
+```
+
+#### `parseTwilioError`
+Converts Twilio error codes into actionable error messages.
+```typescript
+const { message, isRecoverable } = parseTwilioError(error);
+```
+
+#### `handleNetworkErrors`
+Handles network-related errors with appropriate retry strategies.
+```typescript
+const { shouldRetry, retryAfter, message } = handleNetworkErrors(error);
+```
+
 ## File Structure
 
 - `streaming.ts` - Utilities for Twilio and streaming functionality
 - `media.ts` - Utilities for media operations like thumbnails
 - `auth.ts` - Authentication-related utilities
+- `errors.ts` - Error handling and parsing utilities
+- `formatting.ts` - Text and data formatting utilities
+- `validation.ts` - Form and data validation utilities
 
 ## Best Practices
 
@@ -90,6 +150,9 @@ const formattedName = formatUserName(user.displayName);
 3. **Error handling**: Include appropriate error handling.
 4. **Documentation**: Document all utilities with JSDoc comments.
 5. **Testing**: Write unit tests for utilities when possible.
+6. **Performance**: Consider memoization for expensive operations.
+7. **Browser Compatibility**: Ensure utilities work across all supported browsers.
+8. **Avoid Side Effects**: Utilities should generally avoid side effects, with clear documentation when they do have them.
 
 ## Adding New Utilities
 
@@ -97,4 +160,6 @@ When adding new utilities, consider:
 1. Is the utility general enough to be reused across the application?
 2. Does it fit into an existing utility file, or should it be in a new file?
 3. Is it properly typed and documented?
-4. Does it follow functional programming principles where appropriate? 
+4. Does it follow functional programming principles where appropriate?
+5. Is it thoroughly tested with edge cases?
+6. Does it handle errors gracefully? 

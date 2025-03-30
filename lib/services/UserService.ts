@@ -9,9 +9,7 @@ import { hashPassword } from "../utils/authUtils";
 export class UserService {
   private usersCollection = db.collection("users");
 
-  /**
-   * Find a user by ID
-   */
+
   async findById(id: string): Promise<User | null> {
     try {
       const doc = await this.usersCollection.doc(id).get();
@@ -25,18 +23,15 @@ export class UserService {
     }
   }
 
-  /**
-   * Find a user by email
-   */
+
   async findByEmail(email: string): Promise<User | null> {
     try {
       const snapshot = await this.usersCollection
         .where("email", "==", email)
         .limit(1)
         .get();
-      if (snapshot.empty) {
-        return null;
-      }
+      if (snapshot.empty) return null;
+      
       return convertDocToObj<User>(snapshot.docs[0]);
     } catch (error) {
       console.error("Error finding user by email:", error);
@@ -44,9 +39,6 @@ export class UserService {
     }
   }
 
-  /**
-   * Find a user by username
-   */
   async findByUsername(username: string): Promise<User | null> {
     try {
       const snapshot = await this.usersCollection
@@ -63,9 +55,6 @@ export class UserService {
     }
   }
 
-  /**
-   * Create a new user
-   */
   async create(userData: UserCreateDTO): Promise<User> {
     try {
       // Check if email already exists
@@ -116,9 +105,6 @@ export class UserService {
     }
   }
 
-  /**
-   * Update a user
-   */
   async update(id: string, userData: Partial<User>): Promise<User> {
     try {
       // Check if user exists
@@ -153,9 +139,7 @@ export class UserService {
     }
   }
 
-  /**
-   * Delete a user
-   */
+
   async delete(id: string): Promise<void> {
     try {
       // Check if user exists
@@ -174,4 +158,5 @@ export class UserService {
       throw new ApiError("Failed to delete user", 500);
     }
   }
+
 }

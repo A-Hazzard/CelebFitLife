@@ -76,9 +76,70 @@ const result = await setupTwilioRoom(
 );
 ```
 
+#### `handleStreamStatusChange`
+Handles changes to stream status (started, ended, camera/mic toggled) and updates Firestore.
+```typescript
+const result = await handleStreamStatusChange(slug, {
+  hasStarted: true,
+  audioMuted: false,
+  cameraOff: false
+});
+```
+
+#### `fetchTwilioToken`
+Retrieves a Twilio access token for connecting to a room.
+```typescript
+const { success, token, error } = await fetchTwilioToken(slug, identity);
+```
+
+#### `reconnectToStream`
+Attempts to reconnect to a stream after disconnection with retry logic.
+```typescript
+const result = await reconnectToStream(
+  slug, 
+  userName, 
+  maxAttempts, 
+  delayMs
+);
+```
+
+### Media Device Helpers (`devices.ts`)
+
+#### `saveDevicePreferences`
+Saves user device preferences to local storage and optionally to Firestore.
+```typescript
+const result = await saveDevicePreferences({
+  cameraId,
+  microphoneId,
+  speakerId,
+  videoQuality
+}, userId);
+```
+
+#### `loadDevicePreferences`
+Loads saved device preferences from local storage or Firestore.
+```typescript
+const { 
+  cameraId, 
+  microphoneId, 
+  speakerId,
+  videoQuality
+} = await loadDevicePreferences(userId);
+```
+
+#### `testMediaDevices`
+Tests if selected media devices are working properly.
+```typescript
+const { camera, microphone, success, error } = await testMediaDevices(
+  cameraId,
+  microphoneId
+);
+```
+
 ## File Structure
 
 - `streaming.ts` - Functions for stream creation, management, and Twilio setup
+- `devices.ts` - Media device management and testing
 - `auth.ts` - Authentication-related helpers
 - `analytics.ts` - Analytics tracking helpers
 - `payment.ts` - Payment processing helpers
@@ -90,6 +151,10 @@ const result = await setupTwilioRoom(
 3. **Function documentation**: Document all functions with JSDoc comments.
 4. **Keep functions pure**: When possible, make functions pure and focused on a single responsibility.
 5. **Consistent return values**: Maintain a consistent pattern for return values (e.g., using `{ success, error }` objects).
+6. **Logging**: Include appropriate logging for debugging and monitoring.
+7. **Parameter validation**: Validate input parameters to prevent errors.
+8. **Handle edge cases**: Ensure helpers handle edge cases gracefully.
+9. **Use async/await**: Prefer async/await for asynchronous operations over Promises.
 
 ## Adding New Helpers
 
@@ -97,4 +162,6 @@ When adding new helpers, consider:
 1. Is the helper focused on a specific domain (e.g., streams, auth, payments)?
 2. Should it be grouped with existing helpers or placed in a new file?
 3. Is it properly typed and documented?
-4. Does it follow the error handling pattern used in existing helpers? 
+4. Does it follow the error handling pattern used in existing helpers?
+5. Does it include proper logging for debugging?
+6. Is it thoroughly tested with edge cases? 

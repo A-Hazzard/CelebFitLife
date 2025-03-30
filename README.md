@@ -10,10 +10,12 @@ CelebFitLife is a live streaming platform that connects fitness influencers with
 - **Stream Management**: Control camera, microphone, and stream settings
 - **Video Playback**: Watch recorded workout sessions
 - **Responsive Design**: Optimized for desktop and mobile devices
+- **Realtime Status Sync**: Camera and microphone status sync between streamer and viewers
+- **Session Recovery**: Automatic handling of temporary connection issues
 
 ## Tech Stack
 
-- **Frontend**: Next.js 13 with App Router, React 18, TypeScript, Tailwind CSS
+- **Frontend**: Next.js 13+ with App Router, React 18, TypeScript, Tailwind CSS
 - **Backend**: Firebase (Authentication, Firestore, Storage)
 - **Real-time Communication**: Twilio Video and Chat APIs
 - **State Management**: React Context API and custom hooks
@@ -24,22 +26,78 @@ CelebFitLife is a live streaming platform that connects fitness influencers with
 
 ```
 ├── app/                      # Next.js app router
+│   ├── (auth)/               # Authentication-specific pages with route group
+│   ├── api/                  # Server-side API routes
+│   │   ├── auth/             # Authentication-related endpoints
+│   │   ├── twilio/           # Twilio token generation and room management
+│   │   └── models/           # Data model endpoints
 │   ├── dashboard/            # Dashboard pages
 │   │   └── streams/          # Stream management
+│   │       └── manage/       # Streamer controls for live sessions
+│   ├── features/             # Feature showcase pages
+│   ├── learn-more/           # Information pages
+│   ├── profile/              # User profile management
 │   ├── streaming/            # Viewer streaming pages
 │   │   └── live/             # Live stream viewing
-│   └── auth/                 # Authentication pages
+│   ├── globals.css           # Global styles
+│   ├── layout.tsx            # Root layout component
+│   └── page.tsx              # Home page component
+│
 ├── components/               # Reusable React components
-│   ├── ui/                   # UI components (from shadcn/ui)
 │   ├── dashboard/            # Dashboard-specific components
-│   └── streaming/            # Streaming-specific components
+│   ├── layout/               # Layout components (header, footer, etc.)
+│   ├── payment/              # Payment-related components
+│   ├── profile/              # Profile management components
+│   ├── streaming/            # Streaming-specific components
+│   │   ├── StreamManager.tsx # Streamer camera/mic controls
+│   │   ├── StreamChat.tsx    # Chat functionality
+│   │   ├── DeviceTester.tsx  # Device selection interface
+│   │   └── Countdown.tsx     # Scheduled stream countdown
+│   └── ui/                   # UI components (from shadcn/ui)
+│
 ├── lib/                      # Shared utilities and helpers
-│   ├── hooks/                # Custom React hooks
+│   ├── config/               # Configuration files (Firebase, etc.)
 │   ├── helpers/              # Business logic helpers
-│   └── utils/                # Utility functions
+│   │   ├── streaming.ts      # Stream management helpers
+│   │   ├── devices.ts        # Device management helpers
+│   │   └── auth.ts           # Authentication helpers
+│   ├── hooks/                # Custom React hooks
+│   │   ├── useStreamData.ts  # Firestore stream data management
+│   │   ├── useMediaDevices.ts# Device selection management
+│   │   └── useStreamSchedule.ts # Stream scheduling functionality
+│   ├── models/               # Data models and type definitions
+│   ├── services/             # External service integrations
+│   ├── store/                # State management
+│   ├── types/                # TypeScript type definitions
+│   ├── utils/                # Utility functions
+│   │   ├── streaming.ts      # Twilio connection helpers
+│   │   ├── media.ts          # Media handling utilities
+│   │   └── errors.ts         # Error handling utilities
+│   ├── session.ts            # Session management
+│   ├── twilio.ts             # Twilio configuration
+│   ├── twilioTrackUtils.ts   # Twilio track utilities
+│   └── uiConstants.ts        # UI-related constants
+│
 ├── public/                   # Static assets
-└── types/                    # TypeScript type definitions
+└── types/                    # Global TypeScript type definitions
 ```
+
+## API Routes
+
+The application includes several API routes for server-side functionality:
+
+### Authentication APIs (`/app/api/auth/`)
+- **`/login`**: Handles user login and session creation
+- **`/logout`**: Handles user logout and session destruction
+- **`/register`**: Handles new user registration
+
+### Twilio APIs (`/app/api/twilio/`)
+- **`/token`**: Generates Twilio access tokens for video rooms
+- **`/rooms`**: Manages Twilio room creation and configuration
+
+### Data Model APIs (`/app/api/models/`)
+- **`/streams`**: CRUD operations for stream management
+- **`/users`**: User profile management
 
 ## Getting Started
 
@@ -90,32 +148,42 @@ CelebFitLife is a live streaming platform that connects fitness influencers with
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Project Architecture
+## Component Organization
 
-### Module Organization
+The project follows a modular component structure:
 
-The project follows a modular architecture with clear separation of concerns:
+- **UI Components**: Generic, reusable UI elements (buttons, inputs, etc.)
+- **Layout Components**: Page layout elements (header, footer, navigation)
+- **Feature Components**: Domain-specific components grouped by feature
+- **Page Components**: Next.js page components that compose other components
 
-1. **Pages (app directory)**: Defines routes and page components
-2. **Components**: Reusable UI elements
-3. **Hooks**: Encapsulates complex stateful logic
-4. **Helpers**: Handles business logic and external service interactions
-5. **Utils**: Provides utility functions for common operations
+## Media Device Permissions
 
-### Data Flow
+This application requires access to your camera and microphone. Make sure to:
 
-1. **User Interface**: Components call hooks and helpers to perform actions
-2. **Custom Hooks**: Manage state and side effects for component logic
-3. **Helper Functions**: Handle external service interactions (Firebase, Twilio)
-4. **Firestore**: Stores and synchronizes data in real-time
-5. **Twilio**: Handles video and chat communication
+1. Grant browser permissions when prompted
+2. Use HTTPS for local development (required for camera/mic access in some browsers)
+3. If using a mobile device, ensure camera/mic permissions are enabled
 
-## Code Conventions
+## Known Issues and Troubleshooting
 
-- **File Naming**: Use PascalCase for components, camelCase for hooks, helpers, and utilities
-- **Typing**: Use TypeScript interfaces and types for all components and functions
-- **Error Handling**: Consistent error handling with typed error responses
-- **Documentation**: JSDoc comments for functions and components
+### Camera and Microphone Issues
+
+- **Device not showing up**: Try refreshing the page and checking browser permissions
+- **Camera/mic toggle not working**: Ensure you've completed the device setup process
+- **Black screen in preview**: Check if another application is using your camera
+
+### Connection Issues
+
+- **Can't connect to stream**: Check your network connection and ensure the stream is active
+- **"Failed to sync with server"**: Usually temporary, will auto-reconnect
+- **Stream freezing**: May indicate network issues, try lowering your video quality
+
+### Browser Compatibility
+
+- **Best experience**: Chrome, Edge, or Firefox (latest versions)
+- **Safari limitations**: Some media features may have limited support on older Safari versions
+- **Mobile support**: Works on modern mobile browsers with camera/mic support
 
 ## Contributing
 

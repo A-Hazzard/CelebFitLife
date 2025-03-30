@@ -9,10 +9,8 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    // Parse request body
     const body = await req.json();
 
-    // Validate required fields
     if (!body.email || !body.username || !body.password) {
       return NextResponse.json(
         { error: "Email, username, and password are required" },
@@ -20,7 +18,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Create a DTO object
     const userData: UserCreateDTO = {
       email: body.email,
       username: body.username,
@@ -32,11 +29,9 @@ export async function POST(req: Request) {
       role: body.role || { admin: false, streamer: false, viewer: true },
     };
 
-    // Call the AuthService to register the user
     const authService = new AuthService();
     const user = await authService.register(userData);
 
-    // Return success response
     return NextResponse.json(user, { status: 201 });
   } catch (error) {
     return handleApiError(error);

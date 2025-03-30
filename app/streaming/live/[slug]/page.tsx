@@ -24,13 +24,6 @@ import { ClientTwilioService } from "@/lib/services/ClientTwilioService";
 // Create a static instance of ClientTwilioService for the client side
 const clientTwilioService = new ClientTwilioService();
 
-// Move error type definition out of connectToRoom
-type TwilioErrorType = {
-  name?: string;
-  code?: number;
-  message?: string;
-};
-
 export default function LiveViewPage() {
   const pathname = usePathname();
   const slug = pathname?.split("/").pop() || "";
@@ -38,7 +31,7 @@ export default function LiveViewPage() {
 
   // Using isStreamStarted to track if the stream is active
   const [hasStarted, setHasStarted] = useState(false);
-  const [hasEnded, setHasEnded] = useState(false);
+  const [hasEnded] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [remoteParticipant, setRemoteParticipant] =
     useState<RemoteParticipant | null>(null);
@@ -62,7 +55,6 @@ export default function LiveViewPage() {
   );
   const [streamDuration, setStreamDuration] = useState(0);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const [authError, setAuthError] = useState(false);
 
   // This state is used to detect browser autoplay restrictions
   const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -72,8 +64,6 @@ export default function LiveViewPage() {
   const [streamTitle, setStreamTitle] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
 
-  // State to track whether we're currently attempting to connect
-  const [isConnecting, setIsConnecting] = useState(false);
   // Add error state
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
@@ -151,7 +141,6 @@ export default function LiveViewPage() {
   // Authentication check effect
   useEffect(() => {
     if (hasHydrated && !currentUser && !loadingAuth) {
-      setAuthError(true);
       // Don't redirect here, we'll show a UI message instead
     }
   }, [currentUser, hasHydrated, loadingAuth]);
@@ -471,7 +460,6 @@ export default function LiveViewPage() {
     console.log("[Connection] Conditions met, starting connection attempt...");
     isConnectingRef.current = true; // Mark as connecting
     if (isMountedRef.current) {
-      setConnectionError(null);
       setVideoStatus("connecting");
     }
 
@@ -493,10 +481,7 @@ export default function LiveViewPage() {
           if (!isMountedRef.current || cancelled) return false;
 
           if (!streamDoc.exists()) {
-            console.log(
-              "[Connection] Stream does not exist in Firestore:",
-              slug
-            );
+            console.log("[Connection] Stream not found in Firestore:", slug);
             if (isMountedRef.current) {
               setConnectionError(
                 "Stream not found. It may have been deleted or never existed."
@@ -510,7 +495,6 @@ export default function LiveViewPage() {
           if (streamData.hasEnded) {
             console.log("[Connection] Stream has ended:", slug);
             if (isMountedRef.current) {
-              setConnectionError("This stream has ended.");
               setVideoStatus("ended");
             }
             return false;
@@ -526,9 +510,6 @@ export default function LiveViewPage() {
         } catch (error) {
           console.error("[Connection] Error checking if stream exists:", error);
           if (isMountedRef.current && !cancelled) {
-            setConnectionError(
-              "Error checking stream status. Please try again later."
-            );
             setVideoStatus("error");
           }
           return false;
@@ -555,9 +536,6 @@ export default function LiveViewPage() {
           `[Connection] Failed to connect after ${maxAttempts} attempts`
         );
         if (isMountedRef.current) {
-          setConnectionError(
-            "Failed to connect after multiple attempts. Please try refreshing."
-          );
           setVideoStatus("error");
         }
         isConnectingRef.current = false;
@@ -625,8 +603,8 @@ export default function LiveViewPage() {
             if (error.code === 53205)
               errorMsg =
                 "You're already connected to this stream in another window.";
-            setConnectionError(errorMsg);
             setVideoStatus("error");
+            setConnectionError(errorMsg);
           } else if (hasEnded) {
             setVideoStatus("ended");
           } else {
@@ -646,8 +624,12 @@ export default function LiveViewPage() {
           if (twilioError.code === 53118)
             errorMsg =
               "Could not connect. The room may be full or unavailable.";
+
+          // Set the error message to state
           setConnectionError(errorMsg);
-          setVideoStatus("error");
+
+          // Optionally log the error message for debugging
+          console.log("Error message set:", errorMsg);
         }
         isConnectingRef.current = false; // Reset on error
         // Optionally retry after a delay if connectAttempts < maxAttempts

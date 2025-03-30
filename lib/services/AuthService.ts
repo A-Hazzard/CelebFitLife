@@ -13,9 +13,6 @@ export class AuthService {
     this.userService = new UserService();
   }
 
-  /**
-   * Register a new user
-   */
   async register(userData: UserCreateDTO): Promise<UserResponseDTO> {
     try {
       // Create user using UserService
@@ -32,49 +29,36 @@ export class AuthService {
     }
   }
 
-  /**
-   * Login a user
-   */
   async login(credentials: UserLoginDTO): Promise<UserResponseDTO> {
     try {
-      // Find user by email
       const user = await this.userService.findByEmail(credentials.email);
-      if (!user) {
-        throw ErrorTypes.UNAUTHORIZED("Invalid email or password");
-      }
-
-      // Verify password
+      
+      if (!user) throw ErrorTypes.UNAUTHORIZED("Invalid email or password");
+      
       const isPasswordValid = await comparePasswords(
         credentials.password,
         user.password!
       );
-      if (!isPasswordValid) {
-        throw ErrorTypes.UNAUTHORIZED("Invalid email or password");
-      }
 
-      // Return user with token
+      if (!isPasswordValid) throw ErrorTypes.UNAUTHORIZED("Invalid email or password");
+      
       return createUserResponse(user, true);
     } catch (error) {
       console.error("Error logging in user:", error);
-      if (error instanceof ApiError) {
-        throw error;
-      }
+      if (error instanceof ApiError) throw error;
+      
       throw new ApiError("Failed to log in", 500);
     }
   }
 
-  /**
-   * Get current user profile
-   */
+ 
   async getProfile(userId: string): Promise<UserResponseDTO> {
     try {
-      // Find user by ID
       const user = await this.userService.findById(userId);
       if (!user) {
         throw ErrorTypes.NOT_FOUND("User");
       }
 
-      // Return user without token
       return createUserResponse(user, false);
     } catch (error) {
       console.error("Error getting user profile:", error);
@@ -84,4 +68,5 @@ export class AuthService {
       throw new ApiError("Failed to get user profile", 500);
     }
   }
+
 }
