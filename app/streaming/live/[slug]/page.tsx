@@ -69,6 +69,9 @@ export default function LiveViewPage() {
   const [isRetrying, setIsRetrying] = useState(false);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
   const maxConnectionAttempts = 5;
+  const [twilioConnectionStatus, setTwilioConnectionStatus] = useState<
+    "disconnected" | "connecting" | "connected"
+  >("disconnected");
 
   const isMountedRef = useRef(false);
   const isConnectingRef = useRef(false);
@@ -834,7 +837,200 @@ export default function LiveViewPage() {
       .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Add a new effect for initial connection attempt
+  // Replace the initiateConnection function with a useCallback version
+  const initiateConnection = useCallback(async () => {
+    if (isConnectingRef.current) return;
+
+    isConnectingRef.current = true;
+    setVideoStatus("connecting");
+    setTwilioConnectionStatus("connecting");
+
+    // Track connection attempts
+    const newAttemptCount = connectionAttempts + 1;
+    setConnectionAttempts(newAttemptCount);
+    console.log(
+      `[LiveView] Connection attempt ${newAttemptCount} of ${maxConnectionAttempts}`
+    );
+
+    if (newAttemptCount > maxConnectionAttempts) {
+      console.error(
+        `[LiveView] Too many connection attempts (${newAttemptCount})`
+      );
+      setConnectionError(
+        `Too many connection attempts. Please try again later or refresh the page.`
+      );
+      setVideoStatus("error");
+      isConnectingRef.current = false;
+      return;
+    }
+
+    try {
+      // Create identity for the viewer
+      const identity =
+        currentUser?.username || currentUser?.email || `viewer-${Date.now()}`;
+
+      console.log(
+        `[LiveView] Getting Twilio token for viewer: ${identity}, room: ${slug}`
+      );
+
+      // Get connection token
+      const token = await clientTwilioService.getToken(
+        slug, // Room name (correct order)
+        identity // User identity (correct order)
+      );
+
+      console.log(
+        `[LiveView] Successfully received Twilio token, connecting to room...`
+      );
+
+      // Connect to room
+      const twilioRoom = await connect(token, {
+        name: slug,
+        audio: false,
+        video: false,
+        networkQuality: { local: 1, remote: 1 },
+        dominantSpeaker: true,
+      });
+
+      console.log(`[LiveView] Connected to room: ${twilioRoom.sid}`);
+      setRoom(twilioRoom);
+      setConnectionError(null);
+      setVideoStatus("active");
+      setTwilioConnectionStatus("connected");
+
+      // Set up participants
+      if (twilioRoom.participants.size > 0) {
+        const firstParticipant = Array.from(
+          twilioRoom.participants.values()
+        )[0];
+        setRemoteParticipant(firstParticipant);
+
+        // Set up tracks
+        firstParticipant.tracks.forEach((publication) => {
+          // Handle existing tracks
+          if (publication.isSubscribed && publication.track) {
+            const track = publication.track;
+
+            if (track.kind === "video") {
+              setRemoteVideoTrack(track as RemoteVideoTrack);
+
+              if (videoContainerRef.current) {
+                const videoElement = track.attach();
+                videoElement.style.width = "100%";
+                videoElement.style.height = "100%";
+                videoElement.style.objectFit = "cover";
+                videoContainerRef.current.appendChild(videoElement);
+              }
+            } else if (track.kind === "audio") {
+              setRemoteAudioTrack(track as RemoteAudioTrack);
+            }
+          }
+        });
+      }
+
+      // Set up room event handlers
+      twilioRoom.on("participantConnected", handleParticipantConnected);
+      twilioRoom.on("participantDisconnected", handleParticipantDisconnected);
+
+      twilioRoom.on("disconnected", (_room, error) => {
+        console.log(
+          `[LiveView] Disconnected from room: ${
+            error ? error.message : "No error"
+          }`
+        );
+        setVideoStatus("offline");
+        setRoom(null);
+        setTwilioConnectionStatus("disconnected");
+
+        if (error) {
+          setConnectionError(`Disconnected: ${error.message}`);
+        }
+      });
+
+      twilioRoom.on("reconnecting", (error) => {
+        console.log(
+          `[LiveView] Reconnecting to room: ${
+            error ? error.message : "Unknown error"
+          }`
+        );
+        setTwilioConnectionStatus("connecting");
+      });
+
+      twilioRoom.on("reconnected", () => {
+        console.log(`[LiveView] Reconnected to room successfully`);
+        setTwilioConnectionStatus("connected");
+      });
+    } catch (error) {
+      console.error("[LiveView] Error connecting to room:", error);
+      setTwilioConnectionStatus("disconnected");
+
+      // Provide more specific error messages based on error type
+      if (error instanceof TwilioError) {
+        switch (error.code) {
+          case 20101:
+            setConnectionError(
+              "Invalid Access Token. The stream may have ended or restarted."
+            );
+            break;
+          case 20103:
+            setConnectionError(
+              "Invalid Access Token issuer/subject. Please try refreshing the page."
+            );
+            break;
+          case 20104:
+            setConnectionError(
+              "Access Token expired. Please refresh the page to get a new token."
+            );
+            break;
+          case 53000:
+            setConnectionError(
+              "Room not found or has ended. The streamer may have stopped streaming."
+            );
+            break;
+          case 53205:
+            setConnectionError("Room is full. Please try again later.");
+            break;
+          default:
+            setConnectionError(
+              `Twilio error: ${error.message} (Code: ${error.code})`
+            );
+        }
+      } else if (error instanceof Error) {
+        if (error.message.includes("token")) {
+          setConnectionError(
+            "Failed to get a valid connection token. Please refresh the page."
+          );
+        } else if (
+          error.message.includes("network") ||
+          error.message.includes("timeout")
+        ) {
+          setConnectionError(
+            "Network error. Please check your internet connection and try again."
+          );
+        } else {
+          setConnectionError(`Connection failed: ${error.message}`);
+        }
+      } else {
+        setConnectionError(
+          "Unknown error occurred. Please try refreshing the page."
+        );
+      }
+
+      setVideoStatus("error");
+    } finally {
+      isConnectingRef.current = false;
+    }
+  }, [
+    connectionAttempts,
+    maxConnectionAttempts,
+    currentUser,
+    slug,
+    videoContainerRef,
+    handleParticipantConnected,
+    handleParticipantDisconnected,
+  ]);
+
+  // Replace the useEffect at lines ~1065-1100 with the corrected version
   useEffect(() => {
     // Only attempt connection if we have the necessary conditions
     if (
@@ -871,101 +1067,11 @@ export default function LiveViewPage() {
         }
 
         // If stream has started, attempt initial connection
-        initiateConnection();
+        await initiateConnection();
       } catch (error) {
         console.error("Error checking stream status:", error);
         setConnectionError("Error checking stream status");
         setVideoStatus("error");
-      }
-    };
-
-    // Function to initiate the connection
-    const initiateConnection = async () => {
-      if (isConnectingRef.current) return;
-
-      isConnectingRef.current = true;
-      setVideoStatus("connecting");
-
-      try {
-        // Create identity for the viewer
-        const identity =
-          currentUser?.username || currentUser?.email || `viewer-${Date.now()}`;
-
-        // Get connection token
-        const token = await clientTwilioService.getToken(
-          slug, // Room name (correct order)
-          identity // User identity (correct order)
-        );
-
-        // Connect to room
-        const twilioRoom = await connect(token, {
-          name: slug,
-          audio: false,
-          video: false,
-          networkQuality: { local: 1, remote: 1 },
-          dominantSpeaker: true,
-        });
-
-        console.log(`Connected to room: ${twilioRoom.sid}`);
-        setRoom(twilioRoom);
-        setConnectionError(null);
-        setVideoStatus("active");
-
-        // Set up participants
-        if (twilioRoom.participants.size > 0) {
-          const firstParticipant = Array.from(
-            twilioRoom.participants.values()
-          )[0];
-          setRemoteParticipant(firstParticipant);
-
-          // Set up tracks
-          firstParticipant.tracks.forEach((publication) => {
-            // Handle existing tracks
-            if (publication.isSubscribed && publication.track) {
-              const track = publication.track;
-
-              if (track.kind === "video") {
-                setRemoteVideoTrack(track as RemoteVideoTrack);
-
-                if (videoContainerRef.current) {
-                  const videoElement = track.attach();
-                  videoElement.style.width = "100%";
-                  videoElement.style.height = "100%";
-                  videoElement.style.objectFit = "cover";
-                  videoContainerRef.current.appendChild(videoElement);
-                }
-              } else if (track.kind === "audio") {
-                setRemoteAudioTrack(track as RemoteAudioTrack);
-              }
-            }
-          });
-        }
-
-        // Set up room event handlers
-        twilioRoom.on("participantConnected", (participant) => {
-          console.log(`Participant connected: ${participant.identity}`);
-          setRemoteParticipant(participant);
-        });
-
-        twilioRoom.on("participantDisconnected", (participant) => {
-          if (participant === remoteParticipant) {
-            setRemoteParticipant(null);
-            setRemoteVideoTrack(null);
-            setRemoteAudioTrack(null);
-            setVideoStatus("offline");
-          }
-        });
-
-        twilioRoom.on("disconnected", () => {
-          setVideoStatus("offline");
-          setRoom(null);
-        });
-      } catch (error) {
-        console.error("Error connecting to room:", error);
-        setConnectionError(`Connection failed: ${(error as Error).message}`);
-        setVideoStatus("error");
-      } finally {
-        isConnectingRef.current = false;
       }
     };
 
@@ -978,7 +1084,16 @@ export default function LiveViewPage() {
       setRoom(null);
       isConnectingRef.current = false;
     };
-  }, [slug, currentUser, hasEnded, room, loadingAuth, hasHydrated, hasStarted]);
+  }, [
+    slug,
+    currentUser,
+    hasEnded,
+    room,
+    loadingAuth,
+    hasHydrated,
+    hasStarted,
+    initiateConnection,
+  ]);
 
   if (!hasHydrated || !currentUser) return null;
 
@@ -1025,7 +1140,7 @@ export default function LiveViewPage() {
             {/* Status Overlays */}
             {videoStatus === "waiting" && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
-                <div className="mb-4">
+                <div className="mb-4 text-center">
                   {isScheduled ? (
                     <>
                       <h2 className="text-xl font-bold mb-4 text-center">
@@ -1041,15 +1156,26 @@ export default function LiveViewPage() {
                     </>
                   ) : (
                     <>
-                      <div className="animate-pulse flex flex-col items-center">
-                        <div className="w-4 h-4 bg-yellow-500 rounded-full mb-2"></div>
+                      <div className="mb-6">
+                        <div className="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center mx-auto mb-4">
+                          <div className="animate-pulse">
+                            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                          </div>
+                        </div>
                         <h2 className="text-xl font-bold">
-                          Waiting for Streamer
+                          Waiting for Stream to Start
                         </h2>
+                        <p className="text-sm text-gray-400 mt-2">
+                          The streamer hasn&apos;t started yet. Please wait or
+                          check back later.
+                        </p>
                       </div>
-                      <p className="text-sm text-gray-400 mt-2">
-                        Stream will begin shortly
-                      </p>
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-full mt-4"
+                      >
+                        Refresh
+                      </button>
                     </>
                   )}
                 </div>
@@ -1067,19 +1193,72 @@ export default function LiveViewPage() {
             )}
 
             {videoStatus === "offline" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
-                <div className="flex flex-col items-center">
-                  <div className="w-4 h-4 bg-red-500 rounded-full mb-2"></div>
-                  <h2 className="text-xl font-bold">Stream is Offline</h2>
-                  {connectionError ? (
-                    <p className="text-sm text-gray-400 mt-2 text-center max-w-md px-4">
-                      {connectionError}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-gray-400 mt-2">
-                      Please try again later
-                    </p>
-                  )}
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
+                <div className="text-center p-8 max-w-md">
+                  <div className="mb-4 text-gray-400">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-12 w-12 mx-auto"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold mb-2">Stream is Offline</h3>
+                  <p className="mb-4 text-gray-300">
+                    {connectionError ||
+                      "The stream is currently offline. Please check back later."}
+                  </p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-full"
+                  >
+                    Refresh Page
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Enhanced ended overlay with better visuals */}
+            {videoStatus === "ended" && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
+                <div className="text-center p-8 max-w-md">
+                  <div className="mb-4 text-brandOrange">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-12 w-12 mx-auto"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold mb-2">Stream Has Ended</h3>
+                  <p className="mb-4 text-gray-300">
+                    Thanks for watching! The streamer has ended this live
+                    session.
+                  </p>
+                  <button
+                    onClick={() => {
+                      window.location.href = "/streaming";
+                    }}
+                    className="bg-brandOrange hover:bg-brandOrange/80 text-white font-bold py-2 px-4 rounded-full"
+                  >
+                    Explore More Streams
+                  </button>
                 </div>
               </div>
             )}
@@ -1105,173 +1284,114 @@ export default function LiveViewPage() {
                     </svg>
                   </div>
                   <h3 className="text-xl font-bold mb-2">Connection Error</h3>
-                  <p className="mb-4">
+                  <p className="mb-4 text-gray-300">
                     {connectionError || "Failed to connect to the stream."}
                   </p>
-                  <button
-                    onClick={() => {
-                      // Simple direct retry that avoids any TypeScript issues
-                      if (isConnectingRef.current) return;
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => {
+                        // Reset connection
+                        setIsRetrying(true);
+                        setConnectionError(null);
 
-                      setIsRetrying(true);
-                      setConnectionError(null);
+                        // Clear existing video elements
+                        if (videoContainerRef.current) {
+                          clearVideoContainer(videoContainerRef.current);
+                        }
 
-                      // Clear existing video elements
-                      if (videoContainerRef.current) {
-                        clearVideoContainer(videoContainerRef.current);
-                      }
+                        // Reset all state
+                        setRoom(null);
+                        setRemoteParticipant(null);
+                        setRemoteVideoTrack(null);
+                        setRemoteAudioTrack(null);
 
-                      // Reset all state
-                      setRoom(null);
-                      setRemoteParticipant(null);
-                      setRemoteVideoTrack(null);
-                      setRemoteAudioTrack(null);
+                        // Retry connection after a short delay
+                        setTimeout(() => {
+                          const checkStreamAndRetry = async () => {
+                            try {
+                              // Check if stream exists and is active
+                              const streamDoc = await getDoc(
+                                doc(db, "streams", slug)
+                              );
+                              if (!streamDoc.exists()) {
+                                setVideoStatus("offline");
+                                setConnectionError("Stream not found");
+                                return;
+                              }
 
-                      // Retry connection after a small delay
-                      setTimeout(() => {
-                        // Define a local retry function that doesn't depend on outer scope
-                        const retryConnection = async () => {
-                          try {
-                            // Check if stream exists
-                            const streamDoc = await getDoc(
-                              doc(db, "streams", slug)
-                            );
-                            if (!streamDoc.exists()) {
-                              setVideoStatus("offline");
-                              setConnectionError("Stream not found");
-                              return;
+                              const streamData = streamDoc.data();
+                              if (streamData.hasEnded) {
+                                setVideoStatus("ended");
+                                setConnectionError("Stream has ended");
+                                return;
+                              }
+
+                              if (!streamData.hasStarted) {
+                                setVideoStatus("waiting");
+                                setConnectionError(null);
+                                return;
+                              }
+
+                              // Initiate connection if stream is active
+                              await initiateConnection();
+                            } catch (error) {
+                              console.error(
+                                "[LiveView] Error in retry:",
+                                error
+                              );
+                              setConnectionError(
+                                `Failed to reconnect: ${
+                                  (error as Error).message
+                                }`
+                              );
+                              setVideoStatus("error");
+                            } finally {
+                              setIsRetrying(false);
                             }
+                          };
 
-                            const streamData = streamDoc.data();
-                            if (streamData.hasEnded) {
-                              setVideoStatus("ended");
-                              setConnectionError("Stream has ended");
-                              return;
-                            }
-
-                            if (!streamData.hasStarted) {
-                              setVideoStatus("waiting");
-                              setConnectionError("Stream has not started yet");
-                              return;
-                            }
-
-                            // Generate identity
-                            const identity =
-                              currentUser?.username ||
-                              currentUser?.email ||
-                              `viewer-${Date.now()}`;
-
-                            // Get connection token
-                            const token = await clientTwilioService.getToken(
-                              slug, // Room name
-                              identity // User identity
-                            );
-
-                            // Connect to room
-                            const twilioRoom = await connect(token, {
-                              name: slug,
-                              audio: false,
-                              video: false,
-                              networkQuality: { local: 1, remote: 1 },
-                              dominantSpeaker: true,
-                            });
-
-                            // Update state with connected room
-                            setRoom(twilioRoom);
-                            setConnectionError(null);
-                            setVideoStatus("active");
-
-                            // Set up participants and tracks
-                            if (twilioRoom.participants.size > 0) {
-                              const firstParticipant = Array.from(
-                                twilioRoom.participants.values()
-                              )[0];
-                              setRemoteParticipant(firstParticipant);
-
-                              firstParticipant.tracks.forEach((publication) => {
-                                // Handle track publication
-                                if (
-                                  publication.isSubscribed &&
-                                  publication.track
-                                ) {
-                                  // Handle track subscription
-                                  const remoteTrack = publication.track;
-                                  if (remoteTrack.kind === "video") {
-                                    setRemoteVideoTrack(
-                                      remoteTrack as RemoteVideoTrack
-                                    );
-
-                                    if (videoContainerRef.current) {
-                                      // Attach video track to container
-                                      const videoElement = remoteTrack.attach();
-                                      videoElement.style.width = "100%";
-                                      videoElement.style.height = "100%";
-                                      videoElement.style.objectFit = "cover";
-                                      videoContainerRef.current.appendChild(
-                                        videoElement
-                                      );
-                                    }
-                                  } else if (remoteTrack.kind === "audio") {
-                                    setRemoteAudioTrack(
-                                      remoteTrack as RemoteAudioTrack
-                                    );
-                                  }
-                                }
-                              });
-                            }
-
-                            // Set up basic event handlers
-                            twilioRoom.on("participantDisconnected", () => {
-                              setVideoStatus("offline");
-                            });
-                          } catch (error) {
-                            console.error("Error in retry connection:", error);
-                            setConnectionError(
-                              `Connection failed: ${(error as Error).message}`
-                            );
-                            setVideoStatus("error");
-                          } finally {
-                            isConnectingRef.current = false;
-                          }
-                        };
-
-                        // Execute the retry function
-                        retryConnection().finally(() => {
-                          setIsRetrying(false);
-                        });
-                      }, 500);
-                    }}
-                    disabled={isRetrying}
-                    className="bg-brandOrange hover:bg-brandOrange/80 text-white font-bold py-2 px-4 rounded-full inline-flex items-center"
-                  >
-                    {isRetrying ? (
-                      <>
-                        <svg
-                          className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                        Retrying...
-                      </>
-                    ) : (
-                      "Retry Connection"
-                    )}
-                  </button>
+                          checkStreamAndRetry();
+                        }, 1000);
+                      }}
+                      disabled={isRetrying}
+                      className="bg-brandOrange hover:bg-brandOrange/80 text-white font-bold py-2 px-4 rounded-full inline-flex items-center"
+                    >
+                      {isRetrying ? (
+                        <>
+                          <svg
+                            className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Reconnecting...
+                        </>
+                      ) : (
+                        "Try Again"
+                      )}
+                    </button>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="ml-2 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-full"
+                      disabled={isRetrying}
+                    >
+                      Refresh Page
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1294,6 +1414,33 @@ export default function LiveViewPage() {
             {/* Audio/Video Status Indicators - Show even when video is active */}
             {videoStatus === "active" && (
               <div className="absolute top-4 right-4 flex items-center gap-2">
+                <div
+                  className={`flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-sm ${
+                    twilioConnectionStatus === "connected"
+                      ? "text-green-500"
+                      : twilioConnectionStatus === "connecting"
+                      ? "text-yellow-500"
+                      : "text-red-500"
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      twilioConnectionStatus === "connected"
+                        ? "bg-green-500"
+                        : twilioConnectionStatus === "connecting"
+                        ? "bg-yellow-500 animate-pulse"
+                        : "bg-red-500"
+                    }`}
+                  ></span>
+                  <span>
+                    {twilioConnectionStatus === "connected"
+                      ? "Twilio Connected"
+                      : twilioConnectionStatus === "connecting"
+                      ? "Reconnecting..."
+                      : "Twilio Disconnected"}
+                  </span>
+                </div>
+
                 {streamerStatus.audioMuted && (
                   <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
                     <MicOff size={16} />
@@ -1303,7 +1450,7 @@ export default function LiveViewPage() {
                 {streamerStatus.cameraOff && (
                   <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
                     <VideoOff size={16} />
-                    <span>No Video</span>
+                    <span>Camera Off</span>
                   </div>
                 )}
               </div>

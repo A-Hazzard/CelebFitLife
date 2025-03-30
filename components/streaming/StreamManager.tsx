@@ -6,7 +6,7 @@ import React, {
   useImperativeHandle,
 } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Video, VideoOff, Share2 } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, Share2, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Stream } from "@/lib/models/Stream";
 import { toast } from "sonner";
@@ -25,11 +25,16 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/config/firebase";
 import { StreamDuration } from "@/components/streaming/StreamDuration";
+import { ClientTwilioService } from "@/lib/services/ClientTwilioService";
+import { connect, Room } from "twilio-video";
 
 interface StreamManagerProps {
   stream: Stream;
   className?: string;
 }
+
+// Create an instance of the ClientTwilioService
+const clientTwilioService = new ClientTwilioService();
 
 // Convert to forwardRef
 const StreamManager = forwardRef<
@@ -42,14 +47,18 @@ const StreamManager = forwardRef<
   const [title, setTitle] = useState(stream.title);
   const [shareUrl, setShareUrl] = useState("");
   const [showEndConfirmation, setShowEndConfirmation] = useState(false);
-  const [streamingTimer, setStreamingTimer] = useState(0);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<
+    "disconnected" | "connecting" | "connected"
+  >("disconnected");
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const twilioRoomRef = useRef<Room | null>(null);
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -102,11 +111,12 @@ const StreamManager = forwardRef<
     return () => unsubscribe();
   }, [stream.id]);
 
-  // Keep this timer effect for backward compatibility
+  // Update the useEffect that was using streamingTimer
   useEffect(() => {
     if (isStreaming && !timerIntervalRef.current) {
       timerIntervalRef.current = setInterval(() => {
-        setStreamingTimer((prevTime) => prevTime + 1);
+        // We're not setting streamingTimer anymore
+        // Just keep the interval for backward compatibility
       }, 1000);
     }
 
@@ -118,20 +128,13 @@ const StreamManager = forwardRef<
     };
   }, [isStreaming]);
 
-  // Format the timer as HH:MM:SS (keep for backward compatibility)
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours.toString().padStart(2, "0")}:${minutes
-      .toString()
-      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
-
   // Start streaming
   const startStream = async () => {
     try {
       setConnectionError(null);
+      setIsConnecting(true);
+      setConnectionStatus("connecting");
+
       // If we already have a stream, use it instead of creating a new one
       if (!localStreamRef.current) {
         // Get the selected camera and mic from localStorage if available
@@ -156,6 +159,9 @@ const StreamManager = forwardRef<
         }
 
         try {
+          console.log(
+            "[StreamManager] Requesting media with camera and mic access"
+          );
           // Request media with saved device preferences
           const mediaStream = await navigator.mediaDevices.getUserMedia({
             audio: audioConstraints,
@@ -166,7 +172,7 @@ const StreamManager = forwardRef<
           if (videoRef.current) {
             videoRef.current.srcObject = mediaStream;
             await videoRef.current.play().catch((error) => {
-              console.error("Error playing video:", error);
+              console.error("[StreamManager] Error playing video:", error);
               throw new Error("Failed to play video: " + error.message);
             });
           }
@@ -175,10 +181,13 @@ const StreamManager = forwardRef<
 
           // Reset retry count on successful connection
           setRetryCount(0);
+          console.log(
+            "[StreamManager] Successfully accessed camera and microphone"
+          );
         } catch (mediaError) {
-          console.error("Failed to get media:", mediaError);
+          console.error("[StreamManager] Failed to get media:", mediaError);
           setConnectionError(
-            "Failed to access camera/microphone. Check permissions and try again."
+            "Failed to access camera/microphone. Please check browser permissions and make sure your devices are connected."
           );
           throw mediaError;
         }
@@ -190,7 +199,6 @@ const StreamManager = forwardRef<
       }
 
       setIsStreaming(true);
-      setStreamingTimer(0);
 
       // Initialize tracks with the current state
       const videoTracks = localStreamRef.current.getVideoTracks();
@@ -201,7 +209,9 @@ const StreamManager = forwardRef<
           track.enabled = isVideoEnabled;
         });
       } else {
-        console.warn("No video tracks found in the media stream");
+        console.warn(
+          "[StreamManager] No video tracks found in the media stream"
+        );
       }
 
       if (audioTracks.length > 0) {
@@ -209,10 +219,12 @@ const StreamManager = forwardRef<
           track.enabled = isMicEnabled;
         });
       } else {
-        console.warn("No audio tracks found in the media stream");
+        console.warn(
+          "[StreamManager] No audio tracks found in the media stream"
+        );
       }
 
-      console.log("Starting stream with tracks:", {
+      console.log("[StreamManager] Starting stream with tracks:", {
         video: videoTracks.length > 0,
         audio: audioTracks.length > 0,
         videoEnabled: isVideoEnabled,
@@ -226,6 +238,7 @@ const StreamManager = forwardRef<
           throw new Error("Stream ID is undefined");
         }
 
+        // 1. Update Firestore document first
         const streamDocRef = doc(db, "streams", stream.id);
         await updateDoc(streamDocRef, {
           hasStarted: true,
@@ -236,19 +249,151 @@ const StreamManager = forwardRef<
           audioMuted: !isMicEnabled, // Use audioMuted consistently
           cameraOff: !isVideoEnabled, // Use cameraOff consistently
         });
+
+        // 2. Connect to Twilio room - Important step that was missing
+        try {
+          console.log("[StreamManager] Getting Twilio token for streamer...");
+          toast.info("Setting up streaming room. Please wait...");
+
+          // Generate a unique identity for the streamer
+          const streamerIdentity = `streamer-${stream.id}`;
+
+          // Get a token from Twilio API
+          const token = await clientTwilioService.getToken(
+            stream.id, // Room name
+            streamerIdentity // User identity
+          );
+
+          console.log(
+            "[StreamManager] Successfully received Twilio token, connecting to room..."
+          );
+          toast.info("Connecting to Twilio streaming service...");
+
+          // Connect to the Twilio room as a broadcaster (with local tracks)
+          const twilioRoom = await connect(token, {
+            name: stream.id,
+            tracks: localStreamRef.current.getTracks(),
+            bandwidthProfile: {
+              video: {
+                mode: "collaboration",
+                dominantSpeakerPriority: "high",
+              },
+            },
+            networkQuality: {
+              local: 1,
+              remote: 1,
+            },
+          });
+
+          console.log(
+            `[StreamManager] Successfully connected to Twilio room: ${twilioRoom.name}`
+          );
+
+          // Store the Twilio room reference
+          twilioRoomRef.current = twilioRoom;
+          setConnectionStatus("connected");
+          toast.success("Twilio room connected! You are now ready to stream.");
+
+          // Set up event listeners for the room
+          twilioRoom.on("disconnected", (_room, error) => {
+            console.log(
+              `[StreamManager] Disconnected from Twilio room: ${
+                error ? error.message : "No error"
+              }`
+            );
+            twilioRoomRef.current = null;
+            setConnectionStatus("disconnected");
+
+            if (error) {
+              setConnectionError(`Disconnected: ${error.message}`);
+              toast.error(`Stream disconnected: ${error.message}`);
+            } else {
+              console.log(
+                "[StreamManager] Normal disconnect from Twilio room (no error)"
+              );
+            }
+          });
+
+          twilioRoom.on("participantConnected", (participant) => {
+            console.log(
+              `[StreamManager] Participant connected: ${participant.identity}`
+            );
+            toast.info(`Viewer joined: ${participant.identity.split("_")[0]}`);
+          });
+
+          twilioRoom.on("participantDisconnected", (participant) => {
+            console.log(
+              `[StreamManager] Participant disconnected: ${participant.identity}`
+            );
+          });
+
+          twilioRoom.on("reconnecting", (error) => {
+            console.log(
+              `[StreamManager] Reconnecting to Twilio room: ${error.message}`
+            );
+            setConnectionStatus("connecting");
+            toast.warning(
+              "Stream connection interrupted. Attempting to reconnect..."
+            );
+          });
+
+          twilioRoom.on("reconnected", () => {
+            console.log(`[StreamManager] Reconnected to Twilio room`);
+            setConnectionStatus("connected");
+            toast.success("Stream reconnected successfully!");
+          });
+
+          // Log info about the Twilio debug environment
+          console.log("[StreamManager] Twilio connection info:", {
+            twilioSessionId: clientTwilioService.getDebugInfo().sessionId,
+            roomName: twilioRoom.name,
+            localParticipantIdentity: twilioRoom.localParticipant.identity,
+            twilioRoomSid: twilioRoom.sid,
+          });
+        } catch (twilioError) {
+          console.error(
+            "[StreamManager] Error connecting to Twilio:",
+            twilioError
+          );
+          setConnectionStatus("disconnected");
+
+          // Add specific error handling
+          if (twilioError instanceof Error) {
+            if (twilioError.message.includes("token")) {
+              setConnectionError(
+                "Failed to get valid Twilio token. Please check your Twilio credentials."
+              );
+            } else if (twilioError.message.includes("network")) {
+              setConnectionError(
+                "Network error connecting to Twilio. Please check your internet connection."
+              );
+            } else {
+              setConnectionError(`Twilio error: ${twilioError.message}`);
+            }
+          } else {
+            setConnectionError("Unknown error connecting to Twilio");
+          }
+
+          toast.error(
+            "Stream created but failed to connect to video service. Viewers may not be able to see your stream."
+          );
+          // Don't throw the error - we want the stream to be considered started even if Twilio connection fails
+        }
+
         toast.success("Stream started successfully!");
       } catch (dbError) {
-        console.error("Error updating stream status:", dbError);
+        console.error("[StreamManager] Error updating stream status:", dbError);
         toast.error(
           "Stream started locally but failed to update status in database."
         );
       }
     } catch (error) {
-      console.error("Error starting stream:", error);
+      console.error("[StreamManager] Error starting stream:", error);
 
       // Increment retry count
       const newRetryCount = retryCount + 1;
       setRetryCount(newRetryCount);
+      setConnectionStatus("disconnected");
 
       if (newRetryCount >= maxRetries) {
         setConnectionError(
@@ -275,6 +420,30 @@ const StreamManager = forwardRef<
       }
 
       throw error;
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  // Try to reconnect if disconnected
+  const reconnect = async () => {
+    if (twilioRoomRef.current) {
+      toast.info("Disconnecting from current session before reconnecting...");
+      twilioRoomRef.current.disconnect();
+      twilioRoomRef.current = null;
+    }
+
+    // Clear any cached tokens to force getting a new one
+    clientTwilioService.clearCache();
+
+    // Retry the connection
+    try {
+      setConnectionError(null);
+      await startStream();
+      toast.success("Successfully reconnected to stream!");
+    } catch (error) {
+      console.error("[StreamManager] Reconnection failed:", error);
+      toast.error("Failed to reconnect. Please try again.");
     }
   };
 
@@ -349,6 +518,12 @@ const StreamManager = forwardRef<
     setupLocalPreview();
 
     return () => {
+      // Clean up Twilio room on unmount
+      if (twilioRoomRef.current) {
+        twilioRoomRef.current.disconnect();
+        twilioRoomRef.current = null;
+      }
+
       // Clean up stream on unmount
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -359,6 +534,15 @@ const StreamManager = forwardRef<
 
   // End streaming
   const endStream = () => {
+    // Disconnect from Twilio room if connected
+    if (twilioRoomRef.current) {
+      console.log(
+        `[StreamManager] Disconnecting from Twilio room: ${twilioRoomRef.current.name}`
+      );
+      twilioRoomRef.current.disconnect();
+      twilioRoomRef.current = null;
+    }
+
     // Clean up local stream
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -371,6 +555,13 @@ const StreamManager = forwardRef<
 
     setIsStreaming(false);
     setShowEndConfirmation(false);
+    setConnectionStatus("disconnected");
+
+    // Stop the timer
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
 
     // Update hasEnded in Firestore
     try {
@@ -382,20 +573,25 @@ const StreamManager = forwardRef<
       const streamDocRef = doc(db, "streams", stream.id);
       updateDoc(streamDocRef, {
         hasEnded: true,
+        hasStarted: false, // Make sure to set hasStarted to false
         endedAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
       })
         .then(() => {
           toast.info("Stream ended");
+          console.log("[StreamManager] Stream ended and Firestore updated");
         })
         .catch((dbError) => {
-          console.error("Error updating stream status:", dbError);
+          console.error(
+            "[StreamManager] Error updating stream status:",
+            dbError
+          );
           toast.error(
             "Stream ended locally but failed to update status in database."
           );
         });
     } catch (error) {
-      console.error("Error ending stream:", error);
+      console.error("[StreamManager] Error ending stream:", error);
       toast.error("Failed to end stream properly.");
     }
   };
@@ -534,6 +730,34 @@ const StreamManager = forwardRef<
           </div>
         )}
 
+        {/* Connection Error Display */}
+        {connectionError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 p-4">
+            <div className="text-red-500 text-center max-w-md">
+              <p className="text-lg font-bold mb-2">Connection Error</p>
+              <p className="mb-4">{connectionError}</p>
+              <Button
+                variant="outline"
+                onClick={reconnect}
+                disabled={isConnecting}
+                className="border-red-500 text-red-500 hover:bg-red-500/10"
+              >
+                {isConnecting ? (
+                  <>
+                    <RefreshCw size={16} className="mr-2 animate-spin" />
+                    Reconnecting...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={16} className="mr-2" />
+                    Try Again
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Stream Status Indicators */}
         {isStreaming && (
           <div className="absolute top-4 left-4 flex items-center gap-2">
@@ -541,24 +765,58 @@ const StreamManager = forwardRef<
               <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
               LIVE
             </div>
-            <StreamDuration startedAt={stream.startedAt} />
+            {stream.startedAt && (
+              <StreamDuration startedAt={stream.startedAt} />
+            )}
           </div>
         )}
 
-        {/* Audio/Video Status Indicators - Visible to streamer */}
+        {/* Twilio Connection Status */}
         {isStreaming && (
           <div className="absolute top-4 right-4 flex items-center gap-2">
-            {!isMicEnabled && (
-              <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
-                <MicOff size={16} />
-                <span>Muted</span>
-              </div>
-            )}
-            {!isVideoEnabled && (
-              <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
-                <VideoOff size={16} />
-                <span>Camera Off</span>
-              </div>
+            <div
+              className={`flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-sm ${
+                connectionStatus === "connected"
+                  ? "text-green-500"
+                  : connectionStatus === "connecting"
+                  ? "text-yellow-500"
+                  : "text-red-500"
+              }`}
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  connectionStatus === "connected"
+                    ? "bg-green-500"
+                    : connectionStatus === "connecting"
+                    ? "bg-yellow-500 animate-pulse"
+                    : "bg-red-500"
+                }`}
+              ></span>
+              <span>
+                {connectionStatus === "connected"
+                  ? "Twilio Connected"
+                  : connectionStatus === "connecting"
+                  ? "Connecting to Twilio..."
+                  : "Twilio Disconnected"}
+              </span>
+            </div>
+
+            {/* Only show Audio/Video Status Indicators when connected */}
+            {connectionStatus === "connected" && (
+              <>
+                {!isMicEnabled && (
+                  <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
+                    <MicOff size={16} />
+                    <span>Muted</span>
+                  </div>
+                )}
+                {!isVideoEnabled && (
+                  <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
+                    <VideoOff size={16} />
+                    <span>Camera Off</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -593,8 +851,16 @@ const StreamManager = forwardRef<
               <Button
                 className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
                 onClick={startStream}
+                disabled={isConnecting}
               >
-                Start Streaming
+                {isConnecting ? (
+                  <>
+                    <RefreshCw size={18} className="mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  "Start Streaming"
+                )}
               </Button>
             )}
           </div>

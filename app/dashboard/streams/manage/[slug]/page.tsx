@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { usePathname } from "next/navigation";
 // Import regular Firebase client for client components
 import { db } from "@/lib/config/firebase";
@@ -14,7 +14,6 @@ import { Settings, RefreshCw } from "lucide-react";
 // Import Stream type from the models
 import { Stream } from "@/lib/models/Stream";
 import { toast } from "sonner";
-import { StreamDuration } from "@/components/streaming/StreamDuration";
 
 export default function ManageStreamPage() {
   const pathname = usePathname();
@@ -32,8 +31,8 @@ export default function ManageStreamPage() {
     null
   );
 
-  // Function to fetch stream data
-  const fetchStream = async () => {
+  // Function to fetch stream data wrapped in useCallback
+  const fetchStream = useCallback(async () => {
     try {
       setLoading(true);
       const streamDoc = await getDoc(doc(db, "streams", slug));
@@ -53,12 +52,12 @@ export default function ManageStreamPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [slug]);
 
   useEffect(() => {
     // Fetch the stream data from Firestore client-side
     fetchStream();
-  }, [slug]);
+  }, [fetchStream]);
 
   const handleStartStream = () => {
     // If device tester hasn't been shown yet, show it first and flag to start streaming after
@@ -172,15 +171,6 @@ export default function ManageStreamPage() {
             <h1 className="text-2xl font-bold">{`Managing: ${
               stream.title || "Untitled Stream"
             }`}</h1>
-            {stream.hasStarted && stream.startedAt && (
-              <div className="flex items-center gap-2 mt-2">
-                <div className="flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-white text-sm">
-                  <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
-                  LIVE
-                </div>
-                <StreamDuration startedAt={stream.startedAt} />
-              </div>
-            )}
           </div>
 
           {!showDeviceTester && (
