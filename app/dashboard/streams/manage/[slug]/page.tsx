@@ -4,16 +4,17 @@ import React, { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 // Import regular Firebase client for client components
 import { db } from "@/lib/config/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 // Use the client service, not direct server imports
 import StreamManager from "@/components/streaming/StreamManager";
 import StreamChat from "@/components/streaming/StreamChat";
 import DeviceTester from "@/components/streaming/DeviceTester";
 import { Button } from "@/components/ui/button";
-import { Settings } from "lucide-react";
+import { Settings, RefreshCw } from "lucide-react";
 // Import Stream type from the models
 import { Stream } from "@/lib/models/Stream";
 import { toast } from "sonner";
+import { StreamDuration } from "@/components/streaming/StreamDuration";
 
 export default function ManageStreamPage() {
   const pathname = usePathname();
@@ -25,34 +26,37 @@ export default function ManageStreamPage() {
   const [shouldStartStreamAfterTest, setShouldStartStreamAfterTest] =
     useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
   const streamManagerRef = useRef<{ startStream: () => Promise<void> } | null>(
     null
   );
 
+  // Function to fetch stream data
+  const fetchStream = async () => {
+    try {
+      setLoading(true);
+      const streamDoc = await getDoc(doc(db, "streams", slug));
+
+      if (!streamDoc.exists()) {
+        setError("Stream not found");
+        setStream(null);
+      } else {
+        setStream({
+          id: streamDoc.id,
+          ...streamDoc.data(),
+        } as Stream);
+      }
+    } catch (err) {
+      console.error("Error fetching stream:", err);
+      setError("Error fetching stream details");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     // Fetch the stream data from Firestore client-side
-    const fetchStream = async () => {
-      try {
-        setLoading(true);
-        const streamDoc = await getDoc(doc(db, "streams", slug));
-
-        if (!streamDoc.exists()) {
-          setError("Stream not found");
-          setStream(null);
-        } else {
-          setStream({
-            id: streamDoc.id,
-            ...streamDoc.data(),
-          } as Stream);
-        }
-      } catch (err) {
-        console.error("Error fetching stream:", err);
-        setError("Error fetching stream details");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchStream();
   }, [slug]);
 
@@ -76,8 +80,8 @@ export default function ManageStreamPage() {
       await updateDoc(streamDocRef, {
         hasStarted: true,
         hasEnded: false,
-        startedAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
+        startedAt: serverTimestamp(), // Use serverTimestamp instead of local date
+        lastUpdated: serverTimestamp(),
         audioMuted: false,
         cameraOff: false,
       });
@@ -89,9 +93,25 @@ export default function ManageStreamPage() {
 
       setStream((prev) => (prev ? { ...prev, hasStarted: true } : null));
       toast.success("Stream started successfully!");
+      setConnectionError(null); // Reset any connection errors
     } catch (error) {
       console.error("Error starting stream:", error);
       toast.error("Failed to start the stream. Please try again.");
+      setConnectionError("Failed to start stream. Please retry.");
+    }
+  };
+
+  const handleRetryConnection = async () => {
+    setIsRetrying(true);
+    try {
+      // Call startStream again, which will try to reconnect without refreshing the page
+      await startStream();
+      setConnectionError(null);
+    } catch (error) {
+      console.error("Error retrying connection:", error);
+      setConnectionError("Connection attempt failed. Please try again.");
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -148,9 +168,20 @@ export default function ManageStreamPage() {
     <div className="min-h-screen bg-brandBlack text-brandWhite">
       <div className="container mx-auto px-4 py-6">
         <div className="mb-6 flex justify-between items-center">
-          <h1 className="text-2xl font-bold">{`Managing: ${
-            stream.title || "Untitled Stream"
-          }`}</h1>
+          <div>
+            <h1 className="text-2xl font-bold">{`Managing: ${
+              stream.title || "Untitled Stream"
+            }`}</h1>
+            {stream.hasStarted && stream.startedAt && (
+              <div className="flex items-center gap-2 mt-2">
+                <div className="flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-white text-sm">
+                  <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+                  LIVE
+                </div>
+                <StreamDuration startedAt={stream.startedAt} />
+              </div>
+            )}
+          </div>
 
           {!showDeviceTester && (
             <div className="flex gap-2">
@@ -177,7 +208,7 @@ export default function ManageStreamPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 bg-gray-900 rounded-lg overflow-hidden">
-            <div className="h-full">
+            <div className="h-full relative">
               {showDeviceTester ? (
                 <DeviceTester
                   onComplete={handleDeviceTestComplete}
@@ -189,6 +220,32 @@ export default function ManageStreamPage() {
                   stream={stream as Stream}
                   className="flex-1"
                 />
+              )}
+
+              {/* Connection error overlay */}
+              {connectionError && (
+                <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center">
+                  <div className="text-red-500 text-xl mb-4">
+                    {connectionError}
+                  </div>
+                  <Button
+                    onClick={handleRetryConnection}
+                    className="flex items-center gap-2 bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+                    disabled={isRetrying}
+                  >
+                    {isRetrying ? (
+                      <>
+                        <RefreshCw size={16} className="animate-spin" />
+                        Retrying...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw size={16} />
+                        Retry Connection
+                      </>
+                    )}
+                  </Button>
+                </div>
               )}
             </div>
           </div>

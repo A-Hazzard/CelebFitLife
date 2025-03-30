@@ -17,8 +17,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  updateDoc,
+  serverTimestamp,
+  onSnapshot,
+} from "firebase/firestore";
 import { db } from "@/lib/config/firebase";
+import { StreamDuration } from "@/components/streaming/StreamDuration";
 
 interface StreamManagerProps {
   stream: Stream;
@@ -38,6 +44,9 @@ const StreamManager = forwardRef<
   const [showEndConfirmation, setShowEndConfirmation] = useState(false);
   const [streamingTimer, setStreamingTimer] = useState(0);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -54,7 +63,46 @@ const StreamManager = forwardRef<
     }
   }, [stream.slug]);
 
-  // Timer for streaming duration
+  // Subscribe to stream status changes from Firestore
+  useEffect(() => {
+    if (!stream.id) return;
+
+    const unsubscribe = onSnapshot(
+      doc(db, "streams", stream.id),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setIsStreaming(data.hasStarted === true);
+
+          // Update local state to match remote state
+          setIsMicEnabled(!data.audioMuted);
+          setIsVideoEnabled(!data.cameraOff);
+
+          // Apply to local media if needed
+          if (localStreamRef.current) {
+            const audioTracks = localStreamRef.current.getAudioTracks();
+            const videoTracks = localStreamRef.current.getVideoTracks();
+
+            if (audioTracks.length > 0) {
+              audioTracks.forEach((track) => {
+                track.enabled = !data.audioMuted;
+              });
+            }
+
+            if (videoTracks.length > 0) {
+              videoTracks.forEach((track) => {
+                track.enabled = !data.cameraOff;
+              });
+            }
+          }
+        }
+      }
+    );
+
+    return () => unsubscribe();
+  }, [stream.id]);
+
+  // Keep this timer effect for backward compatibility
   useEffect(() => {
     if (isStreaming && !timerIntervalRef.current) {
       timerIntervalRef.current = setInterval(() => {
@@ -70,7 +118,7 @@ const StreamManager = forwardRef<
     };
   }, [isStreaming]);
 
-  // Format the timer as HH:MM:SS
+  // Format the timer as HH:MM:SS (keep for backward compatibility)
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -83,6 +131,7 @@ const StreamManager = forwardRef<
   // Start streaming
   const startStream = async () => {
     try {
+      setConnectionError(null);
       // If we already have a stream, use it instead of creating a new one
       if (!localStreamRef.current) {
         // Get the selected camera and mic from localStorage if available
@@ -106,21 +155,33 @@ const StreamManager = forwardRef<
           }
         }
 
-        // Request media with saved device preferences
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: audioConstraints,
-          video: videoConstraints,
-        });
-
-        // Set the stream to the video element
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-          videoRef.current.play().catch((error) => {
-            console.error("Error playing video:", error);
+        try {
+          // Request media with saved device preferences
+          const mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: audioConstraints,
+            video: videoConstraints,
           });
-        }
 
-        localStreamRef.current = mediaStream;
+          // Set the stream to the video element
+          if (videoRef.current) {
+            videoRef.current.srcObject = mediaStream;
+            await videoRef.current.play().catch((error) => {
+              console.error("Error playing video:", error);
+              throw new Error("Failed to play video: " + error.message);
+            });
+          }
+
+          localStreamRef.current = mediaStream;
+
+          // Reset retry count on successful connection
+          setRetryCount(0);
+        } catch (mediaError) {
+          console.error("Failed to get media:", mediaError);
+          setConnectionError(
+            "Failed to access camera/microphone. Check permissions and try again."
+          );
+          throw mediaError;
+        }
       }
 
       // Ensure we have a media stream
@@ -136,11 +197,19 @@ const StreamManager = forwardRef<
       const audioTracks = localStreamRef.current.getAudioTracks();
 
       if (videoTracks.length > 0) {
-        videoTracks[0].enabled = isVideoEnabled;
+        videoTracks.forEach((track) => {
+          track.enabled = isVideoEnabled;
+        });
+      } else {
+        console.warn("No video tracks found in the media stream");
       }
 
       if (audioTracks.length > 0) {
-        audioTracks[0].enabled = isMicEnabled;
+        audioTracks.forEach((track) => {
+          track.enabled = isMicEnabled;
+        });
+      } else {
+        console.warn("No audio tracks found in the media stream");
       }
 
       console.log("Starting stream with tracks:", {
@@ -176,9 +245,36 @@ const StreamManager = forwardRef<
       }
     } catch (error) {
       console.error("Error starting stream:", error);
+
+      // Increment retry count
+      const newRetryCount = retryCount + 1;
+      setRetryCount(newRetryCount);
+
+      if (newRetryCount >= maxRetries) {
+        setConnectionError(
+          `Failed to start stream after ${maxRetries} attempts. Please check your camera and microphone permissions.`
+        );
+      } else {
+        setConnectionError(
+          `Connection attempt ${newRetryCount} of ${maxRetries} failed. Retry or check permissions.`
+        );
+      }
+
       toast.error(
         "Failed to start stream. Please check your camera and microphone permissions."
       );
+
+      // Clean up any partial resources
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
+        localStreamRef.current = null;
+      }
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+
+      throw error;
     }
   };
 
@@ -306,104 +402,80 @@ const StreamManager = forwardRef<
 
   // Toggle microphone
   const toggleMic = () => {
-    if (!localStreamRef.current) {
-      console.error("Cannot toggle mic: No local stream available");
-      toast.error("Microphone control unavailable. Try reloading the page.");
-      return;
-    }
-
-    const audioTracks = localStreamRef.current.getAudioTracks();
-    if (audioTracks.length === 0) {
-      console.error("No audio tracks found in local stream");
-      toast.error("No microphone detected. Check your device settings.");
-      return;
-    }
-
-    const newMicState = !isMicEnabled;
-    console.log(
-      `Toggling microphone to ${newMicState ? "enabled" : "disabled"}`
-    );
-
-    audioTracks.forEach((track) => {
-      track.enabled = newMicState;
-    });
-
-    setIsMicEnabled(newMicState);
-
-    // Update Firestore
     try {
-      // Ensure stream.id exists before using it
-      if (!stream.id) {
-        throw new Error("Stream ID is undefined");
+      if (!localStreamRef.current) return;
+
+      const tracks = localStreamRef.current.getAudioTracks();
+      if (tracks.length === 0) {
+        console.warn("No audio tracks found to toggle");
+        return;
       }
 
-      const streamDocRef = doc(db, "streams", stream.id);
-      console.log("Updating Firestore with audio state:", {
-        audioMuted: !newMicState,
+      // Update local state
+      const newMicState = !isMicEnabled;
+      setIsMicEnabled(newMicState);
+
+      // Apply to all audio tracks
+      tracks.forEach((track) => {
+        track.enabled = newMicState;
       });
 
-      updateDoc(streamDocRef, {
-        audioMuted: !newMicState,
-        lastUpdated: serverTimestamp(),
-      }).catch((error) => {
-        console.error("Error updating audio status in Firestore:", error);
-        toast.error("Failed to sync mic state with server");
-      });
+      console.log(`Audio ${newMicState ? "unmuted" : "muted"}`);
+
+      // Update Firestore with the status
+      if (stream.id) {
+        const streamDocRef = doc(db, "streams", stream.id);
+        updateDoc(streamDocRef, {
+          audioMuted: !newMicState, // Use audioMuted for consistency
+          lastUpdated: serverTimestamp(),
+        }).catch((error) => {
+          console.error("Error updating audio status:", error);
+          toast.error("Failed to update audio status");
+        });
+      }
     } catch (error) {
-      console.error("Error updating audio status:", error);
+      console.error("Error toggling microphone:", error);
+      toast.error("Failed to toggle microphone. Please try again.");
     }
-
-    toast.info(newMicState ? "Microphone unmuted" : "Microphone muted");
   };
 
   // Toggle camera
   const toggleVideo = () => {
-    if (!localStreamRef.current) {
-      console.error("Cannot toggle camera: No local stream available");
-      toast.error("Camera control unavailable. Try reloading the page.");
-      return;
-    }
-
-    const videoTracks = localStreamRef.current.getVideoTracks();
-    if (videoTracks.length === 0) {
-      console.error("No video tracks found in local stream");
-      toast.error("No camera detected. Check your device settings.");
-      return;
-    }
-
-    const newVideoState = !isVideoEnabled;
-    console.log(`Toggling camera to ${newVideoState ? "enabled" : "disabled"}`);
-
-    videoTracks.forEach((track) => {
-      track.enabled = newVideoState;
-    });
-
-    setIsVideoEnabled(newVideoState);
-
-    // Update Firestore
     try {
-      // Ensure stream.id exists before using it
-      if (!stream.id) {
-        throw new Error("Stream ID is undefined");
+      if (!localStreamRef.current) return;
+
+      const tracks = localStreamRef.current.getVideoTracks();
+      if (tracks.length === 0) {
+        console.warn("No video tracks found to toggle");
+        return;
       }
 
-      const streamDocRef = doc(db, "streams", stream.id);
-      console.log("Updating Firestore with camera state:", {
-        cameraOff: !newVideoState,
+      // Update local state
+      const newVideoState = !isVideoEnabled;
+      setIsVideoEnabled(newVideoState);
+
+      // Apply to all video tracks
+      tracks.forEach((track) => {
+        track.enabled = newVideoState;
       });
 
-      updateDoc(streamDocRef, {
-        cameraOff: !newVideoState,
-        lastUpdated: serverTimestamp(),
-      }).catch((error) => {
-        console.error("Error updating camera status in Firestore:", error);
-        toast.error("Failed to sync camera state with server");
-      });
+      console.log(`Video ${newVideoState ? "enabled" : "disabled"}`);
+
+      // Update Firestore with the status
+      if (stream.id) {
+        const streamDocRef = doc(db, "streams", stream.id);
+        updateDoc(streamDocRef, {
+          cameraOff: !newVideoState, // Use cameraOff for consistency
+          lastUpdated: serverTimestamp(),
+        }).catch((error) => {
+          console.error("Error updating video status:", error);
+          toast.error("Failed to update video status");
+        });
+      }
     } catch (error) {
-      console.error("Error updating camera status:", error);
+      console.error("Error toggling video:", error);
+      toast.error("Failed to toggle video. Please try again.");
     }
-
-    toast.info(newVideoState ? "Camera turned on" : "Camera turned off");
   };
 
   // Update stream info
@@ -469,9 +541,7 @@ const StreamManager = forwardRef<
               <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
               LIVE
             </div>
-            <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-white text-sm">
-              {formatTime(streamingTimer)}
-            </div>
+            <StreamDuration startedAt={stream.startedAt} />
           </div>
         )}
 
