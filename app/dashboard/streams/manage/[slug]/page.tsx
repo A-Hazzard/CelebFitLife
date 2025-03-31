@@ -10,7 +10,7 @@ import StreamManager from "@/components/streaming/StreamManager";
 import StreamChat from "@/components/streaming/StreamChat";
 import DeviceTester from "@/components/streaming/DeviceTester";
 import { Button } from "@/components/ui/button";
-import { Settings, RefreshCw } from "lucide-react";
+import { Settings, RefreshCw, AlertCircle, Mic, VideoOff } from "lucide-react";
 // Import Stream type from the models
 import { Stream } from "@/lib/models/Stream";
 import { toast } from "sonner";
@@ -164,73 +164,105 @@ export default function ManageStreamPage() {
   }
 
   return (
-    <div className="min-h-screen bg-brandBlack text-brandWhite">
-      <div className="container mx-auto px-4 py-6">
-        <div className="mb-6 flex justify-between items-center">
+    <div className="flex h-screen bg-brandBlack text-brandWhite overflow-hidden">
+      {/* Left sidebar for navigation/avatar placeholders */}
+      <div className="w-16 bg-gray-900 flex flex-col items-center py-4 border-r border-gray-800">
+        {/* Avatar placeholders */}
+        {[1, 2, 3, 4, 5, 6, 7].map((index) => (
+          <div
+            key={index}
+            className="w-10 h-10 rounded-full bg-gray-800 mb-4 flex items-center justify-center overflow-hidden"
+          >
+            {index === 1 && (
+              <div className="w-2 h-2 rounded-full bg-green-500 absolute top-0 right-0"></div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        {/* Header with stream title and controls */}
+        <div className="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold">{`Managing: ${
-              stream.title || "Untitled Stream"
-            }`}</h1>
+            <h1 className="text-xl font-bold">
+              {stream.title || "Untitled Stream"}
+            </h1>
+            <div className="text-sm text-gray-400 mt-1">
+              Manage your live stream settings and interact with viewers
+            </div>
           </div>
 
-          {!showDeviceTester && (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex items-center gap-2 bg-brandGray text-brandBlack hover:bg-gray-300"
-                onClick={() => setShowDeviceTester(true)}
-              >
-                <Settings size={16} />
-                Device Settings
-              </Button>
-
-              {!stream.status || stream.status !== "live" ? (
+          <div className="flex items-center gap-3">
+            {!showDeviceTester && (
+              <>
                 <Button
-                  className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
-                  onClick={handleStartStream}
+                  variant="outline"
+                  className="flex items-center gap-2 border-gray-700 bg-transparent hover:bg-gray-800 text-gray-300"
+                  onClick={() => setShowDeviceTester(true)}
                 >
-                  Start Streaming
+                  <Settings size={16} />
+                  <span className="hidden sm:inline">Device Settings</span>
                 </Button>
-              ) : null}
-            </div>
-          )}
+
+                {!stream.hasStarted ? (
+                  <Button
+                    className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+                    onClick={handleStartStream}
+                  >
+                    <span className="hidden sm:inline">Start Streaming</span>
+                    <span className="sm:hidden">Go Live</span>
+                  </Button>
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 bg-gray-900 rounded-lg overflow-hidden">
-            <div className="h-full relative">
+        {/* Main content grid */}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 p-4 overflow-auto">
+          {/* Stream manager panel */}
+          <div className="lg:col-span-2 flex flex-col">
+            {/* Stream preview and controls */}
+            <div className="bg-gray-900 rounded-lg overflow-hidden shadow-lg flex-1 relative">
               {showDeviceTester ? (
                 <DeviceTester
                   onComplete={handleDeviceTestComplete}
-                  className="min-h-[400px]"
+                  className="h-full min-h-[400px]"
                 />
               ) : (
                 <StreamManager
                   ref={streamManagerRef}
                   stream={stream as Stream}
-                  className="flex-1"
+                  className="h-full"
                 />
               )}
 
               {/* Connection error overlay */}
               {connectionError && (
-                <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center">
-                  <div className="text-red-500 text-xl mb-4">
-                    {connectionError}
+                <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center z-10">
+                  <div className="w-16 h-16 rounded-full bg-gray-800 mb-6 mx-auto flex items-center justify-center">
+                    <AlertCircle size={32} className="text-red-500" />
                   </div>
+                  <div className="text-xl font-bold mb-4 text-red-500">
+                    Connection Error
+                  </div>
+                  <p className="text-gray-300 mb-6 max-w-md text-center">
+                    {connectionError}
+                  </p>
                   <Button
                     onClick={handleRetryConnection}
-                    className="flex items-center gap-2 bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+                    className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
                     disabled={isRetrying}
                   >
                     {isRetrying ? (
                       <>
-                        <RefreshCw size={16} className="animate-spin" />
+                        <RefreshCw size={16} className="animate-spin mr-2" />
                         Retrying...
                       </>
                     ) : (
                       <>
-                        <RefreshCw size={16} />
+                        <RefreshCw size={16} className="mr-2" />
                         Retry Connection
                       </>
                     )}
@@ -238,9 +270,65 @@ export default function ManageStreamPage() {
                 </div>
               )}
             </div>
+
+            {/* Stream stats and additional controls could go here */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <div className="bg-gray-900 rounded-lg p-4 shadow-md flex flex-col items-center justify-center">
+                <div className="text-3xl font-bold text-brandOrange mb-1">
+                  0
+                </div>
+                <div className="text-sm text-gray-400">Viewers</div>
+              </div>
+              <div className="bg-gray-900 rounded-lg p-4 shadow-md flex flex-col items-center justify-center">
+                <div className="text-3xl font-bold text-brandOrange mb-1">
+                  0
+                </div>
+                <div className="text-sm text-gray-400">Likes</div>
+              </div>
+              <div className="bg-gray-900 rounded-lg p-4 shadow-md flex flex-col items-center justify-center">
+                <div className="text-3xl font-bold text-brandOrange mb-1">
+                  0
+                </div>
+                <div className="text-sm text-gray-400">Comments</div>
+              </div>
+            </div>
           </div>
-          <div className="bg-gray-900 rounded-lg overflow-hidden">
-            <StreamChat streamId={slug} className="h-[600px]" />
+
+          {/* Chat panel */}
+          <div className="bg-gray-900 rounded-lg overflow-hidden shadow-lg flex flex-col">
+            <div className="p-4 border-b border-gray-800">
+              <h2 className="text-lg font-bold flex items-center">
+                <span>Live Chat</span>
+                <span className="ml-2 px-2 py-0.5 bg-brandOrange text-brandBlack text-xs rounded-full">
+                  LIVE
+                </span>
+              </h2>
+            </div>
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <div className="flex-1 overflow-y-auto">
+                <StreamChat streamId={slug} className="h-full min-h-[400px]" />
+              </div>
+
+              {/* Chat input */}
+              <div className="p-4 border-t border-gray-800">
+                <div className="relative">
+                  <div className="flex items-center space-x-2 absolute bottom-3 left-3">
+                    <button className="text-brandOrange">
+                      <Mic size={20} />
+                    </button>
+                    <button className="text-brandOrange">
+                      <VideoOff size={20} />
+                    </button>
+                    <button className="text-brandOrange">😊</button>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Send a message..."
+                    className="w-full bg-gray-800 text-white border-0 rounded-lg p-3 pl-28 focus:ring-brandOrange focus:ring-1 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

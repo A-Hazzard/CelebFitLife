@@ -1,11 +1,29 @@
 import React from "react";
+import { cn } from "@/lib/utils";
 
-const Loader = ({ className = "" }: { className?: string }) => {
+interface LoaderProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+const Loader = ({ className, ...props }: LoaderProps) => {
   return (
-    <div className={`flex items-center justify-center space-x-2 ${className}`}>
-      <div className="h-3 w-3 bg-brandOrange rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-      <div className="h-3 w-3 bg-brandGray rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-      <div className="h-3 w-3 bg-brandWhite rounded-full animate-bounce"></div>
+    <div
+      className={cn("flex justify-center items-center", className)}
+      {...props}
+    >
+      <div className="relative">
+        {/* Outer ring with pulse animation */}
+        <div className="absolute inset-0 rounded-full border-t-2 border-b-2 border-brandOrange opacity-20 animate-spin"></div>
+
+        {/* Middle ring with pulse animation */}
+        <div
+          className="absolute inset-1 rounded-full border-t-2 border-b-2 border-brandOrange opacity-40 animate-spin"
+          style={{ animationDuration: "1.2s" }}
+        ></div>
+
+        {/* Inner dot with pulse effect */}
+        <div className="h-8 w-8 rounded-full flex items-center justify-center">
+          <div className="h-2 w-2 bg-brandOrange rounded-full animate-pulse"></div>
+        </div>
+      </div>
     </div>
   );
 };

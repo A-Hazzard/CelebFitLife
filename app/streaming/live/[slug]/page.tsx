@@ -1539,342 +1539,285 @@ export default function LiveViewPage() {
   if (!hasHydrated || !currentUser) return null;
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-brandBlack text-brandWhite overflow-hidden">
-      <div className="flex items-center justify-between py-2 px-4 border-b border-gray-800">
-        <div className="flex items-center space-x-4">
-          <div className="h-8 w-8 rounded overflow-hidden flex-shrink-0 bg-brandGray">
-            <Image
-              src={thumbnailUrl}
-              alt="Stream thumbnail"
-              className="h-full w-full object-cover"
-              width={32}
-              height={32}
-              onError={() => {
-                setThumbnailUrl(
-                  "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg"
-                );
-              }}
-            />
+    <div className="flex h-screen bg-brandBlack text-brandWhite overflow-hidden">
+      {/* Left sidebar for navigation/avatar placeholders */}
+      <div className="w-16 bg-gray-900 flex flex-col items-center py-4 border-r border-gray-800">
+        {/* Avatar placeholders */}
+        {[1, 2, 3, 4, 5, 6, 7].map((index) => (
+          <div
+            key={index}
+            className="w-10 h-10 rounded-full bg-gray-800 mb-4 flex items-center justify-center overflow-hidden"
+          >
+            {index === 1 && (
+              <div className="w-2 h-2 rounded-full bg-green-500 absolute top-0 right-0"></div>
+            )}
           </div>
-          <h1 className="text-lg font-bold text-brandWhite">{streamTitle}</h1>
-        </div>
-
-        {hasStarted && (
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-red-600 px-2 py-0.5 rounded-full text-white text-xs">
-              <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
-              LIVE
-            </div>
-          </div>
-        )}
+        ))}
       </div>
 
-      <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-2.5rem)]">
-        {/* Video Section */}
-        <div className="flex-1 p-2 md:p-4 h-full">
-          <div className="w-full h-full relative">
-            <div
-              ref={videoContainerRef}
-              className="w-full aspect-video bg-gray-900 relative overflow-hidden rounded-lg shadow-lg"
-            ></div>
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col md:flex-row h-full">
+        {/* Main video stream area */}
+        <div className="flex-1 relative">
+          {/* Video container */}
+          <div
+            ref={videoContainerRef}
+            className="w-full h-full bg-gray-900 relative overflow-hidden"
+          >
+            {/* Stream status indicators */}
+            <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
+              {hasStarted && videoStatus === "active" ? (
+                <div className="flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-white text-sm">
+                  <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+                  LIVE
+                </div>
+              ) : null}
 
-            {/* Status Overlays */}
-            {videoStatus === "waiting" && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
-                <div className="mb-4 text-center">
-                  {isScheduled ? (
-                    <>
-                      <h2 className="text-xl font-bold mb-4 text-center">
-                        Stream Scheduled
-                      </h2>
-                      <Countdown
-                        scheduledTime={
-                          scheduledTime
-                            ? scheduledTime.toDate().toISOString()
-                            : null
-                        }
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <Loader className="mb-6" />
-                      <h2 className="text-xl font-semibold text-white mb-2">
-                        Waiting for Stream to Begin
-                      </h2>
-                      <p className="text-gray-300">
-                        The streamer will be live soon. Please wait...
-                      </p>
-                    </>
-                  )}
+              {streamStartTime && hasStarted && (
+                <div className="bg-black bg-opacity-60 text-brandWhite px-3 py-1 rounded-full text-sm">
+                  {formatDuration(streamDuration)}
+                </div>
+              )}
+            </div>
+
+            {/* Streamer name and viewer count */}
+            <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+              <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-brandWhite text-sm flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                <span>@Streamer</span>
+              </div>
+              <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-brandWhite text-sm">
+                1.2K viewers
+              </div>
+            </div>
+
+            {/* Status overlays */}
+            {videoStatus === "waiting" && !isScheduled && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-80 z-10">
+                <div className="text-center">
+                  <Loader className="w-12 h-12 mb-4" />
+                  <h2 className="text-2xl font-bold mb-2">
+                    Waiting for Stream
+                  </h2>
+                  <p className="text-gray-400">
+                    The stream has not started yet.
+                  </p>
                 </div>
               </div>
             )}
 
             {videoStatus === "connecting" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
-                <div className="animate-pulse flex flex-col items-center">
-                  <Loader className="mb-6" />
-                  <h2 className="text-xl font-bold">Connecting to Stream</h2>
-                  <p className="text-sm text-gray-400 mt-2">Please wait...</p>
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-80 z-10">
+                <div className="text-center">
+                  <Loader className="w-12 h-12 mb-4" />
+                  <h2 className="text-2xl font-bold mb-2">Connecting</h2>
+                  <p className="text-gray-400">
+                    Establishing connection to stream...
+                  </p>
+                  {connectionAttempts > 1 && (
+                    <p className="text-sm text-brandOrange mt-2">
+                      Attempt {connectionAttempts} of {maxConnectionAttempts}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
 
             {videoStatus === "offline" && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
-                <div className="text-center p-8 max-w-md">
-                  <div className="mb-4 text-gray-400">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-12 w-12 mx-auto"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 z-10">
+                <div className="text-center max-w-md">
+                  <div className="w-16 h-16 rounded-full bg-gray-800 mb-6 mx-auto flex items-center justify-center">
+                    <VideoOff size={32} className="text-brandOrange" />
                   </div>
-                  <h3 className="text-xl font-bold mb-2">Stream is Offline</h3>
-                  <p className="mb-4 text-gray-300">
-                    {connectionError ||
-                      "The stream is currently offline. Please check back later."}
+                  <h2 className="text-2xl font-bold mb-2">Stream Offline</h2>
+                  <p className="text-gray-400 mb-6">
+                    The stream is currently offline. Please check back later.
                   </p>
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-full"
+                  <Button
+                    onClick={checkStreamAndRetry}
+                    disabled={isRetrying}
+                    className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
                   >
-                    Refresh Page
-                  </button>
+                    {isRetrying ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4" />
+                        Retrying...
+                      </>
+                    ) : (
+                      "Check Again"
+                    )}
+                  </Button>
                 </div>
               </div>
             )}
 
-            {/* Enhanced ended overlay with better visuals */}
             {videoStatus === "ended" && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
-                <div className="text-center p-8 max-w-md">
-                  <div className="mb-4 text-brandOrange">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-12 w-12 mx-auto"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                      />
-                    </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 z-10">
+                <div className="text-center max-w-md">
+                  <div className="w-16 h-16 rounded-full bg-gray-800 mb-6 mx-auto flex items-center justify-center">
+                    <VideoOff size={32} className="text-brandOrange" />
                   </div>
-                  <h3 className="text-xl font-bold mb-2">Stream Has Ended</h3>
-                  <p className="mb-4 text-gray-300">
-                    Thanks for watching! The streamer has ended this live
-                    session.
+                  <h2 className="text-2xl font-bold mb-2">Stream Ended</h2>
+                  <p className="text-gray-400 mb-4">
+                    Thank you for watching! This stream has ended.
                   </p>
-                  <button
-                    onClick={() => {
-                      window.location.href = "/streaming";
-                    }}
-                    className="bg-brandOrange hover:bg-brandOrange/80 text-white font-bold py-2 px-4 rounded-full"
-                  >
-                    Explore More Streams
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Connection Error Overlay */}
-            {videoStatus === "error" && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
-                <div className="text-center p-8 max-w-md">
-                  <div className="mb-4 text-red-500">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-12 w-12 mx-auto"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  {thumbnailUrl && (
+                    <div className="relative w-full h-40 mb-4 rounded-lg overflow-hidden">
+                      <Image
+                        src={thumbnailUrl}
+                        alt={streamTitle || "Stream thumbnail"}
+                        fill
+                        className="object-cover"
                       />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-bold mb-2">Connection Error</h3>
-                  <p className="mb-4 text-gray-300">
-                    {connectionError || "Failed to connect to the stream."}
-                  </p>
-                  <div className="flex justify-center">
-                    <button
-                      onClick={async () => {
-                        if (isRetrying) return;
-                        setIsRetrying(true);
-
-                        // Clear any existing Twilio room
-                        if (room) {
-                          room.disconnect();
-                        }
-
-                        // Reset all state
-                        setRoom(null);
-                        setRemoteParticipant(null);
-                        setRemoteVideoTrack(null);
-                        setRemoteAudioTrack(null);
-
-                        // Retry connection after a short delay
-                        setTimeout(async () => {
-                          try {
-                            await checkStreamAndRetry();
-                          } finally {
-                            setIsRetrying(false);
-                          }
-                        }, 1000);
-                      }}
-                      disabled={isRetrying}
-                      className="bg-brandOrange hover:bg-brandOrange/80 text-white font-bold py-2 px-4 rounded-full inline-flex items-center"
-                    >
-                      {isRetrying ? (
-                        <>
-                          <Loader className="mr-2" />
-                          Reconnecting...
-                        </>
-                      ) : (
-                        "Try Again"
-                      )}
-                    </button>
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="ml-2 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-full"
-                      disabled={isRetrying}
-                    >
-                      Refresh Page
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Live Indicator */}
-            {videoStatus === "active" && (
-              <div className="absolute top-4 left-4 flex items-center gap-2">
-                <div className="flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-white text-sm">
-                  <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
-                  LIVE
-                </div>
-                {streamStartTime && (
-                  <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-white text-sm">
-                    {formatDuration(streamDuration)}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Audio/Video Status Indicators - Show even when video is active */}
-            {videoStatus === "active" && (
-              <div className="absolute top-4 right-4 flex items-center gap-2">
-                <div
-                  className={`flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-sm ${
-                    twilioConnectionStatus === "connected"
-                      ? "text-green-500"
-                      : twilioConnectionStatus === "connecting"
-                      ? "text-yellow-500"
-                      : "text-red-500"
-                  }`}
-                >
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      twilioConnectionStatus === "connected"
-                        ? "bg-green-500"
-                        : twilioConnectionStatus === "connecting"
-                        ? "bg-yellow-500 animate-pulse"
-                        : "bg-red-500"
-                    }`}
-                  ></span>
-                  <span>
-                    {twilioConnectionStatus === "connected"
-                      ? "Connected"
-                      : twilioConnectionStatus === "connecting"
-                      ? "Reconnecting..."
-                      : "Disconnected"}
-                  </span>
-                </div>
-
-                {streamerStatus.audioMuted && (
-                  <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
-                    <MicOff size={16} />
-                    <span>Muted</span>
-                  </div>
-                )}
-                {streamerStatus.cameraOff && (
-                  <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
-                    <VideoOff size={16} />
-                    <span>Camera Off</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Large Overlay Icons for Muted/Camera Off */}
-            {videoStatus === "active" && (
-              <>
-                {/* Center Camera Off Icon */}
-                {streamerStatus.cameraOff && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="bg-black bg-opacity-60 p-5 rounded-full">
-                      <VideoOff size={60} className="text-white" />
                     </div>
-                  </div>
-                )}
-
-                {/* Bottom-right Audio Muted Icon */}
-                {streamerStatus.audioMuted && (
-                  <div className="absolute bottom-4 right-4">
-                    <div className="bg-black bg-opacity-60 p-2 rounded-full">
-                      <MicOff size={24} className="text-white" />
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Audio control for viewer */}
-            {videoStatus === "active" && remoteAudioTrack && (
-              <div className="absolute bottom-4 left-4">
-                <button
-                  onClick={toggleAudioMute}
-                  className="flex items-center gap-2 bg-black bg-opacity-70 px-3 py-2 rounded-full text-white"
-                >
-                  {isAudioMuted ? (
-                    <>
-                      <MicOff size={18} />
-                      <span className="text-sm">Unmute</span>
-                    </>
-                  ) : (
-                    <>
-                      <Mic size={18} />
-                      <span className="text-sm">Mute</span>
-                    </>
                   )}
-                </button>
+                </div>
               </div>
             )}
+
+            {videoStatus === "error" && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 z-10">
+                <div className="text-center max-w-md">
+                  <div className="w-16 h-16 rounded-full bg-gray-800 mb-6 mx-auto flex items-center justify-center">
+                    <AlertCircle size={32} className="text-red-500" />
+                  </div>
+                  <h2 className="text-2xl font-bold mb-2 text-red-500">
+                    Connection Error
+                  </h2>
+                  <p className="text-gray-400 mb-6">
+                    {connectionError ||
+                      "Failed to connect to the stream. Please try again."}
+                  </p>
+                  <Button
+                    onClick={checkStreamAndRetry}
+                    disabled={
+                      isRetrying || connectionAttempts >= maxConnectionAttempts
+                    }
+                    className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
+                  >
+                    {isRetrying ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4" />
+                        Retrying...
+                      </>
+                    ) : (
+                      "Try Again"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {isScheduled && videoStatus === "waiting" && scheduledTime && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 z-10">
+                <div className="text-center max-w-md">
+                  <h2 className="text-2xl font-bold mb-2">Stream Scheduled</h2>
+                  <p className="text-gray-400 mb-4">
+                    This stream is scheduled to begin soon.
+                  </p>
+
+                  <div className="mb-6">
+                    <Countdown targetDate={scheduledTime.toDate()} />
+                  </div>
+
+                  {thumbnailUrl && (
+                    <div className="relative w-full h-48 rounded-lg overflow-hidden">
+                      <Image
+                        src={thumbnailUrl}
+                        alt={streamTitle || "Stream thumbnail"}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Audio muted indicator */}
+            {hasStarted &&
+              videoStatus === "active" &&
+              streamerStatus.audioMuted && (
+                <div className="absolute bottom-4 left-4 bg-black bg-opacity-60 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                  <MicOff size={16} className="text-brandOrange" />
+                  <span>Streamer is muted</span>
+                </div>
+              )}
+
+            {/* Interactive controls */}
+            <div className="absolute bottom-4 right-4 flex gap-2 z-10">
+              <Button
+                onClick={toggleAudioMute}
+                variant="outline"
+                size="icon"
+                className="bg-black bg-opacity-60 border-0 hover:bg-black hover:bg-opacity-80"
+                title={isAudioMuted ? "Unmute" : "Mute"}
+              >
+                {isAudioMuted ? <MicOff size={18} /> : <Mic size={18} />}
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Chat Section */}
-        <div className="w-full md:w-96 h-full p-2 md:p-4">
-          <StreamChat streamId={slug} className="h-full" />
+        {/* Right sidebar: Chat and stream info */}
+        <div className="w-full md:w-96 bg-gray-900 border-l border-gray-800 flex flex-col h-full">
+          {/* Stream info */}
+          <div className="p-4 border-b border-gray-800">
+            <h1 className="text-xl font-bold mb-1 truncate">
+              {streamTitle || "Live Stream"}
+            </h1>
+            <div className="flex items-center text-sm text-gray-400">
+              <span>@Streamer</span>
+              <span className="mx-2">•</span>
+              <span>
+                {streamDuration > 0 ? formatDuration(streamDuration) : "Live"}
+              </span>
+            </div>
+          </div>
+
+          {/* Stream Tags */}
+          <div className="px-4 py-2 border-b border-gray-800 flex flex-wrap gap-2">
+            <span className="bg-brandOrange/20 text-brandOrange text-xs px-2 py-1 rounded-full">
+              Top Charts
+            </span>
+            <span className="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded-full">
+              Tags
+            </span>
+            <span className="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded-full">
+              Question 1
+            </span>
+            <span className="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded-full">
+              Question 2
+            </span>
+            <span className="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded-full">
+              Question 3
+            </span>
+          </div>
+
+          {/* Chat panel */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-4">
+              <StreamChat streamId={slug} />
+            </div>
+            <div className="p-4 border-t border-gray-800">
+              <div className="relative">
+                <div className="flex items-center space-x-2 absolute bottom-3 left-3">
+                  <button className="text-brandOrange">
+                    <Mic size={20} />
+                  </button>
+                  <button className="text-brandOrange">
+                    <VideoOff size={20} />
+                  </button>
+                  <button className="text-brandOrange">😊</button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Text box"
+                  className="w-full bg-gray-800 text-white border-0 rounded-lg p-3 pl-28 focus:ring-brandOrange focus:ring-1 focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
