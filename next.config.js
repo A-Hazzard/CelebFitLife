@@ -2,11 +2,31 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: [
-      "firebasestorage.googleapis.com",
-      "1.bp.blogspot.com",
-      "unsplash.com",
-      "images.unsplash.com",
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**.googleusercontent.com",
+      },
+      {
+        protocol: "https",
+        hostname: "firebasestorage.googleapis.com",
+      },
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
+      {
+        protocol: "https",
+        hostname: "img.icons8.com",
+      },
+      {
+        protocol: "https",
+        hostname: "randomuser.me",
+      },
+      {
+        protocol: "https",
+        hostname: "**.blogspot.com",
+      },
     ],
   },
   webpack: (config, { isServer }) => {

@@ -10,7 +10,7 @@ import {
 import {
   clearVideoContainer,
   updateTrackEnabledState,
-} from "@/lib/utils/streaming";
+} from "@/lib/utils/twilio";
 import { WithListeners, WithDetach } from "@/lib/types/streaming";
 import { createLogger } from "@/lib/utils/logger";
 

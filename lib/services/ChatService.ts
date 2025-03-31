@@ -1,5 +1,10 @@
+/**
+ * CLIENT-SIDE CHAT SERVICE
+ * This service handles chat functionality in the client using Firebase direct SDK access.
+ */
+
 import { db } from "@/lib/config/firebase";
-import { ChatMessage } from "@/lib/types/stream";
+import { ChatMessage } from "@/lib/types/streaming";
 import {
   collection,
   addDoc,

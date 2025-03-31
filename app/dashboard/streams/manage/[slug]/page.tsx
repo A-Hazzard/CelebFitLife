@@ -12,7 +12,7 @@ import DeviceTester from "@/components/streaming/DeviceTester";
 import { Button } from "@/components/ui/button";
 import { Settings, RefreshCw } from "lucide-react";
 // Import Stream type from the models
-import { Stream } from "@/lib/models/Stream";
+import { Stream } from "@/lib/types/streaming";
 import { toast } from "sonner";
 
 export default function ManageStreamPage() {
@@ -184,14 +184,14 @@ export default function ManageStreamPage() {
                 Device Settings
               </Button>
 
-              {!stream.hasStarted && (
+              {!stream.status || stream.status !== "live" ? (
                 <Button
                   className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
                   onClick={handleStartStream}
                 >
                   Start Streaming
                 </Button>
-              )}
+              ) : null}
             </div>
           )}
         </div>

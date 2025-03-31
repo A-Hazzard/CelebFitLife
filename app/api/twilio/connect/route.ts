@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { TwilioService } from "@/lib/services/TwilioService";
-import { handleApiError, ApiError } from "@/lib/utils/errorHandler";
+import { TwilioService } from "../../lib/services/TwilioService";
+import { ValidationError } from "../../lib/errors/apiErrors";
 
 // Make sure this is a server-side route by using the 'use server' directive
 export const dynamic = "force-dynamic";
@@ -16,14 +16,12 @@ export async function POST(req: Request) {
   console.log(`[API:${requestId}] Twilio Connect API called`);
 
   try {
-    // Get region information from headers if available
     const countryCode = req.headers.get("cf-ipcountry") || "unknown";
     const userAgent = req.headers.get("user-agent") || "unknown";
 
     console.log(`[API:${requestId}] Request from region: ${countryCode}`);
-    console.log(`[API:${requestId}] User-Agent: ${userAgent}`);
+    // console.log(`[API:${requestId}] User-Agent: ${userAgent}`); // Optional: Log user agent
 
-    // Parse request body
     let body;
     try {
       body = await req.json();
@@ -31,6 +29,7 @@ export async function POST(req: Request) {
       console.error(`[API:${requestId}] Failed to parse request body:`, error);
       return NextResponse.json(
         {
+          success: false,
           error: "Invalid JSON body",
           details: "The request body could not be parsed as JSON",
           requestId: requestId,
@@ -39,19 +38,23 @@ export async function POST(req: Request) {
       );
     }
 
-    // Validate required fields
     const { roomName, userName } = body;
     if (!roomName || !userName) {
-      console.error(`[API:${requestId}] Missing required fields:`, {
-        roomName,
-        userName,
-      });
+      const missingFields = [];
+      if (!roomName) missingFields.push("roomName");
+      if (!userName) missingFields.push("userName");
+      console.error(
+        `[API:${requestId}] Missing required fields: ${missingFields.join(
+          ", "
+        )}`
+      );
       return NextResponse.json(
         {
+          success: false,
           error: "Missing required fields",
-          details: `roomName${!roomName ? " (missing)" : ""} and userName${
-            !userName ? " (missing)" : ""
-          } are required`,
+          details: `The following fields are required: ${missingFields.join(
+            ", "
+          )}`,
           requestId: requestId,
         },
         { status: 400 }
@@ -59,76 +62,54 @@ export async function POST(req: Request) {
     }
 
     console.log(
-      `[API:${requestId}] Generating Twilio token for room: ${roomName}`
+      `[API:${requestId}] Generating Twilio token for room: ${roomName}, User: ${userName}`
     );
-    console.log(`[API:${requestId}] User: ${userName}`);
-    console.log(`[API:${requestId}] Region: ${countryCode}`);
 
-    // Validate environment variables
-    if (
-      !process.env.TWILIO_ACCOUNT_SID ||
-      !process.env.TWILIO_API_KEY_SID ||
-      !process.env.TWILIO_API_KEY_SECRET
-    ) {
-      console.error(`[API:${requestId}] Missing Twilio environment variables`);
-      throw new ApiError(
-        "Server configuration error - missing Twilio credentials",
-        500
-      );
-    }
+    // TwilioService constructor validates env vars, throws Error if missing
+    const twilioService = new TwilioService();
+    const token = await twilioService.generateToken(roomName, userName);
 
-    // Create TwilioService and generate token
-    try {
-      const twilioService = new TwilioService();
-      const token = await twilioService.generateToken(roomName, userName);
+    const requestDuration = Date.now() - requestStartTime;
+    console.log(
+      `[API:${requestId}] Successfully generated token. Duration: ${requestDuration}ms`
+    );
 
-      const requestDuration = Date.now() - requestStartTime;
-      console.log(
-        `[API:${requestId}] Successfully generated token for room: ${roomName}`
-      );
-      console.log(`[API:${requestId}] User: ${userName}`);
-      console.log(`[API:${requestId}] Duration: ${requestDuration}ms`);
-
-      // Return token response
-      return NextResponse.json({
-        token,
-        identity: userName,
-        status: "success",
-        region: countryCode,
-        requestId: requestId,
-        latency: requestDuration,
-      });
-    } catch (twilioError) {
-      console.error(
-        `[API:${requestId}] Error generating Twilio token:`,
-        twilioError
-      );
-      throw new ApiError(
-        `Failed to generate Twilio token: ${
-          twilioError instanceof Error ? twilioError.message : "Unknown error"
-        }`,
-        500
-      );
-    }
-  } catch (error) {
+    // Return token response
+    return NextResponse.json({
+      success: true,
+      token,
+      identity: userName,
+      requestId: requestId,
+      latency: requestDuration,
+    });
+  } catch (error: unknown) {
     const requestDuration = Date.now() - requestStartTime;
     console.error(
       `[API:${requestId}] Error in Twilio connect API after ${requestDuration}ms:`,
       error
     );
 
-    // Add request ID to the error response
-    const response = handleApiError(error);
+    let errorMessage = "An internal server error occurred.";
+    let status = 500;
 
-    // Parse the response to add the request ID
-    const body = await response.json();
+    if (error instanceof ValidationError) {
+      errorMessage = error.message;
+      status = 400; // Bad Request for validation errors
+    } else if (error instanceof Error) {
+      // For standard errors (like config issues from TwilioService or SDK errors)
+      // Keep the status as 500 but use the error message
+      errorMessage = error.message;
+    }
+    // else {} // Keep default message and status for non-Error types
+
     return NextResponse.json(
       {
-        ...body,
+        success: false,
+        error: errorMessage,
         requestId: requestId,
         latency: requestDuration,
       },
-      { status: response.status }
+      { status }
     );
   }
 }

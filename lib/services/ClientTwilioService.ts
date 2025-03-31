@@ -1,252 +1,229 @@
-// Client-side only TwilioService that uses the API
+/**
+ * CLIENT-SIDE TWILIO SERVICE
+ * This service handles Twilio video functionality in the client by making API calls to the backend.
+ * It manages tokens, connections, and caching for Twilio video sessions.
+ */
+
+import {
+  LocalVideoTrack,
+  LocalAudioTrack,
+  Room,
+  LocalParticipant,
+} from "twilio-video";
+import {
+  createVideoTrack,
+  createAudioTrack,
+  connectToRoom,
+  setupReconnectionHandlers,
+} from "@/lib/utils/twilio";
+import { createLogger } from "@/lib/utils/logger";
+
+// Cache for storing tokens and room connections
+interface TokenCache {
+  [key: string]: {
+    token: string;
+    expiresAt: number; // Timestamp in milliseconds
+  };
+}
+
+const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000; // 5 minutes buffer before token expiry
+
 export class ClientTwilioService {
-  private tokenCache: Record<string, { token: string; expiresAt: number }> = {};
-  private cacheTtl: number;
-  private sessionId: string;
-  private isConnecting: boolean = false;
-  private connectionAttempts: Record<string, number> = {};
-  private maxConnectionAttempts: number = 3;
-
-  constructor(cacheTtl = 5 * 60 * 1000) {
-    // 5 minutes cache by default
-    this.cacheTtl = cacheTtl;
-    // Generate a unique session ID to prevent duplicate identity errors
-    this.sessionId = this.generateSessionId();
-    console.log(
-      `ClientTwilioService initialized with session ID: ${this.sessionId}`
-    );
-  }
+  private tokenCache: TokenCache = {};
+  private logger = createLogger("ClientTwilioService");
 
   /**
-   * Generate a unique session ID
+   * Gets a Twilio token from the server
    */
-  private generateSessionId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
-  }
+  async getToken(streamId: string, userId: string): Promise<string> {
+    const cacheKey = `${streamId}:${userId}`;
+    const now = Date.now();
 
-  /**
-   * Get a token for a room by calling the API
-   */
-  async getToken(roomName: string, userName: string): Promise<string> {
-    if (this.isConnecting) {
-      console.warn(
-        "[ClientTwilioService] Token request already in progress, please wait..."
-      );
-      throw new Error("Token request already in progress, please wait...");
+    // Check if we have a valid cached token
+    if (
+      this.tokenCache[cacheKey] &&
+      this.tokenCache[cacheKey].expiresAt > now + TOKEN_EXPIRY_BUFFER_MS
+    ) {
+      this.logger.debug(`Using cached token for stream ${streamId}`);
+      return this.tokenCache[cacheKey].token;
     }
 
     try {
-      this.isConnecting = true;
+      this.logger.info(`Fetching new token for stream ${streamId}`);
+      const response = await fetch(`/api/twilio/token?streamId=${streamId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
-      // Track connection attempts for this room
-      const connectionKey = `${roomName}:${userName}`;
-      this.connectionAttempts[connectionKey] =
-        (this.connectionAttempts[connectionKey] || 0) + 1;
-      const currentAttempt = this.connectionAttempts[connectionKey];
-
-      if (currentAttempt > this.maxConnectionAttempts) {
-        console.error(
-          `[ClientTwilioService] Too many connection attempts (${currentAttempt}) for room: ${roomName}`
-        );
-        throw new Error(
-          `Too many connection attempts. Please try again later or refresh the page.`
-        );
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to get Twilio token");
       }
 
-      console.log(
-        `[ClientTwilioService] Connection attempt ${currentAttempt} of ${this.maxConnectionAttempts} for room: ${roomName}`
-      );
+      const data = await response.json();
 
-      if (!roomName) {
-        console.error("[ClientTwilioService] Room name is required");
-        throw new Error("Room name is required for Twilio token");
-      }
+      // Cache the token with an expiry (default: 24h minus buffer)
+      this.tokenCache[cacheKey] = {
+        token: data.token,
+        expiresAt: now + 24 * 60 * 60 * 1000 - TOKEN_EXPIRY_BUFFER_MS,
+      };
 
-      if (!userName) {
-        console.error("[ClientTwilioService] User name is required");
-        throw new Error("User name is required for Twilio token");
-      }
-
-      // Sanitize inputs to avoid common issues
-      const sanitizedRoomName = roomName.trim();
-      const sanitizedUserName = userName.trim();
-
-      // Log if sanitization changed the values
-      if (sanitizedRoomName !== roomName) {
-        console.warn(
-          `[ClientTwilioService] Room name was trimmed from "${roomName}" to "${sanitizedRoomName}"`
-        );
-      }
-
-      if (sanitizedUserName !== userName) {
-        console.warn(
-          `[ClientTwilioService] User name was trimmed from "${userName}" to "${sanitizedUserName}"`
-        );
-      }
-
-      // Create a unique identity using userName and the session ID
-      const uniqueIdentity = `${sanitizedUserName}_${this.sessionId}`;
-
-      // Check cache first
-      const cacheKey = `${sanitizedRoomName}:${uniqueIdentity}`;
-      const now = Date.now();
-      const cachedEntry = this.tokenCache[cacheKey];
-
-      if (cachedEntry && cachedEntry.expiresAt > now) {
-        console.log(
-          `[ClientTwilioService] Using cached client token for room: ${sanitizedRoomName}, user: ${uniqueIdentity}`
-        );
-        return cachedEntry.token;
-      }
-
-      console.log(
-        `[ClientTwilioService] Requesting new token for room: ${sanitizedRoomName}, user: ${uniqueIdentity}`
-      );
-
-      const requestStartTime = Date.now();
-      try {
-        // Add a timeout to the fetch request to handle slow international connections
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-
-        // Call the API to get a token
-        const response = await fetch("/api/twilio/connect", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            roomName: sanitizedRoomName,
-            userName: uniqueIdentity,
-          }),
-          signal: controller.signal,
-        }).finally(() => {
-          clearTimeout(timeoutId);
-        });
-
-        const requestTime = Date.now() - requestStartTime;
-        console.log(
-          `[ClientTwilioService] API request completed in ${requestTime}ms`
-        );
-
-        if (requestTime > 5000) {
-          console.warn(
-            `[ClientTwilioService] Slow API response (${requestTime}ms). This may indicate network latency.`
-          );
-        }
-
-        if (!response.ok) {
-          const errorText = await response
-            .text()
-            .catch(() => response.statusText);
-
-          // Try to parse the error as JSON if possible
-          let errorDetails = "Unknown error";
-          try {
-            const errorJson = JSON.parse(errorText);
-            errorDetails = errorJson.error || errorJson.details || errorText;
-          } catch {
-            errorDetails = errorText;
-          }
-
-          console.error(
-            `[ClientTwilioService] Failed to get token: ${response.status} ${response.statusText}`,
-            errorDetails
-          );
-
-          if (response.status === 0 || response.status >= 500) {
-            throw new Error(
-              `Server error or network issue. This may be due to international connection latency. Please try again.`
-            );
-          } else if (response.status === 401 || response.status === 403) {
-            throw new Error(
-              `Authentication failed: ${errorDetails}. Check if your Twilio credentials are correct.`
-            );
-          } else {
-            throw new Error(
-              `Failed to get Twilio token: ${errorDetails} (${response.status})`
-            );
-          }
-        }
-
-        const data = await response.json();
-
-        if (!data.token) {
-          console.error(
-            "[ClientTwilioService] No token received from API",
-            data
-          );
-
-          if (data.error) {
-            throw new Error(`Token request failed: ${data.error}`);
-          } else {
-            throw new Error("No token received from API");
-          }
-        }
-
-        console.log(
-          `[ClientTwilioService] Successfully received token for room: ${sanitizedRoomName}`
-        );
-
-        // Reset connection attempts on success
-        this.connectionAttempts[connectionKey] = 0;
-
-        // Cache the token
-        this.tokenCache[cacheKey] = {
-          token: data.token,
-          expiresAt: now + this.cacheTtl,
-        };
-
-        return data.token;
-      } catch (error) {
-        console.error(
-          "[ClientTwilioService] Error getting Twilio token:",
-          error
-        );
-
-        // Handle specific error types
-        if (
-          error instanceof TypeError &&
-          error.message.includes("NetworkError")
-        ) {
-          throw new Error(
-            "Network connection error. Please check your internet connection."
-          );
-        } else if (error instanceof Error && error.name === "AbortError") {
-          throw new Error(
-            "Request timed out. This may be due to slow network conditions or server issues."
-          );
-        }
-
-        // Rethrow with a clear message
-        throw error instanceof Error
-          ? error
-          : new Error(`Failed to get Twilio token: ${error}`);
-      }
-    } finally {
-      this.isConnecting = false;
+      return data.token;
+    } catch (error) {
+      this.logger.error(`Error getting Twilio token:`, error);
+      throw error;
     }
   }
 
   /**
-   * Clear the token cache
+   * Creates local tracks for camera and microphone
    */
-  clearCache(): void {
-    this.tokenCache = {};
-    this.connectionAttempts = {};
-    console.log("[ClientTwilioService] Client Twilio token cache cleared");
+  async createLocalTracks(
+    cameraDeviceId?: string,
+    micDeviceId?: string
+  ): Promise<{
+    videoTrack: LocalVideoTrack | null;
+    audioTrack: LocalAudioTrack | null;
+    errors: { video?: Error; audio?: Error };
+  }> {
+    const errors: { video?: Error; audio?: Error } = {};
+    let videoTrack: LocalVideoTrack | null = null;
+    let audioTrack: LocalAudioTrack | null = null;
+
+    // Create video track
+    try {
+      videoTrack = await createVideoTrack(cameraDeviceId);
+      this.logger.debug("Created local video track");
+    } catch (error) {
+      this.logger.error("Failed to create video track:", error);
+      errors.video = error instanceof Error ? error : new Error(String(error));
+    }
+
+    // Create audio track
+    try {
+      audioTrack = await createAudioTrack(micDeviceId);
+      this.logger.debug("Created local audio track");
+    } catch (error) {
+      this.logger.error("Failed to create audio track:", error);
+      errors.audio = error instanceof Error ? error : new Error(String(error));
+    }
+
+    return { videoTrack, audioTrack, errors };
   }
 
   /**
-   * Get connection status (for debugging)
+   * Connects to a Twilio room
    */
-  getDebugInfo(): {
-    sessionId: string;
-    cacheSize: number;
-    connectionAttempts: Record<string, number>;
-  } {
-    return {
-      sessionId: this.sessionId,
-      cacheSize: Object.keys(this.tokenCache).length,
-      connectionAttempts: { ...this.connectionAttempts },
-    };
+  async connectToRoom(
+    streamId: string,
+    userId: string,
+    tracks: { videoTrack?: LocalVideoTrack; audioTrack?: LocalAudioTrack },
+    callbacks?: {
+      onReconnecting?: () => void;
+      onReconnected?: () => void;
+      onFailed?: (error: Error) => void;
+    }
+  ): Promise<Room> {
+    try {
+      const token = await this.getToken(streamId, userId);
+
+      this.logger.info(`Connecting to room for stream ${streamId}`);
+      const room = await connectToRoom(token, {
+        roomName: streamId,
+        videoTrack: tracks.videoTrack,
+        audioTrack: tracks.audioTrack,
+      });
+
+      // Set up reconnection handlers
+      if (callbacks) {
+        setupReconnectionHandlers(
+          room,
+          callbacks.onReconnecting,
+          callbacks.onReconnected,
+          callbacks.onFailed
+        );
+      }
+
+      return room;
+    } catch (error) {
+      this.logger.error(`Error connecting to room:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Updates a participant's track enabled status
+   */
+  updateTrackEnabled(
+    localParticipant: LocalParticipant | null,
+    trackKind: "audio" | "video",
+    enabled: boolean
+  ): boolean {
+    if (!localParticipant) {
+      this.logger.warn(
+        `Cannot update ${trackKind} track: No local participant`
+      );
+      return false;
+    }
+
+    try {
+      const publications =
+        trackKind === "audio"
+          ? localParticipant.audioTracks
+          : localParticipant.videoTracks;
+
+      publications.forEach((publication) => {
+        if (publication.track) {
+          this.logger.debug(`Setting ${trackKind} track enabled:`, enabled);
+          publication.track.enable(enabled);
+        }
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Error updating ${trackKind} track enabled status:`,
+        error
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Disconnects from a room and cleans up resources
+   */
+  disconnectFromRoom(room: Room | null): void {
+    if (!room) {
+      this.logger.warn("No room to disconnect from");
+      return;
+    }
+
+    try {
+      this.logger.info(`Disconnecting from room ${room.name}`);
+      room.disconnect();
+      this.logger.debug("Room disconnected successfully");
+    } catch (error) {
+      this.logger.error("Error disconnecting from room:", error);
+    }
+  }
+
+  /**
+   * Clears token cache
+   */
+  clearCache(): void {
+    this.tokenCache = {};
+    this.logger.debug("Token cache cleared");
+  }
+
+  /**
+   * Gets debug information for Twilio connections
+   * Used for logging and troubleshooting
+   */
+  getDebugInfo(): { sessionId: string } {
+    // Generate a session ID based on timestamp for debugging
+    const sessionId = `twilio-debug-${Date.now()}`;
+    return { sessionId };
   }
 }

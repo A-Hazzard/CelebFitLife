@@ -43,18 +43,49 @@ function LoginPageContent() {
     setError("");
     setLoading(true);
 
-    const result = await handleLogin({ email, password });
+    try {
+      const result = await handleLogin({ email, password });
+      console.log("[LOGIN-PAGE] Login result:", {
+        success: result.success,
+        hasError: !!result.error,
+        hasUser: !!result.user,
+      });
 
-    if (result.success && result.user) {
-      setUser(result.user);
-      if (result.user.role?.streamer) {
-        router.push("/dashboard");
-      } else router.push("/streaming");
-    } else {
-      setError(result.error || "Login failed. Please try again.");
+      if (result.success && result.user) {
+        // Log user details to verify structure
+        console.log("[LOGIN-PAGE] User object:", {
+          id: result.user.id?.substring(0, 5) || "missing",
+          email: result.user.email?.substring(0, 3) || "missing",
+          hasRole: !!result.user.role,
+          role: result.user.role || "missing",
+        });
+
+        // Set user in global store
+        setUser(result.user);
+
+        // Safe navigation with fallbacks for missing role
+        const isStreamer = result.user.role?.streamer || false;
+
+        // Redirect based on role
+        if (isStreamer) {
+          console.log("[LOGIN-PAGE] Redirecting to dashboard (streamer)");
+          router.push("/dashboard");
+        } else {
+          console.log("[LOGIN-PAGE] Redirecting to streaming (viewer)");
+          router.push("/streaming");
+        }
+      } else {
+        console.error("[LOGIN-PAGE] Login failed:", result.error);
+        setError(result.error || "Login failed. Please try again.");
+      }
+    } catch (error) {
+      console.error("[LOGIN-PAGE] Login exception:", error);
+      setError(
+        error instanceof Error ? error.message : "An unexpected error occurred"
+      );
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   if (currentUser) {
@@ -72,13 +103,13 @@ function LoginPageContent() {
           transition={{ duration: 0.6 }}
           className="absolute left-16 top-[10%] -translate-y-1/2 transform -rotate-90 origin-left text-9xl font-extrabold tracking-widest z-0"
         >
-          {['F', 'I', 'T', '\u00A0', 'G', 'E', 'T'].map((char, index) => (
-            <span 
-              key={index} 
+          {["F", "I", "T", "\u00A0", "G", "E", "T"].map((char, index) => (
+            <span
+              key={index}
               className="block"
               style={{
                 color: `rgba(255, 255, 255, ${1 - Math.abs(index - 3) * 0.15})`,
-                lineHeight: '0.8'
+                lineHeight: "0.8",
               }}
             >
               {char}
@@ -107,7 +138,7 @@ function LoginPageContent() {
             Login<span className="text-orange-500">.</span>
           </h1>
           <p className="mb-2 text-gray-400 text-sm">
-            Don’t have an account?{" "}
+            Don't have an account?{" "}
             <Link href="/register" className="text-orange-500 font-semibold">
               Sign Up
             </Link>
@@ -128,9 +159,7 @@ function LoginPageContent() {
               initial="hidden"
               animate="visible"
               custom={1}
-            >
-              
-            </motion.div>
+            ></motion.div>
 
             <motion.div
               variants={fadeUp}

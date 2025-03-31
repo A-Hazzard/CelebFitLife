@@ -1,7 +1,8 @@
 import { useState, FormEvent } from "react";
 import { useSignupStore } from "@/lib/store/useSignupStore";
-import { useRouter } from "next/router";
+import { useRouter } from "next/navigation";
 import { RegistrationData } from "@/lib/types/auth";
+import { registerUser } from "@/lib/helpers/auth";
 
 export function useRegistrationForm() {
   const { nextStep } = useSignupStore();
@@ -35,32 +36,29 @@ export function useRegistrationForm() {
 
     try {
       const ageNum = parseInt(formData.age, 10);
-      const registrationData: RegistrationData = {
-        ...formData,
-        age: ageNum,
-      };
-      
-      // Assuming registerUser is a function that needs to be imported or defined
-      // For demonstration, let's assume it's a placeholder function that resolves immediately
-      const registerUser = async (data: RegistrationData) => {
-        console.log("Registered user:", data);
-      };
-      await registerUser(registrationData);
 
-      nextStep({
+      // Create the registration data object
+      const registrationData: RegistrationData = {
         ...formData,
         age: ageNum,
         role: {
           viewer: true,
           streamer: false,
-          admin: false
-        }
-      });
+          admin: false,
+        },
+      };
 
+      // Call the registerUser function from lib/helpers/auth
+      await registerUser(registrationData);
+
+      // Update the signup store and navigate to login
+      nextStep(registrationData);
       router.push("/login");
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+      const errorMessage =
+        err instanceof Error ? err.message : "An unknown error occurred";
       setError(errorMessage);
+      console.error("Registration error:", err);
     } finally {
       setLoading(false);
     }
@@ -71,6 +69,6 @@ export function useRegistrationForm() {
     error,
     loading,
     handleInputChange,
-    handleSubmit
+    handleSubmit,
   };
-} 
+}

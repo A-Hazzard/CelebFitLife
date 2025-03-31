@@ -1,142 +1,79 @@
-/** Signature of a logging function */
-export interface LogFn {
-  (message?: unknown, ...optionalParams: unknown[]): void;
-}
+/**
+ * Application logging utilities
+ *
+ * Provides a consistent logging interface with context tracking
+ * and environment-specific behavior.
+ */
 
-/** Basic logger interface */
-export interface Logger {
-  log: LogFn;
-  warn: LogFn;
-  error: LogFn;
-  debug: LogFn;
-  info: LogFn;
-  trace: LogFn;
-}
+type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
 
-/** Log levels */
-export type LogLevel = "debug" | "info" | "log" | "warn" | "error" | "none";
-
-// No-operation function when logging is disabled
-const NO_OP: LogFn = (/* message */): void => {};
-
-// Timestamps for log messages
-const getTimestamp = (): string => {
-  return new Date().toISOString().substring(11, 23);
+const LOG_LEVELS: Record<LogLevel, number> = {
+  trace: 0,
+  debug: 1,
+  info: 2,
+  warn: 3,
+  error: 4,
 };
 
-// Format a log message with contextual information
-const formatMessage = (context: string, message: unknown): string => {
-  if (typeof message === "string") {
-    return `[${getTimestamp()}][${context}] ${message}`;
+// Set default minimum level based on environment
+const DEFAULT_LOG_LEVEL: LogLevel =
+  process.env.NODE_ENV === "production" ? "info" : "debug";
+
+// Gets the current minimum log level (can be overridden by localStorage in browser)
+function getMinLogLevel(): LogLevel {
+  if (typeof window !== "undefined") {
+    try {
+      const storedLevel = localStorage.getItem("logLevel") as LogLevel | null;
+      if (storedLevel && LOG_LEVELS[storedLevel] !== undefined) {
+        return storedLevel;
+      }
+    } catch (e) {
+      // Ignore localStorage errors
+    }
   }
-  return String(message);
-};
+
+  return DEFAULT_LOG_LEVEL;
+}
+
+interface Logger {
+  trace: (message: string, ...args: any[]) => void;
+  debug: (message: string, ...args: any[]) => void;
+  info: (message: string, ...args: any[]) => void;
+  warn: (message: string, ...args: any[]) => void;
+  error: (message: string, ...args: any[]) => void;
+  withContext: (context: string) => Logger;
+}
 
 /**
- * Configurable logger which outputs to the browser console
- * Allows for setting different log levels and adding context to logs
+ * Creates a logger instance with the given module name
  */
-export class StreamingLogger implements Logger {
-  readonly debug: LogFn;
-  readonly info: LogFn;
-  readonly log: LogFn;
-  readonly warn: LogFn;
-  readonly error: LogFn;
-  readonly trace: LogFn;
-  readonly context: string;
+export function createLogger(module: string): Logger {
+  const createLogMethod = (level: LogLevel) => {
+    return (message: string, ...args: any[]) => {
+      const minLevel = getMinLogLevel();
 
-  constructor(options?: { level?: LogLevel; context?: string }) {
-    const { level = "log", context = "Stream" } = options || {};
-    this.context = context;
+      if (LOG_LEVELS[level] >= LOG_LEVELS[minLevel]) {
+        const timestamp = new Date().toISOString();
+        const prefix = `[${timestamp}] [${level.toUpperCase()}] [${module}]`;
 
-    // Always enable error logging unless explicitly disabled
-    this.error = (message?: unknown, ...optionalParams: unknown[]): void =>
-      console.error(formatMessage(this.context, message), ...optionalParams);
-
-    if (level === "none") {
-      this.warn = NO_OP;
-      this.log = NO_OP;
-      this.info = NO_OP;
-      this.debug = NO_OP;
-      this.trace = NO_OP;
-      return;
-    }
-
-    this.warn = (message?: unknown, ...optionalParams: unknown[]): void =>
-      console.warn(formatMessage(this.context, message), ...optionalParams);
-
-    if (level === "error") {
-      this.log = NO_OP;
-      this.info = NO_OP;
-      this.debug = NO_OP;
-      this.trace = NO_OP;
-      return;
-    }
-
-    this.log = (message?: unknown, ...optionalParams: unknown[]): void =>
-      console.log(formatMessage(this.context, message), ...optionalParams);
-
-    if (level === "warn") {
-      this.info = NO_OP;
-      this.debug = NO_OP;
-      this.trace = NO_OP;
-      return;
-    }
-
-    this.info = (message?: unknown, ...optionalParams: unknown[]): void =>
-      console.info(formatMessage(this.context, message), ...optionalParams);
-
-    if (level === "log") {
-      this.debug = NO_OP;
-      this.trace = NO_OP;
-      return;
-    }
-
-    this.debug = (message?: unknown, ...optionalParams: unknown[]): void =>
-      console.debug(formatMessage(this.context, message), ...optionalParams);
-
-    if (level === "info") {
-      this.trace = NO_OP;
-      return;
-    }
-
-    // Only for "debug" level
-    this.trace = (message?: unknown, ...optionalParams: unknown[]): void => {
-      console.groupCollapsed(formatMessage(this.context, message));
-      console.trace(...optionalParams);
-      console.groupEnd();
+        if (args.length > 0) {
+          console[level === "trace" ? "debug" : level](
+            `${prefix} ${message}`,
+            ...args
+          );
+        } else {
+          console[level === "trace" ? "debug" : level](`${prefix} ${message}`);
+        }
+      }
     };
-  }
+  };
 
-  // Create a sub-logger with a more specific context
-  withContext(subContext: string): StreamingLogger {
-    return new StreamingLogger({
-      level: this.getLevel(),
-      context: `${this.context}:${subContext}`,
-    });
-  }
-
-  // Get the current log level based on enabled methods
-  private getLevel(): LogLevel {
-    if (this.trace !== NO_OP) return "debug";
-    if (this.debug !== NO_OP) return "info";
-    if (this.info !== NO_OP) return "log";
-    if (this.log !== NO_OP) return "warn";
-    if (this.warn !== NO_OP) return "error";
-    return "none";
-  }
+  return {
+    trace: createLogMethod("trace"),
+    debug: createLogMethod("debug"),
+    info: createLogMethod("info"),
+    warn: createLogMethod("warn"),
+    error: createLogMethod("error"),
+    withContext: (context: string) => createLogger(`${module}:${context}`),
+  };
 }
-
-// Determine app environment
-const isProduction = process.env.NODE_ENV === "production";
-
-// Create default logger based on environment
-export const createLogger = (context?: string): StreamingLogger => {
-  return new StreamingLogger({
-    level: isProduction ? "warn" : "debug",
-    context: context || "App",
-  });
-};
-
-// Default app-wide logger
-export const logger = createLogger();

@@ -1,123 +1,167 @@
-import { UserService } from "./UserService";
-import { UserCreateDTO, UserLoginDTO, UserResponseDTO } from "../models/User";
-import { ApiError, ErrorTypes } from "../utils/errorHandler";
-import { comparePasswords, createUserResponse } from "../utils/authUtils";
+/**
+ * CLIENT-SIDE AUTH SERVICE
+ * This service makes API calls to the authentication endpoints.
+ * It does not directly interact with the database.
+ */
+
+import { UserCreateDTO, UserLoginDTO, UserResponseDTO } from "../types/user";
 import { RegistrationData } from "@/lib/types/auth";
+import { z } from "zod";
+
+// Define login validation schema
+const loginSchema = z.object({
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
 
 /**
- * Service for handling authentication operations
+ * Service for handling authentication operations (client-side)
  */
 export class AuthService {
-  private userService: UserService;
-
-  constructor() {
-    this.userService = new UserService();
-  }
-
+  /**
+   * Register a user by making an API call
+   */
   async register(userData: UserCreateDTO): Promise<UserResponseDTO> {
     try {
-      // Create user using UserService
-      const user = await this.userService.create(userData);
-
-      // Return user with token
-      return createUserResponse(user, true);
-    } catch (error) {
-      console.error("Error registering user:", error);
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      throw new ApiError("Failed to register user", 500);
-    }
-  }
-
-  async login(credentials: UserLoginDTO): Promise<UserResponseDTO> {
-    try {
-      console.log("Attempting to log in with:", credentials);
-      const user = await this.userService.findByEmail(credentials.email);
-      
-      if (!user) {
-        console.error("User not found");
-        throw ErrorTypes.UNAUTHORIZED("Invalid email or password");
-      }
-      
-      const isPasswordValid = await comparePasswords(
-        credentials.password,
-        user.password!
-      );
-
-      if (!isPasswordValid) {
-        console.error("Invalid password");
-        throw ErrorTypes.UNAUTHORIZED("Invalid email or password");
-      }
-      
-      return createUserResponse(user, true);
-    } catch (error) {
-      console.error("Error logging in user:", error);
-      if (error instanceof ApiError) throw error;
-      
-      throw new ApiError("Failed to log in", 500);
-    }
-  }
-
- 
-  async getProfile(userId: string): Promise<UserResponseDTO> {
-    try {
-      const user = await this.userService.findById(userId);
-      if (!user) {
-        throw ErrorTypes.NOT_FOUND("User");
-      }
-
-      return createUserResponse(user, false);
-    } catch (error) {
-      console.error("Error getting user profile:", error);
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      throw new ApiError("Failed to get user profile", 500);
-    }
-  }
-
-  async registerUser(data: RegistrationData): Promise<void> {
-    try {
-      // API call to register user
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(userData),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Registration failed');
+        throw new Error(data.error || "Registration failed");
       }
-      
-      return await response.json();
+
+      return data.user;
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error("Error registering user:", error);
       throw error;
     }
   }
 
+  /**
+   * Login a user by making an API call
+   */
+  async login(credentials: UserLoginDTO): Promise<UserResponseDTO> {
+    try {
+      // Validate inputs with Zod
+      const validatedCredentials = loginSchema.parse(credentials);
+
+      console.log("[CLIENT] Attempting to log in:", {
+        email: validatedCredentials.email.substring(0, 3) + "...",
+        passwordProvided: !!validatedCredentials.password,
+      });
+
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(validatedCredentials),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.error("[CLIENT] Login failed:", data.error);
+        throw new Error(data.error || "Login failed");
+      }
+
+      if (!data.user) {
+        console.error("[CLIENT] Login response missing user object");
+        throw new Error("Invalid response from server");
+      }
+
+      console.log(
+        `[CLIENT] Login successful for user: ${validatedCredentials.email.substring(
+          0,
+          3
+        )}...`
+      );
+
+      return data.user;
+    } catch (error) {
+      console.error("[CLIENT] Login error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user profile by making an API call
+   */
+  async getProfile(userId: string): Promise<UserResponseDTO> {
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to get profile");
+      }
+
+      return data.user;
+    } catch (error) {
+      console.error("Error getting user profile:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Register a new user through the registration flow
+   */
+  async registerUser(data: RegistrationData): Promise<void> {
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      const resData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(resData.error || "Registration failed");
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Login a user with email and password
+   */
   async loginUser(email: string, password: string): Promise<UserResponseDTO> {
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Login failed');
+        throw new Error(data.error || "Login failed");
       }
 
-      return await response.json(); // Assuming the response is of type UserResponseDTO
+      return data.user;
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       throw error;
     }
   }

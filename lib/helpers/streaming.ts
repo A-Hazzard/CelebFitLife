@@ -14,7 +14,7 @@ import {
   LocalAudioTrack,
   LocalVideoTrack,
 } from "twilio-video";
-import { clearVideoContainer } from "@/lib/utils/streaming";
+import { clearVideoContainer } from "@/lib/utils/twilio";
 import { createLogger } from "@/lib/utils/logger";
 
 // Create context-specific loggers

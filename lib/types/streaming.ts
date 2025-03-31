@@ -3,6 +3,7 @@ import {
   RemoteTrackPublication,
   RemoteParticipant,
 } from "twilio-video";
+import { User } from "./user";
 
 // Dashboard types
 export type StreamingProfileData = {
@@ -18,50 +19,57 @@ export type StreamingProfileData = {
 };
 
 // Streaming page types
-export type Stream = {
+export type StreamStatus =
+  | "draft"
+  | "scheduled"
+  | "live"
+  | "ended"
+  | "cancelled";
+
+export interface Stream {
   id: string;
   title: string;
-  createdAt?: string;
-  endedAt?: string;
-  hasEnded?: boolean;
-  [key: string]: any;
-};
-
-export type Streamer = {
-  id: string;
-  streamerName: string;
-  email: string;
-  Category: string;
-  Tags: string[];
-  streamID: string;
-  streams: Stream[];
-  categoryName?: string;
-  tagNames?: string[];
-  thumbnail?: string;
-  quote?: string;
-};
-
-export type EnrichedStreamer = Streamer & {
-  categoryName: string;
-  tagNames: string[];
-};
-
-// Stream data for creation
-export type StreamData = {
-  title: string;
-  description: string;
-  thumbnail: string;
+  description?: string;
   slug: string;
+  status: StreamStatus;
+  userId: string;
+  isScheduled: boolean;
+  scheduledFor?: string | null;
+  thumbnailUrl?: string;
+  viewCount?: number;
+  likeCount?: number;
+  roomName?: string;
+  deviceStatus?: {
+    currentCameraId?: string;
+    currentMicId?: string;
+  };
   createdAt: string;
-  createdBy: string;
-  hasStarted: boolean;
-  hasEnded: boolean;
-  scheduledAt: string | null;
-  audioMuted: boolean;
-  cameraOff: boolean;
-  currentCameraId?: string;
-  currentMicId?: string;
-};
+  updatedAt?: string;
+  startedAt?: string;
+  endedAt?: string;
+}
+
+export interface StreamWithDetails extends Stream {
+  streamer?: User;
+}
+
+export interface Streamer extends User {
+  specialty: string;
+  categories?: string[];
+  streams?: Stream[];
+  followers?: number;
+  isLive?: boolean;
+  currentStream?: Stream;
+}
+
+export interface StreamUpdateData {
+  title?: string;
+  description?: string;
+  thumbnailUrl?: string;
+  isScheduled?: boolean;
+  scheduledFor?: string | null;
+  status?: StreamStatus;
+}
 
 // Type for Twilio network quality stats
 export type NetworkQualityStats = {
@@ -87,6 +95,16 @@ export type WithListeners = {
 export type WithDetach = {
   detach: () => HTMLElement[];
 };
+
+/**
+ * Chat message from a stream
+ */
+export interface ChatMessage {
+  id: string;
+  userName: string;
+  content: string;
+  createdAt?: string;
+}
 
 /**
  * Base error interface for streaming operations
