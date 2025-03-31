@@ -19,6 +19,13 @@ const loginSchema = z.object({
 // Type for validated login data
 type LoginInput = z.infer<typeof loginSchema>;
 
+interface UserSessionData {
+  isStreamer: boolean;
+  isAdmin: boolean;
+  userId: string;
+  email: string;
+}
+
 // LoginService class to encapsulate login logic
 export class LoginService {
   // Validate input data using Zod schema
@@ -58,12 +65,23 @@ export class LoginService {
   }
 
   // Create a session token for the authenticated user
-  async createSessionToken(email: string, userData: any): Promise<string> {
+  async createSessionToken(
+    email: string,
+    userData: FirebaseFirestore.DocumentData
+  ): Promise<string> {
+    // Convert the Firestore data to UserSessionData format
+    const sessionData: UserSessionData = {
+      email,
+      userId: userData.uid || userData.id || email,
+      isStreamer: userData.role?.streamer || false,
+      isAdmin: userData.role?.admin || false,
+    };
+
     const sessionManager = new SessionManager();
     return sessionManager.createSession({
       email,
-      isStreamer: !!userData.isStreamer,
-      isAdmin: !!userData.isAdmin,
+      isStreamer: sessionData.isStreamer,
+      isAdmin: sessionData.isAdmin,
     });
   }
 

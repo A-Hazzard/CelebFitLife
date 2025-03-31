@@ -44,6 +44,15 @@ const generateUniqueIdentity = (prefix: string, streamId: string): string => {
   return `${prefix}_${streamId}_${timestamp}_${random}`;
 };
 
+// Define types with proper error handling
+type StartStreamFunction = () => Promise<void>;
+type HandleRetryFunction = (retryCount: number) => Promise<void>;
+type StreamError = Error | unknown;
+
+// Declare function references first to break circular dependencies
+let startStream: StartStreamFunction;
+let handleRetry: HandleRetryFunction;
+
 // Convert to forwardRef
 const StreamManager = forwardRef<
   { startStream: () => Promise<void> },
@@ -149,64 +158,41 @@ const StreamManager = forwardRef<
     setTitle(stream.title || "");
 
     // If hasStarted changed to true and we're not connected to Twilio, try to connect
-    if (stream.hasStarted && !twilioRoomRef.current && !isConnecting) {
+    if (stream.hasStarted && !isConnecting) {
       console.log(
         "[StreamManager] Stream hasStarted changed to true, attempting to connect to Twilio"
       );
-      startStream().catch((err) => {
+      startStream().catch((err: StreamError) => {
         console.error(
           "[StreamManager] Failed to auto-connect after hasStarted changed:",
           err
         );
       });
     }
-  }, [stream.hasStarted, stream.title, twilioRoomRef.current, isConnecting]);
+  }, [stream.hasStarted, stream.title, isConnecting]);
 
-  // Fix the auto-connect mechanism to prevent infinite loops
-  useEffect(() => {
-    // If stream has already started, we should automatically connect to Twilio
-    const autoConnect = async () => {
-      // Only connect if ALL these conditions are true:
-      // 1. Stream is started
-      // 2. We're not already connected
-      // 3. We're not currently connecting
-      // 4. We don't have a connection error that needs user action
-      if (
-        stream.hasStarted &&
-        !twilioRoomRef.current &&
-        !isConnecting &&
-        !connectionError &&
-        connectionStatus !== "connected" // Critical addition: don't connect if already connected
-      ) {
-        console.log(
-          "[StreamManager] Auto-connecting to stream since it's already active"
-        );
-        try {
-          // Use setIsConnecting to prevent multiple connection attempts
-          setIsConnecting(true);
-          await startStream();
-        } catch (error) {
-          console.error("[StreamManager] Auto-connect failed:", error);
-          // Set reconnection flag to false on failure
-          setIsConnecting(false);
-        }
+  // Define the retry handler with proper type
+  handleRetry = async (retryCount: number) => {
+    if (!twilioRoomRef.current && connectionStatus !== "connected") {
+      console.log(`[StreamManager] Auto-retry attempt ${retryCount}`);
+      try {
+        await startStream();
+      } catch (error: StreamError) {
+        console.error("[StreamManager] Auto-retry failed:", error);
       }
-    };
+    } else {
+      console.log(
+        "[StreamManager] Skipping auto-retry, already connected or unmounted"
+      );
+    }
+  };
 
-    // Wait a short moment for component to fully mount before connecting
-    const timer = setTimeout(() => {
-      autoConnect();
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, [stream.hasStarted, twilioRoomRef.current]);
-
-  // Fix the startStream function to guard against multiple connections
-  const startStream = async () => {
+  // Define the start stream function with proper type
+  startStream = async () => {
     // Guard against multiple simultaneous connection attempts
     if (isConnecting) {
       console.log(
-        "[StreamManager] Connection already in progress, ignoring duplicate request"
+        "[StreamManager] Connection already in progress, skipping startStream"
       );
       return;
     }
@@ -553,73 +539,73 @@ const StreamManager = forwardRef<
           "Stream started locally but failed to update status in database."
         );
       }
-    } catch (error) {
+    } catch (error: StreamError) {
       console.error("[StreamManager] Error starting stream:", error);
-
       // Increment retry count
       const newRetryCount = retryCount + 1;
       setRetryCount(newRetryCount);
       setConnectionStatus("disconnected");
 
       // Only change to error state if we've reached max retries
-      // This prevents flickering between connected and error states
       if (newRetryCount >= maxRetries) {
         setConnectionError(
           `Failed to start stream after ${maxRetries} attempts. Please check your camera and microphone permissions.`
         );
-        // Only show one error toast
         toast.error(
           "Failed to start stream. Please check your camera and microphone permissions."
         );
       } else {
-        // Auto-retry once immediately for first failure
         setConnectionError(
           `Connection attempt ${newRetryCount} of ${maxRetries} failed. Attempting to reconnect...`
         );
 
-        // Only show reconnecting toast on first retry
         if (newRetryCount === 1) {
           toast.info("Reconnecting automatically...");
         }
 
-        // Wait a moment and try again, but with increasing delay
-        const delay = Math.min(3000 * newRetryCount, 10000); // 3s, 6s, 9s, max 10s
+        const delay = Math.min(3000 * newRetryCount, 10000);
         console.log(
           `[StreamManager] Scheduling auto-retry attempt ${newRetryCount} in ${delay}ms`
         );
 
         setTimeout(() => {
-          // Only retry if component is still mounted and we're not already connected
-          if (!twilioRoomRef.current && connectionStatus !== "connected") {
-            console.log(`[StreamManager] Auto-retry attempt ${newRetryCount}`);
-            startStream().catch((e) => {
-              console.error("[StreamManager] Auto-retry failed:", e);
-            });
-          } else {
-            console.log(
-              "[StreamManager] Skipping auto-retry, already connected or unmounted"
-            );
-          }
+          handleRetry(newRetryCount);
         }, delay);
-
-        return; // Don't clean up resources yet for retry
       }
-
-      // Clean up any partial resources
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => track.stop());
-        localStreamRef.current = null;
-      }
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
-
-      throw error;
     } finally {
       setIsConnecting(false);
     }
   };
+
+  // Fix the auto-connect mechanism to prevent infinite loops
+  useEffect(() => {
+    // If stream has already started, we should automatically connect to Twilio
+    const autoConnect = async () => {
+      if (
+        stream.hasStarted &&
+        !isConnecting &&
+        !connectionError &&
+        connectionStatus !== "connected"
+      ) {
+        console.log(
+          "[StreamManager] Auto-connecting to stream since it's already active"
+        );
+        try {
+          setIsConnecting(true);
+          await startStream();
+        } catch (error: unknown) {
+          console.error("[StreamManager] Auto-connect failed:", error);
+          setIsConnecting(false);
+        }
+      }
+    };
+
+    const timer = setTimeout(() => {
+      autoConnect();
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [stream.hasStarted, isConnecting, connectionError, connectionStatus]);
 
   // Fix re-connection logic to be cleaner
   const reconnect = async () => {

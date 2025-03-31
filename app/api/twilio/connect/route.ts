@@ -17,10 +17,8 @@ export async function POST(req: Request) {
 
   try {
     const countryCode = req.headers.get("cf-ipcountry") || "unknown";
-    const userAgent = req.headers.get("user-agent") || "unknown";
 
     console.log(`[API:${requestId}] Request from region: ${countryCode}`);
-    // console.log(`[API:${requestId}] User-Agent: ${userAgent}`); // Optional: Log user agent
 
     let body;
     try {

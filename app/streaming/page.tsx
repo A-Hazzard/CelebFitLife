@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  Search,
-  ChevronDown,
-  ChevronUp,
-  ChevronRight,
-} from "lucide-react";
+import { Search, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -25,7 +20,6 @@ export default function UserDashboard() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  
 
   const { streamers, fetchAll } = useStreamerStore();
 
@@ -47,7 +41,9 @@ export default function UserDashboard() {
   }, []);
 
   const toggleCategory = (categoryName: string) => {
-    setExpandedCategory((prev) => (prev === categoryName ? null : categoryName));
+    setExpandedCategory((prev) =>
+      prev === categoryName ? null : categoryName
+    );
     setSelectedCategories((prev) =>
       prev.includes(categoryName)
         ? prev.filter((cat) => cat !== categoryName)
@@ -68,14 +64,17 @@ export default function UserDashboard() {
   };
 
   // Filter streamers based on selected categories
-  const filteredStreamers = streamers.filter((streamer) =>
-    selectedCategories.length === 0 || 
-    (streamer.categoryName && selectedCategories.includes(streamer.categoryName))
+  const filteredStreamers = streamers.filter(
+    (streamer) =>
+      selectedCategories.length === 0 ||
+      (streamer.categoryName &&
+        selectedCategories.includes(streamer.categoryName))
   );
+
+  // Use correct property 'id' instead of non-existent 'streamID'
   const uniqueStreamers = Array.from(
-    new Map(streamers.map(s => [s.streamID, s])).values()
+    new Map(streamers.map((s) => [s.id, s])).values()
   );
-  
 
   return (
     <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite font-inter">
@@ -106,13 +105,29 @@ export default function UserDashboard() {
               MY STREAMERS
             </h2>
             <Slider {...SLIDER_SETTINGS}>
-  {uniqueStreamers.slice(0, 3).map((streamer, index) => (
-    <div key={index} className="px-2 md:p-4 transform transition-all duration-300 hover:scale-105">
-      <StreamerCard streamer={streamer} />
-    </div>
-  ))}
-</Slider>
-
+              {uniqueStreamers.slice(0, 3).map((streamer, index) => (
+                <div
+                  key={index}
+                  className="px-2 md:p-4 transform transition-all duration-300 hover:scale-105"
+                >
+                  <StreamerCard
+                    streamer={{
+                      ...streamer,
+                      avatarUrl: streamer.avatarUrl || "/favicon.ico",
+                      username: streamer.username || streamer.name,
+                      bio: streamer.bio || "",
+                      streams:
+                        streamer.streams?.map((stream) => ({
+                          ...stream,
+                          thumbnail: stream.thumbnail || "/favicon.ico",
+                          hasEnded: stream.hasEnded || false,
+                          title: stream.title || "Untitled Stream",
+                        })) || [],
+                    }}
+                  />
+                </div>
+              ))}
+            </Slider>
           </section>
 
           {/* 🎛 CATEGORY SIDEBAR */}
@@ -134,13 +149,17 @@ export default function UserDashboard() {
             </div>
 
             <div
-              className={`${isTagsOpen ? "block" : "hidden"} md:block space-y-1 p-2 pt-0`}
+              className={`${
+                isTagsOpen ? "block" : "hidden"
+              } md:block space-y-1 p-2 pt-0`}
             >
               {categories.map((category) => (
                 <div key={category.name} className="mb-1">
                   <div
                     className={`flex justify-between items-center bg-brandBlack border border-brandOrange/30 p-2 rounded-lg hover:bg-brandOrange/10 transition-colors cursor-pointer ${
-                      selectedCategories.includes(category.name) ? "bg-brandOrange/20" : ""
+                      selectedCategories.includes(category.name)
+                        ? "bg-brandOrange/20"
+                        : ""
                     }`}
                     onClick={() => toggleCategory(category.name)}
                   >
@@ -183,26 +202,38 @@ export default function UserDashboard() {
 
         {/* 🔥 DISCOVER SECTION (cleaned up!) */}
         <section className="space-y-6">
-          <h2 className="text-xl md:text-2xl font-bold text-brandWhite">DISCOVER</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-brandWhite">
+            DISCOVER
+          </h2>
           <p className="text-xs md:text-sm text-brandOrange/70">
             What fits your needs from your previous tags?
           </p>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
-            {filteredStreamers.slice(0, visibleDiscoverStreamers).map((streamer, index) => (
-              <div
-                key={index}
-                className="transform transition-all duration-300 hover:scale-105"
-              >
-                <StreamerCard streamer={{
-                  ...streamer,
-                  streams: streamer.streams.map(stream => ({
-                    ...stream,
-                    hasEnded: stream.hasEnded || false
-                  }))
-                }} />
-              </div>
-            ))}
+            {filteredStreamers
+              .slice(0, visibleDiscoverStreamers)
+              .map((streamer, index) => (
+                <div
+                  key={index}
+                  className="transform transition-all duration-300 hover:scale-105"
+                >
+                  <StreamerCard
+                    streamer={{
+                      ...streamer,
+                      avatarUrl: streamer.avatarUrl || "/favicon.ico",
+                      username: streamer.username || streamer.name,
+                      bio: streamer.bio || "",
+                      streams:
+                        streamer.streams?.map((stream) => ({
+                          ...stream,
+                          thumbnail: stream.thumbnail || "/favicon.ico",
+                          hasEnded: stream.hasEnded || false,
+                          title: stream.title || "Untitled Stream",
+                        })) || [],
+                    }}
+                  />
+                </div>
+              ))}
           </div>
 
           {visibleDiscoverStreamers < filteredStreamers.length && (

@@ -57,6 +57,9 @@ export default function ManageStreamPage() {
   useEffect(() => {
     // Fetch the stream data from Firestore client-side
     fetchStream();
+
+    // Return undefined to satisfy TypeScript return type requirement
+    return undefined;
   }, [fetchStream]);
 
   const handleStartStream = () => {

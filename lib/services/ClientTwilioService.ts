@@ -72,7 +72,7 @@ export class ClientTwilioService {
 
       return data.token;
     } catch (error) {
-      this.logger.error(`Error getting Twilio token:`, error);
+      this.logger.error(`Error getting Twilio token:`, error as Error);
       throw error;
     }
   }
@@ -97,7 +97,7 @@ export class ClientTwilioService {
       videoTrack = await createVideoTrack(cameraDeviceId);
       this.logger.debug("Created local video track");
     } catch (error) {
-      this.logger.error("Failed to create video track:", error);
+      this.logger.error("Failed to create video track:", error as Error);
       errors.video = error instanceof Error ? error : new Error(String(error));
     }
 
@@ -106,7 +106,7 @@ export class ClientTwilioService {
       audioTrack = await createAudioTrack(micDeviceId);
       this.logger.debug("Created local audio track");
     } catch (error) {
-      this.logger.error("Failed to create audio track:", error);
+      this.logger.error("Failed to create audio track:", error as Error);
       errors.audio = error instanceof Error ? error : new Error(String(error));
     }
 
@@ -148,7 +148,7 @@ export class ClientTwilioService {
 
       return room;
     } catch (error) {
-      this.logger.error(`Error connecting to room:`, error);
+      this.logger.error(`Error connecting to room:`, error as Error);
       throw error;
     }
   }
@@ -185,7 +185,7 @@ export class ClientTwilioService {
     } catch (error) {
       this.logger.error(
         `Error updating ${trackKind} track enabled status:`,
-        error
+        error as Error
       );
       return false;
     }
@@ -205,7 +205,7 @@ export class ClientTwilioService {
       room.disconnect();
       this.logger.debug("Room disconnected successfully");
     } catch (error) {
-      this.logger.error("Error disconnecting from room:", error);
+      this.logger.error("Error disconnecting from room:", error as Error);
     }
   }
 

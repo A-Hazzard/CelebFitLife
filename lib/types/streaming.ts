@@ -63,6 +63,32 @@ export interface Stream {
   tags?: string[];
 }
 
+/**
+ * Streamer with associated streams from the API
+ */
+export interface StreamerWithStreams {
+  id: string;
+  name: string;
+  username: string;
+  avatarUrl?: string;
+  bio?: string;
+  isActive?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  streams: Stream[];
+  // Fields that might be added by the categories lookup
+  Category?: string;
+  Tags?: string[];
+}
+
+/**
+ * Enriched streamer with category and tag information
+ */
+export interface EnrichedStreamer extends StreamerWithStreams {
+  categoryName: string;
+  tagNames: string[];
+}
+
 export interface StreamWithDetails extends Stream {
   streamer?: User;
 }

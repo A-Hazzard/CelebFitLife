@@ -138,7 +138,7 @@ function LoginPageContent() {
             Login<span className="text-orange-500">.</span>
           </h1>
           <p className="mb-2 text-gray-400 text-sm">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href="/register" className="text-orange-500 font-semibold">
               Sign Up
             </Link>

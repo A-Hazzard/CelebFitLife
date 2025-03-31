@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { setupDevices } from "@/lib/utils/streaming";
+import { setupDevices } from "@/lib/utils/twilio";
 import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger("MediaDevices");
@@ -51,7 +51,7 @@ export const useMediaDevices = (
 
       // Select initial device if not already set or if the stored one isn't available
       const selectedCameraExists = cameras.some(
-        (c) => c.deviceId === currentCameraId
+        (c: MediaDeviceInfo) => c.deviceId === currentCameraId
       );
       if (cameras.length > 0 && (!currentCameraId || !selectedCameraExists)) {
         logger.debug(
@@ -60,7 +60,9 @@ export const useMediaDevices = (
         setCurrentCameraId(cameras[0].deviceId);
       }
 
-      const selectedMicExists = mics.some((m) => m.deviceId === currentMicId);
+      const selectedMicExists = mics.some(
+        (m: MediaDeviceInfo) => m.deviceId === currentMicId
+      );
       if (mics.length > 0 && (!currentMicId || !selectedMicExists)) {
         logger.debug(
           `Setting default microphone: ${mics[0].label || "Unknown microphone"}`

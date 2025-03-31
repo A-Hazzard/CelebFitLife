@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { doc, onSnapshot, Unsubscribe } from "firebase/firestore";
 import { db } from "@/lib/config/firebase";
-import { StreamData } from "@/lib/types/streaming";
+import { Stream } from "@/lib/types/streaming";
 import { useRouter } from "next/navigation";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -16,9 +16,7 @@ const logger = createLogger("StreamData");
  * @returns An object containing the stream data, loading status, and any error encountered.
  */
 export const useStreamData = (slug: string) => {
-  const [streamData, setStreamData] = useState<Partial<StreamData> | null>(
-    null
-  );
+  const [streamData, setStreamData] = useState<Partial<Stream> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -40,7 +38,7 @@ export const useStreamData = (slug: string) => {
       streamDocRef,
       (snapshot) => {
         if (snapshot.exists()) {
-          const data = snapshot.data() as StreamData; // Assume it fits StreamData
+          const data = snapshot.data() as Stream; // Assume it fits Stream
           logger.debug(`Received stream data update for: ${slug}`);
           setStreamData({
             ...data,

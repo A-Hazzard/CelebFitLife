@@ -67,7 +67,7 @@ export const useTwilioViewerConnection = (
           (remoteVideoTrack as WithDetach).detach();
         }
       } catch (error) {
-        logger.error("Error detaching video track:", error);
+        logger.error("Error detaching video track:", error as Error);
       }
     }
 
@@ -77,7 +77,7 @@ export const useTwilioViewerConnection = (
           (remoteAudioTrack as WithDetach).detach();
         }
       } catch (error) {
-        logger.error("Error detaching audio track:", error);
+        logger.error("Error detaching audio track:", error as Error);
       }
     }
 
@@ -160,7 +160,7 @@ export const useTwilioViewerConnection = (
                 logger.warn("Autoplay blocked even while muted:", err);
               });
             } catch (playError) {
-              logger.warn("Error calling play():", playError);
+              logger.warn("Error calling play():", playError as Error);
             }
           }
 
@@ -201,7 +201,7 @@ export const useTwilioViewerConnection = (
           });
         }
       } catch (error) {
-        logger.error("Error in handleTrackSubscribed:", error);
+        logger.error("Error in handleTrackSubscribed:", error as Error);
       }
     },
     [offlineTimerId, isAudioMuted, videoContainerRef]
@@ -271,7 +271,7 @@ export const useTwilioViewerConnection = (
           }
         }
       } catch (error) {
-        logger.error("Error in handleTrackUnsubscribed:", error);
+        logger.error("Error in handleTrackUnsubscribed:", error as Error);
       }
     },
     [remoteVideoTrack, remoteAudioTrack, videoContainerRef]
@@ -386,7 +386,7 @@ export const useTwilioViewerConnection = (
         setVideoStatus("waiting");
       }
     } catch (error) {
-      logger.error("Error connecting to room:", error);
+      logger.error("Error connecting to room:", error as Error);
       setVideoStatus("offline");
     }
   }, [

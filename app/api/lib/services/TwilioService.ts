@@ -1,143 +1,120 @@
 import twilio from "twilio";
-import { ValidationError, InvalidDataError } from "../errors/apiErrors"; // Use API specific errors
+import { ValidationError } from "../errors/apiErrors";
 
 /**
- * Interface for token cache entry
+ * Cache entry for Twilio tokens
  */
 interface CacheEntry {
   token: string;
-  expiresAt: number; // timestamp
+  expiresAt: number;
 }
 
 /**
- * Type for token cache
+ * Typed token cache to avoid using any
  */
-type TokenCache = {
-  [key: string]: CacheEntry;
-};
+type TokenCache = Record<string, CacheEntry>;
 
 /**
- * Service for handling Twilio operations (API-specific)
+ * Service for generating Twilio tokens
  */
 export class TwilioService {
   private accountSid: string;
   private apiKey: string;
   private apiSecret: string;
+  private tokenTTL: number = 3600; // Default: 1 hour in seconds
   private tokenCache: TokenCache = {};
-  private cacheTtl: number;
 
-  constructor(
-    accountSid = process.env.TWILIO_ACCOUNT_SID,
-    apiKey = process.env.TWILIO_API_KEY_SID,
-    apiSecret = process.env.TWILIO_API_KEY_SECRET,
-    cacheTtl = 5 * 60 * 1000 // 5 minutes in milliseconds
-  ) {
-    this.accountSid = accountSid || "";
-    this.apiKey = apiKey || "";
-    this.apiSecret = apiSecret || "";
-    this.cacheTtl = cacheTtl;
-    this.validateCredentials();
-  }
+  constructor() {
+    // Load and validate environment variables
+    this.accountSid = process.env.TWILIO_ACCOUNT_SID || "";
+    this.apiKey = process.env.TWILIO_API_KEY || "";
+    this.apiSecret = process.env.TWILIO_API_SECRET || "";
 
-  /**
-   * Validate Twilio credentials - Throws standard Error for config issues
-   */
-  private validateCredentials(): void {
-    if (!this.accountSid) {
-      throw new Error("Missing TWILIO_ACCOUNT_SID environment variable");
-    }
-    if (!this.apiKey) {
-      throw new Error("Missing TWILIO_API_KEY_SID environment variable");
-    }
-    if (!this.apiSecret) {
-      throw new Error("Missing TWILIO_API_KEY_SECRET environment variable");
+    // Allow overriding default token TTL via environment
+    const configTTL = process.env.TWILIO_TOKEN_TTL;
+    if (configTTL) {
+      const parsedTTL = parseInt(configTTL, 10);
+      if (!isNaN(parsedTTL) && parsedTTL > 0) {
+        this.tokenTTL = parsedTTL;
+      }
     }
 
-    const accountSidPattern = /^AC[a-f0-9]{32}$/i;
-    if (!accountSidPattern.test(this.accountSid)) {
-      throw new Error(
-        "Invalid Twilio Account SID format. Should start with 'AC' followed by 32 hex characters."
-      );
-    }
-    const apiKeySidPattern = /^SK[a-f0-9]{32}$/i;
-    if (!apiKeySidPattern.test(this.apiKey)) {
-      throw new Error(
-        "Invalid Twilio API Key SID format. Should start with 'SK' followed by 32 hex characters."
+    // Validate required configuration
+    if (!this.accountSid || !this.apiKey || !this.apiSecret) {
+      const missing = [];
+      if (!this.accountSid) missing.push("TWILIO_ACCOUNT_SID");
+      if (!this.apiKey) missing.push("TWILIO_API_KEY");
+      if (!this.apiSecret) missing.push("TWILIO_API_SECRET");
+
+      throw new ValidationError(
+        `Missing required Twilio configuration: ${missing.join(", ")}`
       );
     }
   }
 
   /**
-   * Generate a token for video access
+   * Generate a token for accessing Twilio Video
+   * @param roomName The Twilio room name (typically stream ID)
+   * @param identity User identity for the token
+   * @returns Promise resolving to the Twilio JWT token
    */
-  async generateToken(
-    roomName: string,
-    identity: string,
-    ttl = 14400 // Default 4 hours
-  ): Promise<string> {
-    // Validate inputs - Throw ValidationError for bad client input
-    if (!roomName) {
-      throw new ValidationError("Room name is required");
-    }
-    if (!identity) {
-      throw new ValidationError("User identity is required");
+  async generateToken(roomName: string, identity: string): Promise<string> {
+    // Validate input
+    if (!roomName || !identity) {
+      throw new ValidationError("Room name and identity are required");
     }
 
-    // Sanitize inputs
-    const sanitizedRoomName = roomName.replace(/[^a-zA-Z0-9_-]/g, "");
-    const sanitizedIdentity = identity.replace(/[^a-zA-Z0-9_@.-]/g, "");
-    // Log if changes were made (optional)
-    // if (sanitizedRoomName !== roomName) { console.warn(...) }
-    // if (sanitizedIdentity !== identity) { console.warn(...) }
+    // Create a cache key
+    const cacheKey = `${roomName}:${identity}`;
 
-    // Check cache
-    const cacheKey = `${sanitizedRoomName}:${sanitizedIdentity}`;
-    const now = Date.now();
-    const cachedEntry = this.tokenCache[cacheKey];
-    if (cachedEntry && cachedEntry.expiresAt > now) {
-      console.log(`Using cached Twilio token for ${sanitizedIdentity}`);
-      return cachedEntry.token;
+    // Check cache first
+    const cachedToken = this.tokenCache[cacheKey];
+    if (cachedToken && cachedToken.expiresAt > Date.now()) {
+      console.log(`[TwilioService] Using cached token for ${cacheKey}`);
+      return cachedToken.token;
     }
 
-    console.log(`Creating new Twilio token for ${sanitizedIdentity}`);
+    // Create new token
     try {
+      // Create a Video grant for this token
+      const videoGrant = new twilio.jwt.AccessToken.VideoGrant({
+        room: roomName,
+      });
+
+      // Create an access token with our API key
       const token = new twilio.jwt.AccessToken(
         this.accountSid,
         this.apiKey,
         this.apiSecret,
-        {
-          identity: sanitizedIdentity,
-          ttl: ttl,
-        }
+        { identity, ttl: this.tokenTTL }
       );
 
-      const videoGrant = new twilio.jwt.AccessToken.VideoGrant({
-        room: sanitizedRoomName,
-      });
+      // Add the video grant to the token
       token.addGrant(videoGrant);
-      const jwt = token.toJwt();
 
-      // Cache the token
+      // Generate token
+      const tokenString = token.toJwt();
+
+      // Cache the token with expiration time
+      const expiresAt = Date.now() + this.tokenTTL * 1000;
       this.tokenCache[cacheKey] = {
-        token: jwt,
-        expiresAt: now + this.cacheTtl,
+        token: tokenString,
+        expiresAt,
       };
 
-      console.log(
-        `Successfully generated Twilio token for ${sanitizedIdentity}`
-      );
-      return jwt;
-    } catch (twilioError) {
-      const message =
-        twilioError instanceof Error
-          ? twilioError.message
-          : "Unknown Twilio SDK error";
-      console.error("Twilio token generation failed:", message);
-      // Throw standard Error for internal/SDK issues
-      throw new Error(`Twilio token generation failed: ${message}`);
+      return tokenString;
+    } catch (error) {
+      console.error("[TwilioService] Error generating token:", error);
+      throw new Error("Failed to generate Twilio token");
     }
-    // Note: Removed outer try-catch as the inner one handles Twilio errors
-    // and input validation happens before the try block.
+  }
+
+  /**
+   * Get the token expiration time in seconds
+   * @returns Token expiration time in seconds
+   */
+  getTokenExpiration(): number {
+    return this.tokenTTL;
   }
 
   /**
@@ -145,5 +122,24 @@ export class TwilioService {
    */
   clearCache(): void {
     this.tokenCache = {};
+  }
+
+  /**
+   * Get debug information about the Twilio service
+   * @returns Object with debug information
+   */
+  getDebugInfo() {
+    return {
+      accountSid: this.accountSid
+        ? `${this.accountSid.slice(0, 5)}...`
+        : "not-set",
+      apiKeySet: !!this.apiKey,
+      apiSecretSet: !!this.apiSecret,
+      tokenTTL: this.tokenTTL,
+      cacheSize: Object.keys(this.tokenCache).length,
+      sessionId: `twilio-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .substring(2, 7)}`,
+    };
   }
 }

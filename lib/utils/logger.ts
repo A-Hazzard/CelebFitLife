@@ -7,6 +7,17 @@
 
 type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
 
+// Define types for log data rather than using any
+type LogData =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | Error
+  | Record<string, unknown>
+  | Array<unknown>;
+
 const LOG_LEVELS: Record<LogLevel, number> = {
   trace: 0,
   debug: 1,
@@ -27,7 +38,7 @@ function getMinLogLevel(): LogLevel {
       if (storedLevel && LOG_LEVELS[storedLevel] !== undefined) {
         return storedLevel;
       }
-    } catch (e) {
+    } catch {
       // Ignore localStorage errors
     }
   }
@@ -36,11 +47,11 @@ function getMinLogLevel(): LogLevel {
 }
 
 interface Logger {
-  trace: (message: string, ...args: any[]) => void;
-  debug: (message: string, ...args: any[]) => void;
-  info: (message: string, ...args: any[]) => void;
-  warn: (message: string, ...args: any[]) => void;
-  error: (message: string, ...args: any[]) => void;
+  trace: (message: string, ...args: LogData[]) => void;
+  debug: (message: string, ...args: LogData[]) => void;
+  info: (message: string, ...args: LogData[]) => void;
+  warn: (message: string, ...args: LogData[]) => void;
+  error: (message: string, ...args: LogData[]) => void;
   withContext: (context: string) => Logger;
 }
 
@@ -49,7 +60,7 @@ interface Logger {
  */
 export function createLogger(module: string): Logger {
   const createLogMethod = (level: LogLevel) => {
-    return (message: string, ...args: any[]) => {
+    return (message: string, ...args: LogData[]) => {
       const minLevel = getMinLogLevel();
 
       if (LOG_LEVELS[level] >= LOG_LEVELS[minLevel]) {

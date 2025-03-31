@@ -1,8 +1,8 @@
-import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/config/firebase";
 import { v4 as uuidv4 } from "uuid";
 import {
-  StreamData,
+  Stream,
   StreamingProfileData,
   toStreamingError,
 } from "@/lib/types/streaming";
@@ -49,7 +49,8 @@ export const createStream = async (
       .replace(/\s+/g, "-")
       .toLowerCase()}-${uuidv4()}`;
 
-    const streamData: StreamData = {
+    const streamData: Stream = {
+      id: uuidv4(),
       title,
       description,
       thumbnail:
@@ -60,7 +61,7 @@ export const createStream = async (
       createdBy: userId,
       hasStarted: false,
       hasEnded: false,
-      scheduledAt: scheduledAt ? scheduledAt.toISOString() : null,
+      scheduledAt: scheduledAt ? Timestamp.fromDate(scheduledAt) : undefined,
       audioMuted: false,
       cameraOff: false,
     };
@@ -111,7 +112,7 @@ export const fetchStreamInfo = async (
   slug: string
 ): Promise<{
   success: boolean;
-  data?: Partial<StreamData>;
+  data?: Partial<Stream>;
   error?: string;
 }> => {
   if (!slug) return { success: false, error: "Slug is required" };
@@ -122,7 +123,7 @@ export const fetchStreamInfo = async (
     if (streamSnapshot.exists()) {
       return {
         success: true,
-        data: streamSnapshot.data() as Partial<StreamData>,
+        data: streamSnapshot.data() as Partial<Stream>,
       };
     } else {
       return { success: false, error: "Stream not found" };
@@ -291,7 +292,7 @@ export const safelyDetachTrack = (track: LocalVideoTrack | LocalAudioTrack) => {
     logger.error(`Error during track detachment for ${track.id}:`, error);
     // Log specific error details if available
     if ("cause" in error && error.cause) {
-      logger.error(`Underlying cause:`, error.cause);
+      logger.error(`Underlying cause:`, error.cause as Record<string, unknown>);
     }
     // Attempt to stop again as a fallback
     try {
@@ -844,7 +845,7 @@ export const setupTwilioRoom = async (
       audioTrack,
     };
   } catch (error: unknown) {
-    logger.error(`Error setting up Twilio room:`, error);
+    logger.error(`Error setting up Twilio room:`, error as Error);
     logger.trace(`General setup error stack trace`);
 
     // Clean up resources in case of general failure
@@ -868,7 +869,10 @@ export const setupTwilioRoom = async (
 
       logger.debug(`Cleanup after general failure completed`);
     } catch (cleanupError: unknown) {
-      logger.error(`Error during cleanup after failure:`, cleanupError);
+      logger.error(
+        `Error during cleanup after failure:`,
+        cleanupError as Error
+      );
     }
 
     const streamingError = toStreamingError(error);

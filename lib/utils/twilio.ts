@@ -18,6 +18,7 @@ import {
 } from "twilio-video";
 import { createLogger } from "@/lib/utils/logger";
 import { toStreamingError } from "@/lib/types/streaming";
+import { VideoTrackOptions, AudioTrackOptions } from "@/lib/types/twilio";
 
 // Create context-specific loggers
 const twilioLogger = createLogger("Twilio");
@@ -118,7 +119,10 @@ export function stopAndDetachTrack(
       audioTrack.detach().forEach((el) => el.remove());
     }
   } catch (error) {
-    trackLogger.error("Error stopping/detaching track:", error);
+    trackLogger.error(
+      "Error stopping/detaching track:",
+      toStreamingError(error)
+    );
   }
 }
 
@@ -186,13 +190,13 @@ export function clearVideoContainer(container: HTMLDivElement | null): void {
 export async function createVideoTrack(
   deviceId?: string
 ): Promise<LocalVideoTrack> {
-  const options: any = {};
-  if (deviceId) options.deviceId = { exact: deviceId };
+  const options: VideoTrackOptions = {};
+  if (deviceId) options.deviceId = deviceId;
 
   try {
     return await createLocalVideoTrack(options);
   } catch (error) {
-    trackLogger.error("Failed to create video track:", error);
+    trackLogger.error("Failed to create video track:", toStreamingError(error));
     throw error;
   }
 }
@@ -203,13 +207,16 @@ export async function createVideoTrack(
 export async function createAudioTrack(
   deviceId?: string
 ): Promise<LocalAudioTrack> {
-  const options: any = {};
-  if (deviceId) options.deviceId = { exact: deviceId };
+  const options: AudioTrackOptions = {
+    echoCancellation: true,
+    noiseSuppression: true,
+  };
+  if (deviceId) options.deviceId = deviceId;
 
   try {
     return await createLocalAudioTrack(options);
   } catch (error) {
-    trackLogger.error("Failed to create audio track:", error);
+    trackLogger.error("Failed to create audio track:", toStreamingError(error));
     throw error;
   }
 }
@@ -244,7 +251,10 @@ export async function connectToRoom(
       },
     });
   } catch (error) {
-    roomLogger.error(`Failed to connect to room ${roomName}:`, error);
+    roomLogger.error(
+      `Failed to connect to room ${roomName}:`,
+      toStreamingError(error)
+    );
     throw error;
   }
 }
@@ -261,7 +271,10 @@ export function setupReconnectionHandlers(
   if (!room) return () => {};
 
   const handleReconnecting = (error?: Error) => {
-    roomLogger.warn(`Room ${room.name} is reconnecting`, error);
+    roomLogger.warn(
+      `Room ${room.name} is reconnecting`,
+      error ? toStreamingError(error) : undefined
+    );
     if (onReconnecting) onReconnecting();
   };
 
@@ -272,7 +285,10 @@ export function setupReconnectionHandlers(
 
   const handleDisconnected = (_room: Room, error?: Error) => {
     if (error) {
-      roomLogger.error(`Room ${room.name} disconnected with error:`, error);
+      roomLogger.error(
+        `Room ${room.name} disconnected with error:`,
+        toStreamingError(error)
+      );
       if (onFailed) onFailed(error);
     } else {
       roomLogger.info(`Room ${room.name} disconnected normally`);
@@ -314,4 +330,47 @@ export function updateTrackEnabledState(
 
   // For video tracks, we might want to add other behaviors here
   // such as showing a placeholder when disabled
+}
+
+/**
+ * Sets up media devices by requesting permissions and getting available devices
+ * @returns Object containing camera and mic lists, and any error that occurred
+ */
+export async function setupDevices(): Promise<{
+  cameras: MediaDeviceInfo[];
+  mics: MediaDeviceInfo[];
+  error: string | null;
+}> {
+  const logger = twilioLogger.withContext("Devices");
+  logger.debug("Setting up media devices...");
+
+  const result = {
+    cameras: [] as MediaDeviceInfo[],
+    mics: [] as MediaDeviceInfo[],
+    error: null as string | null,
+  };
+
+  try {
+    // First request permission to access media devices
+    await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    logger.debug("Media permissions granted");
+
+    // Get list of available devices
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    logger.debug(`Found ${devices.length} media devices`);
+
+    // Filter devices by type
+    result.cameras = devices.filter((device) => device.kind === "videoinput");
+    result.mics = devices.filter((device) => device.kind === "audioinput");
+
+    logger.info(
+      `Found ${result.cameras.length} cameras and ${result.mics.length} microphones`
+    );
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    logger.error(`Error setting up media devices: ${error}`);
+    result.error = error;
+  }
+
+  return result;
 }

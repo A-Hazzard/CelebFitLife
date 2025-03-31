@@ -49,7 +49,9 @@ type TimestampLike = {
 /**
  * Converts Firestore timestamps to ISO strings
  */
-export function convertTimestampToISO(timestamp: any): string {
+export function convertTimestampToISO(
+  timestamp: TimestampLike | string | Date | null | undefined
+): string {
   if (!timestamp) return new Date().toISOString();
 
   if (typeof timestamp === "string") {

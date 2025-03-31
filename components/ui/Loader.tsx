@@ -1,9 +1,11 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 
-interface LoaderProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-const Loader = ({ className, ...props }: LoaderProps) => {
+// Using HTMLAttributes directly instead of an empty interface
+const Loader = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => {
   return (
     <div
       className={cn("flex justify-center items-center", className)}

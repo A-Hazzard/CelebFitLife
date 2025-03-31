@@ -3,6 +3,23 @@ import { Stream, StreamCreateDTO, StreamUpdateDTO } from "../models/Stream"; // 
 import { NotFoundError, InvalidDataError } from "../errors/apiErrors"; // Use API errors
 import { nanoid } from "nanoid";
 
+// Define more specific type for StreamUpdateData
+interface StreamUpdateData {
+  title?: string;
+  description?: string;
+  thumbnailUrl?: string;
+  hasStarted?: boolean;
+  hasEnded?: boolean;
+  startedAt?: string;
+  endedAt?: string;
+  scheduledAt?: string;
+  audioMuted?: boolean;
+  cameraOff?: boolean;
+  isCameraOff?: boolean; // Legacy field
+  isMuted?: boolean; // Legacy field
+  lastUpdated?: string;
+}
+
 /**
  * Service for managing streams in the database (API-specific)
  */
@@ -106,8 +123,8 @@ export class StreamService {
         hasEnded: false,
         audioMuted: false,
         cameraOff: false,
-        isCameraOff: false, // Consider removing redundancy
-        isMuted: false, // Consider removing redundancy
+        isCameraOff: false, // Legacy field
+        isMuted: false, // Legacy field
         lastUpdated: new Date().toISOString(),
       };
 
@@ -135,38 +152,36 @@ export class StreamService {
    * Update a stream
    */
   async update(id: string, streamData: StreamUpdateDTO): Promise<Stream> {
-    try {
-      const docRef = this.streamsCollection.doc(id);
-      const doc = await docRef.get();
-      if (!doc.exists) {
-        throw new NotFoundError("Stream not found for update");
-      }
+    const docRef = this.streamsCollection.doc(id);
+    const doc = await docRef.get();
 
-      // Ensure sensitive/immutable fields are not updated accidentally
-      const { createdBy, createdAt, slug, ...safeUpdateData } =
-        streamData as any;
-      if (Object.keys(safeUpdateData).length === 0) {
-        throw new InvalidDataError("No valid fields provided for update.");
-      }
-
-      await docRef.update({
-        ...safeUpdateData,
-        lastUpdated: new Date().toISOString(),
-      });
-
-      const updatedDoc = await docRef.get();
-      if (!updatedDoc.exists) {
-        // Should exist, but safety check
-        throw new Error("Failed to retrieve updated stream data after update.");
-      }
-      return convertDocToObj<Stream>(updatedDoc);
-    } catch (error) {
-      console.error("[API StreamService] Error updating stream:", error);
-      if (error instanceof NotFoundError || error instanceof InvalidDataError) {
-        throw error; // Re-throw specific handled errors
-      }
-      throw new Error("Failed to update stream due to a database error.");
+    if (!doc.exists) {
+      throw new NotFoundError("Stream not found for update");
     }
+
+    // Ensure sensitive/immutable fields are not updated accidentally
+    const safeUpdateData = streamData as StreamUpdateData;
+    if (Object.keys(safeUpdateData).length === 0) {
+      throw new InvalidDataError("No valid fields provided for update.");
+    }
+
+    await docRef.update({
+      ...safeUpdateData,
+      lastUpdated: new Date().toISOString(),
+    });
+
+    const updatedDoc = await docRef.get();
+    if (!updatedDoc.exists) {
+      // Should exist, but safety check
+      throw new Error("Failed to retrieve updated stream data after update.");
+    }
+
+    const updatedStream = convertDocToObj<Stream>(updatedDoc);
+    if (!updatedStream) {
+      throw new Error("Failed to convert updated stream document to object");
+    }
+
+    return updatedStream;
   }
 
   /**
@@ -192,7 +207,13 @@ export class StreamService {
         // Should exist, but safety check
         throw new Error("Failed to retrieve stream data after starting.");
       }
-      return convertDocToObj<Stream>(updatedDoc);
+
+      const startedStream = convertDocToObj<Stream>(updatedDoc);
+      if (!startedStream) {
+        throw new Error("Failed to convert started stream document to object");
+      }
+
+      return startedStream;
     } catch (error) {
       console.error("[API StreamService] Error starting stream:", error);
       if (error instanceof NotFoundError) {
@@ -224,7 +245,13 @@ export class StreamService {
         // Should exist, but safety check
         throw new Error("Failed to retrieve stream data after ending.");
       }
-      return convertDocToObj<Stream>(updatedDoc);
+
+      const endedStream = convertDocToObj<Stream>(updatedDoc);
+      if (!endedStream) {
+        throw new Error("Failed to convert ended stream document to object");
+      }
+
+      return endedStream;
     } catch (error) {
       console.error("[API StreamService] Error ending stream:", error);
       if (error instanceof NotFoundError) {

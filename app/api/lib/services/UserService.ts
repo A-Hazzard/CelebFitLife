@@ -8,6 +8,27 @@ import {
 } from "../errors/apiErrors"; // Use API specific errors
 import { convertDocToObj } from "@/lib/firebase/admin"; // Assuming convertDocToObj is here
 
+// More specific type for user role
+interface UserRole {
+  admin?: boolean;
+  streamer?: boolean;
+  viewer?: boolean;
+}
+
+interface UserUpdateData {
+  username?: string;
+  displayName?: string;
+  bio?: string;
+  avatarUrl?: string;
+  age?: number;
+  city?: string;
+  country?: string;
+  phone?: string;
+  role?: UserRole;
+  isAdmin?: boolean;
+  updatedAt?: string;
+}
+
 /**
  * Service for managing users in the database (API-specific)
  */
@@ -152,39 +173,37 @@ export class UserService {
     id: string,
     updateData: Partial<Omit<User, "id" | "email" | "password">>
   ): Promise<User> {
-    try {
-      const docRef = this.usersCollection.doc(id);
-      const doc = await docRef.get();
+    const docRef = this.usersCollection.doc(id);
+    const doc = await docRef.get();
 
-      if (!doc.exists) {
-        throw new NotFoundError("User not found for update");
-      }
-
-      // Explicitly exclude fields that shouldn't be updated this way
-      const { password, email, id: _, ...safeUpdateData } = updateData as any;
-      if (Object.keys(safeUpdateData).length === 0) {
-        throw new InvalidDataError("No valid fields provided for update.");
-      }
-
-      await docRef.update({
-        ...safeUpdateData,
-        updatedAt: new Date().toISOString(),
-      });
-
-      // Get updated user data
-      const updatedDoc = await docRef.get();
-      if (!updatedDoc.exists) {
-        // Should exist, but safety check
-        throw new Error("Failed to retrieve updated user data after update.");
-      }
-      return convertDocToObj<User>(updatedDoc);
-    } catch (error) {
-      console.error("Error updating user:", error);
-      if (error instanceof NotFoundError || error instanceof InvalidDataError) {
-        throw error; // Re-throw specific handled errors
-      }
-      throw new Error("Failed to update user due to a database error.");
+    if (!doc.exists) {
+      throw new NotFoundError("User not found for update");
     }
+
+    // Explicitly exclude fields that shouldn't be updated this way
+    const safeUpdateData = updateData as UserUpdateData;
+    if (Object.keys(safeUpdateData).length === 0) {
+      throw new InvalidDataError("No valid fields provided for update.");
+    }
+
+    await docRef.update({
+      ...safeUpdateData,
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Get updated user data
+    const updatedDoc = await docRef.get();
+    if (!updatedDoc.exists) {
+      // Should exist, but safety check
+      throw new Error("Failed to retrieve updated user data after update.");
+    }
+
+    const updatedUser = convertDocToObj<User>(updatedDoc);
+    if (!updatedUser) {
+      throw new Error("Failed to convert updated user document to object");
+    }
+
+    return updatedUser;
   }
 
   async delete(id: string): Promise<void> {

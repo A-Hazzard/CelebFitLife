@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { LocalAudioTrack, RemoteAudioTrack } from "twilio-video";
-import { cleanupMediaTracks } from "@/lib/utils/streaming";
+import { cleanupMediaTracks } from "@/lib/utils/twilio";
 import { createLogger } from "@/lib/utils/logger";
 
 // Create logger for this hook
@@ -213,7 +213,7 @@ export const AudioTrackRenderer = ({
         try {
           track.detach(audioElement);
         } catch (err) {
-          logger.error("Error detaching audio track:", err);
+          logger.error("Error detaching audio track:", err as Error);
         }
       }
     };

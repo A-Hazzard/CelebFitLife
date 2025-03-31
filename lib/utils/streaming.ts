@@ -15,15 +15,8 @@ import {
   StreamStatus,
   StreamUpdateData,
   StreamWithDetails,
+  toStreamingError,
 } from "@/lib/types/streaming";
-import {
-  LocalVideoTrack,
-  RemoteTrack,
-  LocalAudioTrack,
-  Room,
-} from "twilio-video";
-import { createLocalVideoTrack, createLocalAudioTrack } from "twilio-video";
-import { updateStreamDeviceStatus } from "@/lib/helpers/streaming";
 
 // Create context-specific logger
 const streamLogger = createLogger("Streaming");
@@ -192,7 +185,10 @@ export async function prepareStreamToStart(
     streamLogger.info(`Stream ${streamId} prepared successfully`);
     return data.stream;
   } catch (error) {
-    streamLogger.error(`Error preparing stream ${streamId}:`, error);
+    streamLogger.error(
+      `Error preparing stream ${streamId}:`,
+      toStreamingError(error)
+    );
     return null;
   }
 }
@@ -223,7 +219,10 @@ export async function updateStream(
     streamLogger.info(`Stream ${streamId} updated successfully`);
     return data.stream;
   } catch (error) {
-    streamLogger.error(`Error updating stream ${streamId}:`, error);
+    streamLogger.error(
+      `Error updating stream ${streamId}:`,
+      toStreamingError(error)
+    );
     return null;
   }
 }
@@ -260,7 +259,7 @@ export async function createStream(streamData: {
     streamLogger.info("Stream created successfully");
     return { stream: data.stream, success: true };
   } catch (error) {
-    streamLogger.error("Error creating stream:", error);
+    streamLogger.error("Error creating stream:", toStreamingError(error));
     return {
       stream: null as unknown as Stream,
       success: false,
@@ -286,7 +285,10 @@ export async function fetchStreamById(
     const data = await response.json();
     return data.stream;
   } catch (error) {
-    streamLogger.error(`Error fetching stream ${streamId}:`, error);
+    streamLogger.error(
+      `Error fetching stream ${streamId}:`,
+      toStreamingError(error)
+    );
     return null;
   }
 }
@@ -310,7 +312,10 @@ export async function fetchStreamsForUser(userId: string): Promise<Stream[]> {
     const data = await response.json();
     return data.streams;
   } catch (error) {
-    streamLogger.error(`Error fetching streams for user ${userId}:`, error);
+    streamLogger.error(
+      `Error fetching streams for user ${userId}:`,
+      toStreamingError(error)
+    );
     return [];
   }
 }
@@ -344,7 +349,10 @@ export async function updateStreamStatus(
     streamLogger.info(`Stream ${streamId} status updated to ${status}`);
     return data.stream;
   } catch (error) {
-    streamLogger.error(`Error updating stream ${streamId} status:`, error);
+    streamLogger.error(
+      `Error updating stream ${streamId} status:`,
+      toStreamingError(error)
+    );
     return null;
   }
 }
@@ -367,7 +375,10 @@ export async function endStream(streamId: string): Promise<boolean> {
     streamLogger.info(`Stream ${streamId} ended successfully`);
     return true;
   } catch (error) {
-    streamLogger.error(`Error ending stream ${streamId}:`, error);
+    streamLogger.error(
+      `Error ending stream ${streamId}:`,
+      toStreamingError(error)
+    );
     return false;
   }
 }

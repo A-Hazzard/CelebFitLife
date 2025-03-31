@@ -39,9 +39,26 @@ export interface UserData {
   country?: string;
   city?: string;
   age?: number;
-  plan?: {
-    maxStreamers: number;
-  }
+  plan?:
+    | {
+        maxStreamers: number;
+      }
+    | string;
   selectedPlan?: string;
+  planDetails?: {
+    price: number;
+    maxStreamers: number | string;
+  };
   userId?: string;
+  planId?: string;
+  paymentInfo?: {
+    paymentMethodId?: string;
+    amount?: number;
+    status?: string;
+  };
+  acceptedTnC?: boolean;
+  selectedStreamers?: Array<{
+    streamerId: string;
+    streamerName: string;
+  }>;
 }

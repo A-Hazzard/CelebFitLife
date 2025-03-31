@@ -1,29 +1,13 @@
-import { create } from 'zustand';
-import { fetchCategoriesWithTags } from '@/lib/store/categoriesStore';
-import { fetchStreamersWithStreams } from '@/app/api/streamers/route';
-
-type Stream = {
-  id: string;
-  title: string;
-  createdAt?: string;
-  endedAt?: string;
-  [key: string]: any;
-};
-
-type Streamer = {
-  id: string;
-  streamerName: string;
-  email: string;
-  Category: string;
-  Tags: string[];
-  streamID: string;
-  streams: Stream[];
-  categoryName?: string;
-  tagNames?: string[];
-};
+import { create } from "zustand";
+import { fetchCategoriesWithTags } from "@/lib/store/categoriesStore";
+import { fetchStreamersWithStreams } from "@/app/api/streamers/route";
+import {
+  StreamerWithStreams,
+  EnrichedStreamer,
+} from "@/lib/types/streaming";
 
 type Store = {
-  streamers: Streamer[];
+  streamers: EnrichedStreamer[];
   loading: boolean;
   fetchAll: () => Promise<void>;
 };
@@ -41,16 +25,26 @@ export const useStreamerStore = create<Store>((set) => ({
       ]);
 
       if (!categoriesResult.success) {
-        throw new Error('Failed to fetch categories and tags');
+        throw new Error("Failed to fetch categories and tags");
       }
 
       const categories = categoriesResult.categoriesWithTags;
-      const enrichedStreamers = streamersData.map((streamer: Streamer) => {
-        const categoryName = categories.find(cat => cat.id === streamer.Category)?.name || "Unknown";
-        const tagNames = streamer.Tags.map(tagId => {
-          const foundTag = categories.flatMap(cat => cat.tags).find(tag => tag.id === tagId);
-          return foundTag ? foundTag.name : "Unknown Tag";
-        });
+
+      // Cast the streamersData to our expected type
+      const typedStreamersData = streamersData as StreamerWithStreams[];
+
+      const enrichedStreamers = typedStreamersData.map((streamer) => {
+        const categoryName =
+          categories.find((cat) => cat.id === streamer.Category)?.name ||
+          "Unknown";
+
+        const tagNames =
+          streamer.Tags?.map((tagId: string) => {
+            const foundTag = categories
+              .flatMap((cat) => cat.tags)
+              .find((tag) => tag.id === tagId);
+            return foundTag ? foundTag.name : "Unknown Tag";
+          }) || [];
 
         return {
           ...streamer,
@@ -61,7 +55,7 @@ export const useStreamerStore = create<Store>((set) => ({
 
       set({ streamers: enrichedStreamers });
     } catch (err) {
-      console.error('🔥 Error fetching streamer data:', err);
+      console.error("🔥 Error fetching streamer data:", err);
     } finally {
       set({ loading: false });
     }

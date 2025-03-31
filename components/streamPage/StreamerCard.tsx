@@ -1,7 +1,10 @@
 import React from "react";
-import { Streamer } from "@/lib/types/streaming";
+import { EnrichedStreamer } from "@/lib/types/streaming";
+import Image from "next/image";
 
-const StreamerCard: React.FC<{ streamer: Streamer }> = ({ streamer }) => {
+const StreamerCard: React.FC<{ streamer: EnrichedStreamer }> = ({
+  streamer,
+}) => {
   return (
     <div className="bg-brandBlack border border-brandOrange/30 p-4 md:p-5 rounded-xl shadow-lg hover:shadow-2xl">
       {/* Avatar + Name */}
@@ -9,43 +12,51 @@ const StreamerCard: React.FC<{ streamer: Streamer }> = ({ streamer }) => {
         <div
           className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-cover bg-center border-2 border-brandOrange/30"
           style={{
-            backgroundImage: `url(${streamer.thumbnail || "/default-avatar.png"})`,
+            backgroundImage: `url(${streamer.avatarUrl || "/favicon.ico"})`,
           }}
         />
         <div>
           <div className="flex items-center space-x-2">
             <h3 className="text-base md:text-lg font-bold text-brandWhite">
-              {streamer.streamerName}
+              {streamer.username || streamer.name || "Unknown Streamer"}
             </h3>
-            <span className="bg-brandOrange text-brandBlack text-xs px-2 py-1 rounded-full">
-              {streamer.categoryName}
-            </span>
+            {streamer.categoryName && (
+              <span className="bg-brandOrange text-brandBlack text-xs px-2 py-1 rounded-full">
+                {streamer.categoryName}
+              </span>
+            )}
           </div>
-          <p className="text-xs md:text-sm text-brandOrange/70">{streamer.email}</p>
+          <p className="text-xs md:text-sm text-brandOrange/70">
+            {streamer.username || streamer.name || "Unknown Streamer"}
+          </p>
         </div>
       </div>
 
       {/* Optional quote (if exists) */}
-      {streamer.quote && (
+      {streamer.bio && (
         <p className="text-xs md:text-sm text-brandWhite/70 italic mb-4">
-          &ldquo;{streamer.quote}&rdquo;
+          &ldquo;{streamer.bio}&rdquo;
         </p>
       )}
 
       {/* Tags */}
       <div className="flex flex-wrap gap-2 mb-4">
-        {streamer.tagNames?.map((tag: string, i: number) => (
-          <span
-            key={i}
-            className="bg-brandBlack border border-brandOrange/30 text-xs px-2 py-1 rounded-full text-brandOrange"
-          >
-            {tag}
-          </span>
-        ))}
+        {streamer.tagNames?.length > 0 ? (
+          streamer.tagNames?.map((tag: string, i: number) => (
+            <span
+              key={i}
+              className="bg-brandBlack border border-brandOrange/30 text-xs px-2 py-1 rounded-full text-brandOrange"
+            >
+              {tag}
+            </span>
+          ))
+        ) : (
+          <span className="text-xs text-brandOrange/50">No tags</span>
+        )}
       </div>
 
       {/* Streams Section */}
-      {streamer.streams?.length > 0 && (
+      {streamer.streams && streamer.streams.length > 0 && (
         <div className="border-t border-brandOrange/30 pt-3 space-y-3">
           <h4 className="text-sm font-semibold text-brandWhite">📺 Streams</h4>
           <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-brandOrange/50">
@@ -55,18 +66,21 @@ const StreamerCard: React.FC<{ streamer: Streamer }> = ({ streamer }) => {
                 className="flex items-start space-x-3"
               >
                 {/* Thumbnail */}
-                {stream.thumbnail && (
-                  <img
-                    src={stream.thumbnail}
-                    alt={stream.title}
-                    className="w-16 h-10 object-cover rounded-md border border-brandOrange/20"
+                <div className="relative w-16 h-10 overflow-hidden rounded-md border border-brandOrange/20">
+                  <Image
+                    src={stream.thumbnail || "/favicon.ico"}
+                    alt={stream.title || "Stream thumbnail"}
+                    width={64}
+                    height={40}
+                    className="object-cover"
+                    priority={index < 2} // Prioritize loading for first two images
                   />
-                )}
+                </div>
 
                 {/* Stream Info */}
                 <div className="flex-1">
                   <p className="text-xs font-medium text-brandWhite">
-                    {stream.title}
+                    {stream.title || "Untitled Stream"}
                   </p>
                   <p className="text-[10px] text-brandOrange/70">
                     {stream.hasEnded ? (

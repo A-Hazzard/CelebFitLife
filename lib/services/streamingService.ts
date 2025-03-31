@@ -3,17 +3,15 @@
  * This service contains client-side functions for interacting with streamer-related APIs.
  */
 
-export interface StreamerSelection {
-  streamerId: string;
-  streamerName: string;
-}
+import { StreamerSelection, RecommendedStreamer } from "@/lib/types/streamer";
+import { toStreamingError } from "@/lib/types/streaming";
 
 export async function saveStreamerSelections(
   userId: string,
   selectedStreamers: StreamerSelection[]
 ): Promise<void> {
   try {
-    const response = await fetch("/api/user/streamers", {
+    const response = await fetch("/api/streamers/selection", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -28,12 +26,14 @@ export async function saveStreamerSelections(
       throw new Error("Failed to save streamer selections");
     }
   } catch (error) {
-    console.error("Streamer selection error:", error);
+    console.error("Streamer selection error:", toStreamingError(error));
     throw error;
   }
 }
 
-export async function getRecommendedStreamers(): Promise<any[]> {
+export async function getRecommendedStreamers(): Promise<
+  RecommendedStreamer[]
+> {
   // Implementation to fetch recommended streamers
   return [];
 }

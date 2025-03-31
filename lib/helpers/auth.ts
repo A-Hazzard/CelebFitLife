@@ -190,7 +190,7 @@ export function isAuthenticated(): boolean {
     const expiry = payload.exp * 1000;
     return expiry > Date.now();
   } catch (error) {
-    authLogger.error("Error checking authentication:", error);
+    authLogger.error("Error checking authentication:", error as Error);
     return false;
   }
 }
@@ -207,7 +207,7 @@ export function getCurrentUser(): User | null {
 
     return JSON.parse(userJson) as User;
   } catch (error) {
-    authLogger.error("Error getting current user:", error);
+    authLogger.error("Error getting current user:", error as Error);
     return null;
   }
 }
@@ -237,7 +237,7 @@ export function getToken(): string | null {
   try {
     return localStorage.getItem("token");
   } catch (error) {
-    authLogger.error("Error getting token:", error);
+    authLogger.error("Error getting token:", error as Error);
     return null;
   }
 }
@@ -256,6 +256,6 @@ export function logout(): void {
     // Redirect to home page
     window.location.href = "/";
   } catch (error) {
-    authLogger.error("Error logging out:", error);
+    authLogger.error("Error logging out:", error as Error);
   }
 }

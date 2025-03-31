@@ -79,7 +79,10 @@ export const useStreamSchedule = (slug: string) => {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
-      logger.error(`Error fetching stream schedule: ${errorMessage}`, err);
+      logger.error(
+        `Error fetching stream schedule: ${errorMessage}`,
+        err as Error
+      );
       setError("Failed to fetch stream schedule");
     } finally {
       setLoading(false);
