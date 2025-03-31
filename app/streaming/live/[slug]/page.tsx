@@ -175,84 +175,93 @@ export default function LiveViewPage() {
   const handleTrackSubscribed = useCallback(
     (track: RemoteTrack) => {
       console.log(
-        `Track subscribed: ${track.kind} - ${track.name} - sid: ${track.sid} - enabled: ${track.isEnabled}`
+        `Track subscribed: ${track.kind} - {${track.name}} - sid: ${track.sid} - enabled: ${track.isEnabled}`
       );
 
       if (track.kind === "video") {
         console.log("[Track] Adding video track to container");
-        const videoTrack = track as RemoteVideoTrack;
-        setRemoteVideoTrack(videoTrack);
+
+        // Clear existing videos first to avoid duplicates
+        const existingVideos = videoContainerRef.current?.querySelectorAll(
+          `video[data-track-sid="${track.sid}"]`
+        );
+        existingVideos?.forEach((v) => v.remove());
+
+        // Create and attach the new video element
+        const videoElement = track.attach();
+        videoElement.style.width = "100%";
+        videoElement.style.height = "100%";
+        videoElement.style.objectFit = "cover";
+        videoElement.style.display = "block";
+        videoElement.setAttribute("data-track-sid", track.sid);
+        videoElement.setAttribute("data-debug", "viewer-video-track");
+        videoElement.setAttribute("autoplay", "true");
+        videoElement.setAttribute("playsinline", "true");
 
         if (videoContainerRef.current) {
-          // Clear existing elements first to prevent duplicates
-          clearVideoContainer(videoContainerRef.current);
-
-          try {
-            // Create a video element and explicitly set attributes
-            const videoElement = videoTrack.attach();
-            videoElement.style.width = "100%";
-            videoElement.style.height = "100%";
-            videoElement.style.objectFit = "cover";
-            videoElement.setAttribute("autoplay", "true");
-            videoElement.setAttribute("playsinline", "true");
-            videoElement.setAttribute("data-track-sid", track.sid);
-            videoElement.setAttribute("data-debug", "viewer-video-track");
-
-            // Make sure the video element is visible
-            videoElement.style.display = "block";
-
-            // Add to container
-            videoContainerRef.current.appendChild(videoElement);
-            console.log(
-              "[Track] Video element attached and added to container",
-              videoElement
-            );
-            setVideoStatus("active");
-
-            // Force a visual check for debugging
-            setTimeout(() => {
-              if (videoContainerRef.current) {
-                const hasVideo =
-                  videoContainerRef.current.querySelector("video");
-                console.log(
-                  "[Track] After timeout, container has video element:",
-                  !!hasVideo
-                );
-              }
-            }, 1000);
-          } catch (error) {
-            console.error("[Track] Error attaching video track:", error);
-          }
-        } else {
-          console.error(
-            "[Track] Video container ref is null, can't attach track"
+          videoContainerRef.current.appendChild(videoElement);
+          console.log(
+            "[Track] Video element attached and added to container",
+            videoElement
           );
+
+          // Set a timeout to verify that the video element is in the DOM
+          setTimeout(() => {
+            const hasVideo =
+              !!videoContainerRef.current?.querySelector("video");
+            console.log(
+              "[Track] After timeout, container has video element:",
+              hasVideo
+            );
+          }, 2000);
         }
+
+        // Update state to reflect we have a video track
+        setRemoteVideoTrack(track as RemoteVideoTrack);
       } else if (track.kind === "audio") {
         console.log("[Track] Setting up audio track:", track.sid);
-        setRemoteAudioTrack(track as RemoteAudioTrack);
 
-        try {
-          // Create a new audio element (not attached to the DOM)
-          const audioElement = document.createElement("audio");
-          audioElement.setAttribute("autoplay", "true");
-          audioElement.setAttribute("data-track-sid", track.sid);
-          audioElement.muted = isAudioMuted;
+        // Remove any existing audio element with the same track SID
+        const existingAudio = document.querySelectorAll(
+          `audio[data-track-sid="${track.sid}"]`
+        );
+        existingAudio.forEach((a) => a.remove());
 
-          // Debug attribute
-          audioElement.setAttribute("data-debug", "viewer-audio-track");
+        // Create and set up the audio element
+        const audioElement = track.attach();
+        audioElement.setAttribute("data-track-sid", track.sid);
+        audioElement.setAttribute("data-debug", "viewer-audio-track");
+        audioElement.setAttribute("autoplay", "true");
 
-          // Attach the track to the audio element
-          (track as RemoteAudioTrack).attach(audioElement);
+        // Set volume to full and try to play it
+        audioElement.volume = 1.0;
 
-          // Add to document body to ensure it plays
-          document.body.appendChild(audioElement);
-          console.log(
-            "[Track] Audio element attached and added to document body"
-          );
-        } catch (error) {
-          console.error("[Track] Error attaching audio track:", error);
+        // Add specific properties to ensure audio playback
+        audioElement.muted = false;
+        audioElement.setAttribute("playsinline", "true");
+
+        // Make sure it stays attached to the document
+        document.body.appendChild(audioElement);
+        console.log(
+          "[Track] Audio element attached and added to document body"
+        );
+
+        // Try to force play the audio element
+        const playPromise = audioElement.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log("[Track] Audio playback started successfully");
+            })
+            .catch((error) => {
+              console.error("[Track] Audio playback failed:", error);
+              // If autoplay fails, we need user interaction, show a button to the user
+              setIsAudioMuted(true);
+            });
         }
+
+        // Update state to reflect we have an audio track
+        setRemoteAudioTrack(track as RemoteAudioTrack);
       }
     },
     [isAudioMuted]
@@ -940,20 +949,48 @@ export default function LiveViewPage() {
     }
   }, [videoStatus, slug, room, isConnectingRef, checkStreamAndRetry]);
 
-  // Audio muting handler - moved outside of render for React Hook rules
-  const toggleAudioMute = useCallback(() => {
-    setIsAudioMuted((prev) => !prev);
+  // Replace the toggleAudioMute function with this improved version:
 
-    // Update elements for the remote audio track
-    if (remoteAudioTrack) {
-      const audioElements = document.querySelectorAll(
-        `audio[data-track-sid="${remoteAudioTrack.sid}"]`
-      );
-      audioElements.forEach((el) => {
-        (el as HTMLAudioElement).muted = !isAudioMuted;
-      });
+  const toggleAudioMute = useCallback(() => {
+    const newMuteState = !isAudioMuted;
+    setIsAudioMuted(newMuteState);
+    console.log(
+      `[LiveView] ${newMuteState ? "Muting" : "Unmuting"} audio tracks`
+    );
+
+    // Find all audio elements and update their muted state
+    const audioElements = document.querySelectorAll(
+      'audio[data-debug="viewer-audio-track"]'
+    );
+
+    if (audioElements.length === 0) {
+      console.log("[LiveView] No audio elements found to toggle mute state");
     }
-  }, [remoteAudioTrack, isAudioMuted]);
+
+    audioElements.forEach((el) => {
+      const audioEl = el as HTMLAudioElement;
+      audioEl.muted = newMuteState;
+
+      // If unmuting, try to play the audio
+      if (!newMuteState) {
+        const playPromise = audioEl.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((error) => {
+            console.error(
+              "[LiveView] Failed to play audio after unmuting:",
+              error
+            );
+          });
+        }
+      }
+
+      console.log(
+        `[LiveView] Set muted=${newMuteState} on audio track ${audioEl.getAttribute(
+          "data-track-sid"
+        )}`
+      );
+    });
+  }, [isAudioMuted]);
 
   // Add debug output for track status
   useEffect(() => {

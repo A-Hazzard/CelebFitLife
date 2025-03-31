@@ -247,11 +247,10 @@ const StreamManager = forwardRef<
           }
         }
 
+        console.log(
+          "[StreamManager] Requesting media with camera and mic access"
+        );
         try {
-          console.log(
-            "[StreamManager] Requesting media with camera and mic access"
-          );
-          // Request media with saved device preferences
           const mediaStream = await navigator.mediaDevices.getUserMedia({
             audio: audioConstraints,
             video: videoConstraints,
@@ -260,10 +259,29 @@ const StreamManager = forwardRef<
           // Set the stream to the video element
           if (videoRef.current) {
             videoRef.current.srcObject = mediaStream;
-            await videoRef.current.play().catch((error) => {
-              console.error("[StreamManager] Error playing video:", error);
-              throw new Error("Failed to play video: " + error.message);
-            });
+            videoRef.current.muted = true; // Important: Muted videos can autoplay
+            videoRef.current.setAttribute("playsinline", ""); // For iOS
+
+            try {
+              // Try to play the video with error handling
+              const playPromise = videoRef.current.play();
+              if (playPromise !== undefined) {
+                await playPromise.catch((error) => {
+                  console.warn(
+                    "[StreamManager] Browser prevented autoplay:",
+                    error
+                  );
+                  // Even with autoplay blocked, we'll continue - this is just the preview
+                  // User will still be able to publish their stream
+                });
+              }
+            } catch (playError) {
+              console.warn(
+                "[StreamManager] Error playing video preview:",
+                playError
+              );
+              // Continue anyway - this is just the preview
+            }
           }
 
           localStreamRef.current = mediaStream;
@@ -273,11 +291,33 @@ const StreamManager = forwardRef<
           console.log(
             "[StreamManager] Successfully accessed camera and microphone"
           );
-        } catch (mediaError) {
+        } catch (mediaError: unknown) {
           console.error("[StreamManager] Failed to get media:", mediaError);
-          setConnectionError(
-            "Failed to access camera/microphone. Please check browser permissions and make sure your devices are connected."
-          );
+          let errorMessage = "Failed to access camera/microphone. ";
+
+          // Provide better error messages based on the error
+          if (mediaError instanceof Error) {
+            if (mediaError.name === "NotAllowedError") {
+              errorMessage +=
+                "Please grant camera and microphone permissions in your browser.";
+            } else if (mediaError.name === "NotFoundError") {
+              errorMessage +=
+                "No camera or microphone found. Please connect a device and try again.";
+            } else if (mediaError.name === "NotReadableError") {
+              errorMessage +=
+                "Your camera or microphone is already in use by another application.";
+            } else {
+              errorMessage +=
+                "Please check browser permissions and make sure your devices are connected.";
+            }
+          } else {
+            errorMessage +=
+              "Please check browser permissions and make sure your devices are connected.";
+          }
+
+          setConnectionError(errorMessage);
+          setIsConnecting(false);
+          setConnectionStatus("disconnected");
           throw mediaError;
         }
       }
