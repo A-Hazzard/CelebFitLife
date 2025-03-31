@@ -4,6 +4,7 @@ import {
   RemoteParticipant,
 } from "twilio-video";
 import { User } from "./user";
+import { Timestamp } from "firebase/firestore";
 
 // Dashboard types
 export type StreamingProfileData = {
@@ -31,11 +32,14 @@ export interface Stream {
   title: string;
   description?: string;
   slug: string;
-  status: StreamStatus;
-  userId: string;
-  isScheduled: boolean;
+  status?: StreamStatus;
+  userId?: string;
+  createdBy?: string;
+  isScheduled?: boolean;
   scheduledFor?: string | null;
+  scheduledAt?: Timestamp;
   thumbnailUrl?: string;
+  thumbnail?: string;
   viewCount?: number;
   likeCount?: number;
   roomName?: string;
@@ -43,10 +47,20 @@ export interface Stream {
     currentCameraId?: string;
     currentMicId?: string;
   };
-  createdAt: string;
-  updatedAt?: string;
-  startedAt?: string;
-  endedAt?: string;
+  // Firestore timestamps
+  createdAt: string | Timestamp;
+  updatedAt?: string | Timestamp;
+  startedAt?: string | Timestamp;
+  endedAt?: string | Timestamp;
+  lastUpdated?: Timestamp;
+
+  // Stream state properties used by StreamManager
+  hasStarted: boolean;
+  hasEnded: boolean;
+  audioMuted?: boolean;
+  cameraOff?: boolean;
+  category?: string;
+  tags?: string[];
 }
 
 export interface StreamWithDetails extends Stream {

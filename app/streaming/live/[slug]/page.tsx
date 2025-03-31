@@ -20,9 +20,19 @@ import {
 import { MicOff, Mic, VideoOff } from "lucide-react";
 import { Countdown } from "@/components/streaming/Countdown";
 import { ClientTwilioService } from "@/lib/services/ClientTwilioService";
+import Loader from "@/components/ui/Loader";
+import { Button } from "@/components/ui/button";
+import { AlertCircle } from "lucide-react";
 
 // Create a static instance of ClientTwilioService for the client side
 const clientTwilioService = new ClientTwilioService();
+
+// Generate a unique identity for viewers that includes a timestamp and random value
+const generateUniqueIdentity = (prefix: string, userId: string): string => {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 10000);
+  return `${prefix}_${userId}_${timestamp}_${random}`;
+};
 
 export default function LiveViewPage() {
   const pathname = usePathname();
@@ -151,6 +161,629 @@ export default function LiveViewPage() {
     }
   }, [currentUser, hasHydrated, loadingAuth]);
 
+  // Format time as HH:MM:SS
+  const formatDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // Fix the handleTrackSubscribed function to properly handle video and audio tracks
+  const handleTrackSubscribed = useCallback(
+    (track: RemoteTrack) => {
+      console.log(
+        `Track subscribed: ${track.kind} - ${track.name} - sid: ${track.sid} - enabled: ${track.isEnabled}`
+      );
+
+      if (track.kind === "video") {
+        console.log("[Track] Adding video track to container");
+        const videoTrack = track as RemoteVideoTrack;
+        setRemoteVideoTrack(videoTrack);
+
+        if (videoContainerRef.current) {
+          // Clear existing elements first to prevent duplicates
+          clearVideoContainer(videoContainerRef.current);
+
+          try {
+            // Create a video element and explicitly set attributes
+            const videoElement = videoTrack.attach();
+            videoElement.style.width = "100%";
+            videoElement.style.height = "100%";
+            videoElement.style.objectFit = "cover";
+            videoElement.setAttribute("autoplay", "true");
+            videoElement.setAttribute("playsinline", "true");
+            videoElement.setAttribute("data-track-sid", track.sid);
+            videoElement.setAttribute("data-debug", "viewer-video-track");
+
+            // Make sure the video element is visible
+            videoElement.style.display = "block";
+
+            // Add to container
+            videoContainerRef.current.appendChild(videoElement);
+            console.log(
+              "[Track] Video element attached and added to container",
+              videoElement
+            );
+            setVideoStatus("active");
+
+            // Force a visual check for debugging
+            setTimeout(() => {
+              if (videoContainerRef.current) {
+                const hasVideo =
+                  videoContainerRef.current.querySelector("video");
+                console.log(
+                  "[Track] After timeout, container has video element:",
+                  !!hasVideo
+                );
+              }
+            }, 1000);
+          } catch (error) {
+            console.error("[Track] Error attaching video track:", error);
+          }
+        } else {
+          console.error(
+            "[Track] Video container ref is null, can't attach track"
+          );
+        }
+      } else if (track.kind === "audio") {
+        console.log("[Track] Setting up audio track:", track.sid);
+        setRemoteAudioTrack(track as RemoteAudioTrack);
+
+        try {
+          // Create a new audio element (not attached to the DOM)
+          const audioElement = document.createElement("audio");
+          audioElement.setAttribute("autoplay", "true");
+          audioElement.setAttribute("data-track-sid", track.sid);
+          audioElement.muted = isAudioMuted;
+
+          // Debug attribute
+          audioElement.setAttribute("data-debug", "viewer-audio-track");
+
+          // Attach the track to the audio element
+          (track as RemoteAudioTrack).attach(audioElement);
+
+          // Add to document body to ensure it plays
+          document.body.appendChild(audioElement);
+          console.log(
+            "[Track] Audio element attached and added to document body"
+          );
+        } catch (error) {
+          console.error("[Track] Error attaching audio track:", error);
+        }
+      }
+    },
+    [isAudioMuted]
+  );
+
+  // Handler for track published - enhance to better handle video tracks
+  const handleTrackPublication = useCallback(
+    (publication: RemoteTrackPublication) => {
+      try {
+        if (!publication) {
+          console.warn(
+            "handleTrackPublication called with undefined publication"
+          );
+          return;
+        }
+
+        const trackName = publication.trackName || "unknown";
+        console.log(
+          `Track published: ${trackName}, kind: ${
+            publication.kind
+          }, isSubscribed: ${
+            publication.isSubscribed
+          }, track exists: ${!!publication.track}, track enabled: ${
+            publication.track?.isEnabled
+          }`
+        );
+
+        // React to track unsubscribed events
+        publication.on("unsubscribed", (track) => {
+          console.log(
+            `Track ${trackName} was unsubscribed, attempting to resubscribe`
+          );
+          // Try to resubscribe
+          publication.once("subscribed", (newTrack) => {
+            console.log(`Successfully resubscribed to ${trackName}`);
+            handleTrackSubscribed(newTrack);
+          });
+        });
+
+        // CRITICAL: Add track disabled/enabled handlers
+        publication.on("disabled", () => {
+          console.log(`Track ${trackName} was disabled by publisher`);
+          if (publication.kind === "video") {
+            setStreamerStatus((prev) => ({ ...prev, cameraOff: true }));
+          } else if (publication.kind === "audio") {
+            setStreamerStatus((prev) => ({ ...prev, audioMuted: true }));
+          }
+        });
+
+        publication.on("enabled", () => {
+          console.log(`Track ${trackName} was enabled by publisher`);
+          if (publication.kind === "video") {
+            setStreamerStatus((prev) => ({ ...prev, cameraOff: false }));
+
+            // If the video is enabled, make an extra attempt to attach it
+            if (publication.track) {
+              handleTrackSubscribed(publication.track);
+            }
+          } else if (publication.kind === "audio") {
+            setStreamerStatus((prev) => ({ ...prev, audioMuted: false }));
+          }
+        });
+
+        // If this is a video track, prepare the container
+        if (publication.kind === "video") {
+          console.log(
+            "Video track published, clearing container to prepare for new track"
+          );
+
+          // Make sure we have a clean container
+          if (videoContainerRef.current) {
+            clearVideoContainer(videoContainerRef.current);
+          }
+
+          // If the track is already subscribed, handle it immediately
+          if (publication.isSubscribed && publication.track) {
+            console.log(
+              `Track already subscribed, handling: ${publication.trackName}`
+            );
+            handleTrackSubscribed(publication.track);
+            return;
+          }
+
+          // Set up a listener for when the track gets subscribed
+          console.log(`Setting up subscription handlers for: ${trackName}`);
+
+          // One-time handler with setTimeout fallback
+          const onSubscribed = (track: RemoteTrack) => {
+            console.log(`Track ${trackName} was subscribed, handling now`);
+            handleTrackSubscribed(track);
+
+            // Don't remove the handler - keep it for resubscription
+            // publication.off("subscribed", onSubscribed);
+          };
+
+          publication.on("subscribed", onSubscribed);
+
+          // Set multiple timeouts to check again (more aggressive retry)
+          [1000, 3000, 5000, 10000].forEach((timeout) => {
+            setTimeout(() => {
+              if (publication.isSubscribed && publication.track) {
+                console.log(
+                  `Track ${trackName} is now subscribed after ${timeout}ms timeout`
+                );
+                handleTrackSubscribed(publication.track);
+              } else {
+                console.log(
+                  `Track ${trackName} still not subscribed after ${timeout}ms timeout`
+                );
+
+                // Try to manually subscribe if possible
+                if (timeout > 5000) {
+                  console.log(
+                    `Attempting to force subscription to ${trackName}`
+                  );
+                  try {
+                    // This will work if the participant has enabled automatic track subscription
+                    publication.on("subscribed", handleTrackSubscribed);
+                  } catch (error) {
+                    console.error(`Failed to force subscription: ${error}`);
+                  }
+                }
+              }
+            }, timeout);
+          });
+        }
+
+        // Same process for audio tracks
+        if (publication.kind === "audio") {
+          if (publication.isSubscribed && publication.track) {
+            console.log(
+              `Audio track already subscribed, handling: ${publication.trackName}`
+            );
+            handleTrackSubscribed(publication.track);
+            return;
+          }
+
+          const onSubscribed = (track: RemoteTrack) => {
+            console.log(
+              `Audio track ${trackName} was subscribed, handling now`
+            );
+            handleTrackSubscribed(track);
+            // Keep the handler for resubscription events
+          };
+
+          publication.on("subscribed", onSubscribed);
+
+          // Multiple timeouts for audio as well
+          [1000, 3000, 5000].forEach((timeout) => {
+            setTimeout(() => {
+              if (publication.isSubscribed && publication.track) {
+                console.log(
+                  `Audio track ${trackName} is now subscribed after ${timeout}ms timeout`
+                );
+                handleTrackSubscribed(publication.track);
+              }
+            }, timeout);
+          });
+        }
+      } catch (error) {
+        console.error("Error in handleTrackPublication:", error);
+      }
+    },
+    [handleTrackSubscribed, videoContainerRef, setStreamerStatus]
+  );
+
+  // Handler for participant connected
+  const handleParticipantConnected = useCallback(
+    (participant: RemoteParticipant) => {
+      try {
+        console.log(
+          `Participant connected: ${participant.identity}, sid: ${participant.sid}`
+        );
+
+        // Check if this is the streamer by their identity pattern
+        const isStreamer = participant.identity.startsWith("streamer-");
+        console.log(
+          `This participant ${isStreamer ? "IS" : "is NOT"} the streamer`
+        );
+
+        setRemoteParticipant(participant);
+
+        // Enhanced logging for existing tracks
+        console.log(
+          `Checking ${participant.tracks.size} existing tracks from participant:`
+        );
+        if (participant.tracks.size === 0) {
+          console.log("No tracks available yet from this participant");
+        }
+
+        // Handle participant tracks
+        participant.tracks.forEach((publication, trackSid) => {
+          console.log(
+            `Found track publication ${trackSid}: ${publication.kind}, isSubscribed: ${publication.isSubscribed}`
+          );
+          handleTrackPublication(publication);
+        });
+
+        // Watch for new track publications
+        participant.on("trackPublished", (publication) => {
+          console.log(
+            `New track published by participant: ${publication.kind}, trackName: ${publication.trackName}`
+          );
+          handleTrackPublication(publication);
+        });
+
+        // Set up additional track subscription events for extra robustness
+        participant.on("trackSubscribed", (track, publication) => {
+          console.log(
+            `Track directly subscribed: ${track.kind}, name: ${track.name}`
+          );
+          handleTrackSubscribed(track);
+        });
+
+        // Disconnect logic
+        participant.on("disconnected", () => {
+          console.log(
+            `Participant disconnected: ${participant.identity}, sid: ${participant.sid}`
+          );
+          setRemoteParticipant(null);
+        });
+      } catch (error) {
+        console.error("Error in handleParticipantConnected:", error);
+      }
+    },
+    [handleTrackPublication, handleTrackSubscribed]
+  );
+
+  // Handler for participant disconnected
+  const handleParticipantDisconnected = useCallback(
+    (participant: RemoteParticipant) => {
+      try {
+        console.log(
+          `Participant disconnected: ${participant.identity}, sid: ${participant.sid}`
+        );
+        setRemoteParticipant(null);
+        setRemoteVideoTrack(null);
+        setRemoteAudioTrack(null);
+
+        // Clear the video container
+        if (videoContainerRef.current) {
+          clearVideoContainer(videoContainerRef.current);
+        }
+
+        // Set a timeout to mark the stream as offline
+        if (offlineTimerId) clearTimeout(offlineTimerId);
+        setOfflineTimerId(
+          setTimeout(() => {
+            setVideoStatus("offline");
+            setOfflineTimerId(null);
+          }, 10000) // Wait 10 seconds
+        );
+
+        // Clean up participant listeners
+        participant.removeAllListeners();
+      } catch (error) {
+        console.error("Error in handleParticipantDisconnected:", error);
+      }
+    },
+    [offlineTimerId]
+  );
+
+  // Replace the initiateConnection function with a useCallback version
+  const initiateConnection = useCallback(async () => {
+    if (isConnectingRef.current) return;
+
+    // Track connection attempts
+    const newAttemptCount = connectionAttempts + 1;
+    setConnectionAttempts(newAttemptCount);
+    console.log(
+      `[LiveView] Connection attempt ${newAttemptCount} of ${maxConnectionAttempts}`
+    );
+
+    // HARD LIMIT: Exit immediately if too many attempts - make sure this works
+    if (newAttemptCount > maxConnectionAttempts) {
+      console.error(
+        `[LiveView] Too many connection attempts (${newAttemptCount}). Aborting.`
+      );
+      setConnectionError(
+        `Too many connection attempts. Please try again later or refresh the page.`
+      );
+      setVideoStatus("error");
+      isConnectingRef.current = false;
+      // Critical fix: return early to prevent more connection attempts
+      return;
+    }
+
+    isConnectingRef.current = true;
+    setVideoStatus("connecting");
+    setTwilioConnectionStatus("connecting");
+
+    try {
+      // Create identity for the viewer
+      const viewerName = currentUser?.username || currentUser?.email || `anon`;
+      const viewerId = currentUser?.id || Date.now().toString();
+      const identity = generateUniqueIdentity("viewer", viewerId);
+
+      console.log(
+        `[LiveView] Getting Twilio token for viewer: ${viewerName}, using identity: ${identity}, room: ${slug}`
+      );
+
+      // Get connection token
+      const token = await clientTwilioService.getToken(
+        slug, // Room name (correct order)
+        identity // User identity (correct order)
+      );
+
+      console.log(
+        `[LiveView] Successfully received Twilio token, connecting to room...`
+      );
+
+      // Connect to room
+      const twilioRoom = await connect(token, {
+        name: slug,
+        audio: false,
+        video: false,
+        networkQuality: { local: 1, remote: 1 },
+        dominantSpeaker: true,
+      });
+
+      console.log(`[LiveView] Connected to room: ${twilioRoom.sid}`);
+      setRoom(twilioRoom);
+      setConnectionError(null);
+      setVideoStatus("active");
+      setTwilioConnectionStatus("connected");
+
+      // Reset connection attempts on successful connection
+      setConnectionAttempts(0);
+
+      // Set up participants
+      if (twilioRoom.participants.size > 0) {
+        const firstParticipant = Array.from(
+          twilioRoom.participants.values()
+        )[0];
+        setRemoteParticipant(firstParticipant);
+
+        // Set up tracks
+        firstParticipant.tracks.forEach((publication) => {
+          // Handle existing tracks
+          if (publication.isSubscribed && publication.track) {
+            const track = publication.track;
+
+            if (track.kind === "video") {
+              setRemoteVideoTrack(track as RemoteVideoTrack);
+
+              if (videoContainerRef.current) {
+                const videoElement = track.attach();
+                videoElement.style.width = "100%";
+                videoElement.style.height = "100%";
+                videoElement.style.objectFit = "cover";
+                videoContainerRef.current.appendChild(videoElement);
+              }
+            } else if (track.kind === "audio") {
+              setRemoteAudioTrack(track as RemoteAudioTrack);
+            }
+          }
+        });
+      }
+
+      // Set up room event handlers
+      twilioRoom.on("participantConnected", handleParticipantConnected);
+      twilioRoom.on("participantDisconnected", handleParticipantDisconnected);
+
+      twilioRoom.on("disconnected", (_room, error) => {
+        console.log(
+          `[LiveView] Disconnected from room: ${
+            error ? error.message : "No error"
+          }`
+        );
+        setVideoStatus("offline");
+        setRoom(null);
+        setTwilioConnectionStatus("disconnected");
+
+        if (error) {
+          setConnectionError(`Disconnected: ${error.message}`);
+        }
+      });
+
+      twilioRoom.on("reconnecting", (error) => {
+        console.log(
+          `[LiveView] Reconnecting to room: ${
+            error ? error.message : "Unknown error"
+          }`
+        );
+        setTwilioConnectionStatus("connecting");
+      });
+
+      twilioRoom.on("reconnected", () => {
+        console.log(`[LiveView] Reconnected to room successfully`);
+        setTwilioConnectionStatus("connected");
+      });
+    } catch (error) {
+      console.error("[LiveView] Error connecting to room:", error);
+      setTwilioConnectionStatus("disconnected");
+
+      // Provide more specific error messages based on error type
+      if (error instanceof TwilioError) {
+        switch (error.code) {
+          case 20101:
+            setConnectionError(
+              "Invalid Access Token. The stream may have ended or restarted."
+            );
+            break;
+          case 20103:
+            setConnectionError(
+              "Invalid Access Token issuer/subject. Please try refreshing the page."
+            );
+            break;
+          case 20104:
+            setConnectionError(
+              "Access Token expired. Please refresh the page to get a new token."
+            );
+            break;
+          case 53000:
+            setConnectionError(
+              "Room not found or has ended. The streamer may have stopped streaming."
+            );
+            break;
+          case 53205:
+            setConnectionError("Room is full. Please try again later.");
+            break;
+          default:
+            setConnectionError(
+              `Twilio error: ${error.message} (Code: ${error.code})`
+            );
+        }
+      } else if (error instanceof Error) {
+        if (error.message.includes("token")) {
+          setConnectionError(
+            "Failed to get a valid connection token. Please refresh the page."
+          );
+        } else if (
+          error.message.includes("network") ||
+          error.message.includes("timeout")
+        ) {
+          setConnectionError(
+            "Network error. Please check your internet connection and try again."
+          );
+        } else {
+          setConnectionError(`Connection failed: ${error.message}`);
+        }
+      } else {
+        setConnectionError(
+          "Unknown error occurred. Please try refreshing the page."
+        );
+      }
+
+      setVideoStatus("error");
+    } finally {
+      isConnectingRef.current = false;
+    }
+  }, [
+    connectionAttempts,
+    maxConnectionAttempts,
+    currentUser,
+    slug,
+    videoContainerRef,
+    handleParticipantConnected,
+    handleParticipantDisconnected,
+  ]);
+
+  // Extract the checkStreamAndRetry function so it can be used elsewhere in the component
+  const checkStreamAndRetry = useCallback(async () => {
+    try {
+      // Check if we've already hit the max attempts limit
+      if (connectionAttempts >= maxConnectionAttempts) {
+        console.error(
+          `[LiveView] Not retrying: Already reached max connection attempts (${connectionAttempts}/${maxConnectionAttempts})`
+        );
+        setConnectionError(
+          `Too many connection attempts. Please refresh the page.`
+        );
+        setVideoStatus("error");
+        return;
+      }
+
+      setIsRetrying(true);
+      console.log(
+        `[LiveView] Connection retry attempt ${connectionAttempts + 1}`
+      );
+
+      // Check if stream exists and is active
+      const streamDoc = await getDoc(doc(db, "streams", slug));
+      if (!streamDoc.exists()) {
+        setVideoStatus("offline");
+        setConnectionError("Stream not found");
+        setIsRetrying(false);
+        return;
+      }
+
+      const streamData = streamDoc.data();
+      if (streamData.hasEnded) {
+        setVideoStatus("ended");
+        setConnectionError("Stream has ended");
+        setIsRetrying(false);
+        return;
+      }
+
+      if (!streamData.hasStarted) {
+        setVideoStatus("waiting");
+        setConnectionError(null);
+        setIsRetrying(false);
+        return;
+      }
+
+      // Initiate connection if stream is active
+      await initiateConnection();
+
+      // If we get here, the connection was successful
+      setIsRetrying(false);
+    } catch (error) {
+      console.error("[LiveView] Error in retry:", error);
+      setConnectionError(`Failed to reconnect: ${(error as Error).message}`);
+
+      // Don't set error state immediately - try again after a short delay up to 3 times
+      if (connectionAttempts < 3) {
+        console.log(
+          `[LiveView] Scheduling automatic retry #${
+            connectionAttempts + 1
+          } in 3 seconds`
+        );
+        setTimeout(() => {
+          checkStreamAndRetry();
+        }, 3000);
+      } else {
+        setVideoStatus("error");
+        setIsRetrying(false);
+      }
+    }
+  }, [connectionAttempts, maxConnectionAttempts, slug, initiateConnection]);
+
   // Fix the stream status update in the Firestore listener to properly handle hasStarted
   useEffect(() => {
     if (!slug) return;
@@ -196,7 +829,7 @@ export default function LiveViewPage() {
           setStreamDuration(elapsedSeconds > 0 ? elapsedSeconds : 0);
         }
 
-        // IMPORTANT FIX: Update video status based on stream state
+        // CRITICAL FIX: Update video status based on stream state
         // Only show as ended when hasEnded is explicitly true
         if (data.hasEnded === true) {
           console.log("[Status] Stream has ended, disconnecting from room");
@@ -207,11 +840,38 @@ export default function LiveViewPage() {
         }
         // Explicitly check for hasStarted === true to fix incorrect status display
         else if (data.hasStarted === true) {
-          console.log("[Status] Stream has started, setting status to active");
+          console.log(
+            "[Status] Stream hasStarted=true, setting state and connecting if needed"
+          );
+
           // Set hasStarted first so the useEffect will trigger connection
           setHasStarted(true);
-          // Only set to active if we're not already connecting or if there's an error
-          if (videoStatus !== "connecting" && videoStatus !== "error") {
+
+          // If we're showing offline or waiting but the stream is actually active
+          // We should attempt to connect
+          if (videoStatus === "offline" || videoStatus === "waiting") {
+            console.log(
+              "[Status] Stream is active but we're showing offline/waiting. Attempting to connect..."
+            );
+            setVideoStatus("connecting");
+
+            // Ensure we retry connecting to the room
+            if (!room && !isConnectingRef.current) {
+              console.log("[Status] Initiating connection to Twilio room");
+              checkStreamAndRetry().catch((err: Error) => {
+                console.error(
+                  "[Status] Failed to connect to Twilio room:",
+                  err
+                );
+                setVideoStatus("error");
+                setConnectionError(
+                  "Failed to connect to stream. Please try refreshing the page."
+                );
+              });
+            }
+          }
+          // If we're not showing the offline status, just make sure the status is "active"
+          else if (videoStatus !== "connecting" && videoStatus !== "error") {
             setVideoStatus("active");
           }
         } else {
@@ -228,7 +888,57 @@ export default function LiveViewPage() {
       console.log("[Status] Cleaning up stream status listener");
       unsubscribe();
     };
-  }, [slug, room, videoStatus]);
+  }, [slug, room, videoStatus, isConnectingRef, checkStreamAndRetry]);
+
+  // Add periodic check for stream status when offline is displayed
+  useEffect(() => {
+    // If we're showing offline but the stream might actually be active
+    // Set up a periodic check to verify the stream status from Firestore
+    if (videoStatus === "offline") {
+      console.log(
+        "[Status] Setting up periodic check for stream status due to offline state"
+      );
+
+      const checkInterval = setInterval(async () => {
+        try {
+          // Directly fetch the stream document to verify if hasStarted is true
+          const streamDocRef = doc(db, "streams", slug);
+          const snapshot = await getDoc(streamDocRef);
+
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            console.log("[Status] Periodic check found stream status:", {
+              hasStarted: data.hasStarted,
+              hasEnded: data.hasEnded,
+            });
+
+            // If the stream is actually active but we're showing offline
+            if (data.hasStarted === true && !data.hasEnded) {
+              console.log(
+                "[Status] Stream is active but UI shows offline. Correcting..."
+              );
+              setHasStarted(true);
+              setVideoStatus("connecting");
+
+              // Try to connect to the room
+              if (!room && !isConnectingRef.current) {
+                checkStreamAndRetry().catch((err: Error) => {
+                  console.error(
+                    "[Status] Failed to connect on periodic check:",
+                    err
+                  );
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.error("[Status] Error in periodic status check:", error);
+        }
+      }, 10000); // Check every 10 seconds
+
+      return () => clearInterval(checkInterval);
+    }
+  }, [videoStatus, slug, room, isConnectingRef, checkStreamAndRetry]);
 
   // Audio muting handler - moved outside of render for React Hook rules
   const toggleAudioMute = useCallback(() => {
@@ -244,82 +954,6 @@ export default function LiveViewPage() {
       });
     }
   }, [remoteAudioTrack, isAudioMuted]);
-
-  // Fix the handleTrackSubscribed function to properly handle video and audio tracks
-  const handleTrackSubscribed = useCallback(
-    (track: RemoteTrack) => {
-      console.log(
-        `Track subscribed: ${track.kind} - ${track.name} - sid: ${track.sid} - enabled: ${track.isEnabled}`
-      );
-
-      if (track.kind === "video") {
-        console.log("[Track] Adding video track to container");
-        const videoTrack = track as RemoteVideoTrack;
-        setRemoteVideoTrack(videoTrack);
-
-        if (videoContainerRef.current) {
-          // Clear existing elements first to prevent duplicates
-          clearVideoContainer(videoContainerRef.current);
-
-          try {
-            // Create and attach a new video element
-            const videoElement = document.createElement("video");
-            videoElement.style.width = "100%";
-            videoElement.style.height = "100%";
-            videoElement.style.objectFit = "cover";
-            videoElement.setAttribute("autoplay", "true");
-            videoElement.setAttribute("playsinline", "true");
-            videoElement.setAttribute("data-track-sid", track.sid);
-
-            // Debug attribute to help diagnose in browser
-            videoElement.setAttribute("data-debug", "viewer-video-track");
-
-            // Attach track to the video element
-            videoTrack.attach(videoElement);
-
-            // Add to container
-            videoContainerRef.current.appendChild(videoElement);
-            console.log(
-              "[Track] Video element attached and added to container"
-            );
-            setVideoStatus("active");
-          } catch (error) {
-            console.error("[Track] Error attaching video track:", error);
-          }
-        } else {
-          console.error(
-            "[Track] Video container ref is null, can't attach track"
-          );
-        }
-      } else if (track.kind === "audio") {
-        console.log("[Track] Setting up audio track:", track.sid);
-        setRemoteAudioTrack(track as RemoteAudioTrack);
-
-        try {
-          // Create a new audio element (not attached to the DOM)
-          const audioElement = document.createElement("audio");
-          audioElement.setAttribute("autoplay", "true");
-          audioElement.setAttribute("data-track-sid", track.sid);
-          audioElement.muted = isAudioMuted;
-
-          // Debug attribute
-          audioElement.setAttribute("data-debug", "viewer-audio-track");
-
-          // Attach the track to the audio element
-          (track as RemoteAudioTrack).attach(audioElement);
-
-          // Add to document body to ensure it plays
-          document.body.appendChild(audioElement);
-          console.log(
-            "[Track] Audio element attached and added to document body"
-          );
-        } catch (error) {
-          console.error("[Track] Error attaching audio track:", error);
-        }
-      }
-    },
-    [isAudioMuted]
-  );
 
   // Add debug output for track status
   useEffect(() => {
@@ -378,300 +1012,6 @@ export default function LiveViewPage() {
     remoteAudioTrack,
     videoStatus,
     connectionError,
-    handleTrackSubscribed,
-  ]);
-
-  // Handler for track published
-  const handleTrackPublication = useCallback(
-    (publication: RemoteTrackPublication) => {
-      try {
-        if (!publication) {
-          console.warn(
-            "handleTrackPublication called with undefined publication"
-          );
-          return;
-        }
-
-        const trackName = publication.trackName || "unknown";
-        console.log(
-          "Track published:",
-          trackName,
-          "kind:",
-          publication.kind,
-          "isSubscribed:",
-          publication.isSubscribed,
-          "track exists:",
-          !!publication.track,
-          "track enabled:",
-          publication.track?.isEnabled
-        );
-
-        // If this is a video track, clear the container to prepare for the new track
-        if (publication.kind === "video") {
-          console.log(
-            "Video track published, clearing container to prepare for new track"
-          );
-          clearVideoContainer(videoContainerRef.current);
-
-          // Force the track to be subscribed if it's not already
-          if (!publication.isSubscribed) {
-            console.log(
-              `Attempting to subscribe to track: ${publication.trackName}`
-            );
-            publication.on("subscribed", handleTrackSubscribed);
-
-            // We can't force subscription directly, but we can monitor for subscription
-            console.log(
-              `Waiting for track ${publication.trackName} to be subscribed automatically`
-            );
-          } else if (publication.track) {
-            console.log(
-              `Track already subscribed, handling: ${publication.trackName}`
-            );
-            handleTrackSubscribed(publication.track);
-          }
-        }
-
-        if (publication.isSubscribed && publication.track) {
-          console.log("Track is already subscribed, handling directly");
-          handleTrackSubscribed(publication.track);
-        } else {
-          console.log(
-            "Track is not yet subscribed, setting up subscription handler"
-          );
-
-          // Set up a one-time handler for when the track is subscribed
-          const onSubscribed = (track: RemoteTrack) => {
-            try {
-              console.log(
-                "Track was subscribed after publication:",
-                trackName,
-                "kind:",
-                track.kind
-              );
-              handleTrackSubscribed(track);
-            } catch (error) {
-              console.error("Error in onSubscribed handler:", error);
-            } finally {
-              // Always clean up the event listener
-              publication.off("subscribed", onSubscribed);
-            }
-          };
-
-          publication.on("subscribed", onSubscribed);
-
-          // Set a timeout to check if the track was subscribed
-          setTimeout(() => {
-            if (publication.isSubscribed && publication.track) {
-              console.log(
-                "Track was subscribed after timeout, handling now:",
-                trackName
-              );
-              handleTrackSubscribed(publication.track);
-            } else {
-              console.warn(
-                "Track still not subscribed after timeout:",
-                trackName
-              );
-            }
-          }, 2000);
-        }
-      } catch (error) {
-        console.error("Error in handleTrackPublication:", error);
-      }
-    },
-    [handleTrackSubscribed, videoContainerRef]
-  );
-
-  // Handler for participant connected
-  const handleParticipantConnected = useCallback(
-    (participant: RemoteParticipant) => {
-      try {
-        console.log(
-          `Participant connected: ${participant.identity}, sid: ${participant.sid}`
-        );
-        setRemoteParticipant(participant);
-
-        // Handle participant tracks
-        participant.tracks.forEach(handleTrackPublication);
-        participant.on("trackPublished", handleTrackPublication);
-
-        // Disconnect logic
-        participant.on("disconnected", () => {
-          console.log(
-            `Participant disconnected: ${participant.identity}, sid: ${participant.sid}`
-          );
-          setRemoteParticipant(null);
-        });
-      } catch (error) {
-        console.error("Error in handleParticipantConnected:", error);
-      }
-    },
-    [handleTrackPublication]
-  );
-
-  // Handler for participant disconnected
-  const handleParticipantDisconnected = useCallback(
-    (participant: RemoteParticipant) => {
-      try {
-        console.log(
-          `Participant disconnected: ${participant.identity}, sid: ${participant.sid}`
-        );
-        setRemoteParticipant(null);
-        setRemoteVideoTrack(null);
-        setRemoteAudioTrack(null);
-
-        // Clear the video container
-        if (videoContainerRef.current) {
-          clearVideoContainer(videoContainerRef.current);
-        }
-
-        // Set a timeout to mark the stream as offline
-        if (offlineTimerId) clearTimeout(offlineTimerId);
-        setOfflineTimerId(
-          setTimeout(() => {
-            setVideoStatus("offline");
-            setOfflineTimerId(null);
-          }, 10000) // Wait 10 seconds
-        );
-
-        // Clean up participant listeners
-        participant.removeAllListeners();
-      } catch (error) {
-        console.error("Error in handleParticipantDisconnected:", error);
-      }
-    },
-    [offlineTimerId]
-  );
-
-  // Add track status monitoring
-  useEffect(() => {
-    if (!remoteParticipant) return;
-
-    const handleTrackStatus = (publication: RemoteTrackPublication) => {
-      // Safely handle the case where publication might be undefined
-      if (!publication) {
-        console.warn("handleTrackStatus called with undefined publication");
-        return;
-      }
-
-      // Safely access trackName with fallback
-      const trackName = publication.trackName || "unknown";
-
-      // Safely handle the case where track might be null
-      const track = publication.track;
-      if (!track) {
-        console.warn(`Track is null for publication: ${trackName}`);
-        return;
-      }
-
-      console.log(
-        "Track status change:",
-        trackName,
-        "video enabled:",
-        track.kind === "video" ? track.isEnabled : "n/a",
-        "audio enabled:",
-        track.kind === "audio" ? track.isEnabled : "n/a"
-      );
-
-      // Update UI based on track kind and enabled status
-      if (track.kind === "video") {
-        setStreamerStatus((prev) => ({
-          ...prev,
-          cameraOff: !track.isEnabled,
-        }));
-      } else if (track.kind === "audio") {
-        setStreamerStatus((prev) => ({
-          ...prev,
-          audioMuted: !track.isEnabled,
-        }));
-      }
-    };
-
-    const handleSubscribed = (
-      track: RemoteTrack,
-      publication: RemoteTrackPublication
-    ) => {
-      if (!track || !publication) {
-        console.warn(
-          "[🔇] handleSubscribed called with undefined track or publication:",
-          {
-            track,
-            publication,
-          }
-        );
-        return;
-      }
-
-      console.log(
-        "Track subscribed event:",
-        publication.trackName || "unknown"
-      );
-      handleTrackStatus(publication);
-    };
-
-    // Handle existing tracks
-    remoteParticipant.tracks.forEach((publication) => {
-      if (publication.isSubscribed) {
-        handleTrackStatus(publication);
-      }
-      publication.on("subscribed", handleSubscribed);
-      publication.on("unsubscribed", handleTrackStatus);
-    });
-
-    // Monitor for new track publications
-    remoteParticipant.on("trackSubscribed", handleSubscribed);
-    remoteParticipant.on("trackUnsubscribed", handleTrackStatus);
-
-    // Monitor track enabled/disabled status changes
-    remoteParticipant.on("trackEnabled", handleTrackStatus);
-    remoteParticipant.on("trackDisabled", handleTrackStatus);
-
-    // Cleanup function
-    return () => {
-      remoteParticipant.tracks.forEach((publication) => {
-        publication.off("subscribed", handleSubscribed);
-        publication.off("unsubscribed", handleTrackStatus);
-      });
-      remoteParticipant.off("trackSubscribed", handleSubscribed);
-      remoteParticipant.off("trackUnsubscribed", handleTrackStatus);
-      remoteParticipant.off("trackEnabled", handleTrackStatus);
-      remoteParticipant.off("trackDisabled", handleTrackStatus);
-    };
-  }, [remoteParticipant]);
-
-  // Add periodic check for video tracks when camera is supposedly on
-  useEffect(() => {
-    if (!hasStarted || !remoteParticipant || streamerStatus.cameraOff) return;
-
-    const checkInterval = setInterval(() => {
-      const hasVideoElement =
-        videoContainerRef.current &&
-        !!videoContainerRef.current.querySelector("video");
-      if (!hasVideoElement) {
-        console.log(
-          "[Periodic Check] No video element found, attempting to resubscribe to tracks"
-        );
-        remoteParticipant.tracks.forEach((publication) => {
-          if (
-            publication.kind === "video" &&
-            publication.isSubscribed &&
-            publication.track
-          ) {
-            console.log(
-              `[Periodic Check] Resubscribing to video track: ${publication.trackName}`
-            );
-            handleTrackSubscribed(publication.track);
-          }
-        });
-      }
-    }, 5000); // Check every 5 seconds
-
-    return () => clearInterval(checkInterval);
-  }, [
-    hasStarted,
-    remoteParticipant,
-    streamerStatus.cameraOff,
     handleTrackSubscribed,
   ]);
 
@@ -935,214 +1275,6 @@ export default function LiveViewPage() {
     };
   }, [hasStarted, streamStartTime]); // Dependencies are correct
 
-  // Format time as HH:MM:SS
-  const formatDuration = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours.toString().padStart(2, "0")}:${minutes
-      .toString()
-      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  // Replace the initiateConnection function with a useCallback version
-  const initiateConnection = useCallback(async () => {
-    if (isConnectingRef.current) return;
-
-    // Track connection attempts
-    const newAttemptCount = connectionAttempts + 1;
-    setConnectionAttempts(newAttemptCount);
-    console.log(
-      `[LiveView] Connection attempt ${newAttemptCount} of ${maxConnectionAttempts}`
-    );
-
-    // HARD LIMIT: Exit immediately if too many attempts - make sure this works
-    if (newAttemptCount > maxConnectionAttempts) {
-      console.error(
-        `[LiveView] Too many connection attempts (${newAttemptCount}). Aborting.`
-      );
-      setConnectionError(
-        `Too many connection attempts. Please try again later or refresh the page.`
-      );
-      setVideoStatus("error");
-      isConnectingRef.current = false;
-      // Critical fix: return early to prevent more connection attempts
-      return;
-    }
-
-    isConnectingRef.current = true;
-    setVideoStatus("connecting");
-    setTwilioConnectionStatus("connecting");
-
-    try {
-      // Create identity for the viewer
-      const identity =
-        currentUser?.username || currentUser?.email || `viewer-${Date.now()}`;
-
-      console.log(
-        `[LiveView] Getting Twilio token for viewer: ${identity}, room: ${slug}`
-      );
-
-      // Get connection token
-      const token = await clientTwilioService.getToken(
-        slug, // Room name (correct order)
-        identity // User identity (correct order)
-      );
-
-      console.log(
-        `[LiveView] Successfully received Twilio token, connecting to room...`
-      );
-
-      // Connect to room
-      const twilioRoom = await connect(token, {
-        name: slug,
-        audio: false,
-        video: false,
-        networkQuality: { local: 1, remote: 1 },
-        dominantSpeaker: true,
-      });
-
-      console.log(`[LiveView] Connected to room: ${twilioRoom.sid}`);
-      setRoom(twilioRoom);
-      setConnectionError(null);
-      setVideoStatus("active");
-      setTwilioConnectionStatus("connected");
-
-      // Reset connection attempts on successful connection
-      setConnectionAttempts(0);
-
-      // Set up participants
-      if (twilioRoom.participants.size > 0) {
-        const firstParticipant = Array.from(
-          twilioRoom.participants.values()
-        )[0];
-        setRemoteParticipant(firstParticipant);
-
-        // Set up tracks
-        firstParticipant.tracks.forEach((publication) => {
-          // Handle existing tracks
-          if (publication.isSubscribed && publication.track) {
-            const track = publication.track;
-
-            if (track.kind === "video") {
-              setRemoteVideoTrack(track as RemoteVideoTrack);
-
-              if (videoContainerRef.current) {
-                const videoElement = track.attach();
-                videoElement.style.width = "100%";
-                videoElement.style.height = "100%";
-                videoElement.style.objectFit = "cover";
-                videoContainerRef.current.appendChild(videoElement);
-              }
-            } else if (track.kind === "audio") {
-              setRemoteAudioTrack(track as RemoteAudioTrack);
-            }
-          }
-        });
-      }
-
-      // Set up room event handlers
-      twilioRoom.on("participantConnected", handleParticipantConnected);
-      twilioRoom.on("participantDisconnected", handleParticipantDisconnected);
-
-      twilioRoom.on("disconnected", (_room, error) => {
-        console.log(
-          `[LiveView] Disconnected from room: ${
-            error ? error.message : "No error"
-          }`
-        );
-        setVideoStatus("offline");
-        setRoom(null);
-        setTwilioConnectionStatus("disconnected");
-
-        if (error) {
-          setConnectionError(`Disconnected: ${error.message}`);
-        }
-      });
-
-      twilioRoom.on("reconnecting", (error) => {
-        console.log(
-          `[LiveView] Reconnecting to room: ${
-            error ? error.message : "Unknown error"
-          }`
-        );
-        setTwilioConnectionStatus("connecting");
-      });
-
-      twilioRoom.on("reconnected", () => {
-        console.log(`[LiveView] Reconnected to room successfully`);
-        setTwilioConnectionStatus("connected");
-      });
-    } catch (error) {
-      console.error("[LiveView] Error connecting to room:", error);
-      setTwilioConnectionStatus("disconnected");
-
-      // Provide more specific error messages based on error type
-      if (error instanceof TwilioError) {
-        switch (error.code) {
-          case 20101:
-            setConnectionError(
-              "Invalid Access Token. The stream may have ended or restarted."
-            );
-            break;
-          case 20103:
-            setConnectionError(
-              "Invalid Access Token issuer/subject. Please try refreshing the page."
-            );
-            break;
-          case 20104:
-            setConnectionError(
-              "Access Token expired. Please refresh the page to get a new token."
-            );
-            break;
-          case 53000:
-            setConnectionError(
-              "Room not found or has ended. The streamer may have stopped streaming."
-            );
-            break;
-          case 53205:
-            setConnectionError("Room is full. Please try again later.");
-            break;
-          default:
-            setConnectionError(
-              `Twilio error: ${error.message} (Code: ${error.code})`
-            );
-        }
-      } else if (error instanceof Error) {
-        if (error.message.includes("token")) {
-          setConnectionError(
-            "Failed to get a valid connection token. Please refresh the page."
-          );
-        } else if (
-          error.message.includes("network") ||
-          error.message.includes("timeout")
-        ) {
-          setConnectionError(
-            "Network error. Please check your internet connection and try again."
-          );
-        } else {
-          setConnectionError(`Connection failed: ${error.message}`);
-        }
-      } else {
-        setConnectionError(
-          "Unknown error occurred. Please try refreshing the page."
-        );
-      }
-
-      setVideoStatus("error");
-    } finally {
-      isConnectingRef.current = false;
-    }
-  }, [
-    connectionAttempts,
-    maxConnectionAttempts,
-    currentUser,
-    slug,
-    videoContainerRef,
-    handleParticipantConnected,
-    handleParticipantDisconnected,
-  ]);
-
   // Update the useEffect that checks stream status to properly handle already-active streams
   useEffect(() => {
     // Only attempt connection if we have the necessary conditions
@@ -1206,7 +1338,7 @@ export default function LiveViewPage() {
           if (videoStatus !== "error") {
             // Set to connecting state before initiating the connection
             setVideoStatus("connecting");
-            await initiateConnection();
+            await checkStreamAndRetry();
           }
           return;
         }
@@ -1242,6 +1374,129 @@ export default function LiveViewPage() {
     connectionAttempts,
     maxConnectionAttempts,
     videoStatus,
+  ]);
+
+  // Add an effect to automatically recover from error states
+  useEffect(() => {
+    if (videoStatus === "error" && !isRetrying) {
+      // After 30 seconds in error state, automatically try to recover
+      const recoveryTimer = setTimeout(() => {
+        console.log(
+          "[Recovery] Automatically attempting to recover from error state"
+        );
+
+        // Reset state
+        setConnectionError(null);
+
+        // Check if the stream is actually live and try to reconnect
+        const attemptRecovery = async () => {
+          try {
+            setIsRetrying(true);
+
+            // Get latest stream state from Firestore
+            const streamDoc = await getDoc(doc(db, "streams", slug));
+            if (streamDoc.exists()) {
+              const data = streamDoc.data();
+
+              // If the stream is actually active, try to reconnect
+              if (data.hasStarted === true && !data.hasEnded) {
+                console.log(
+                  "[Recovery] Stream is active, attempting to reconnect"
+                );
+                setVideoStatus("connecting");
+                await checkStreamAndRetry();
+              } else {
+                // If stream isn't active, update UI accordingly
+                setVideoStatus(data.hasEnded ? "ended" : "waiting");
+              }
+            }
+          } catch (error) {
+            console.error("[Recovery] Auto-recovery attempt failed:", error);
+            // Don't update error state, we'll try again later
+          } finally {
+            setIsRetrying(false);
+          }
+        };
+
+        attemptRecovery();
+      }, 30000); // 30 seconds
+
+      return () => clearTimeout(recoveryTimer);
+    }
+  }, [videoStatus, isRetrying, slug, checkStreamAndRetry]);
+
+  // Add a periodic check for the room's health
+  useEffect(() => {
+    // Only check if we have a room but no video tracks
+    if (
+      room &&
+      videoStatus === "active" &&
+      !streamerStatus.cameraOff &&
+      (!remoteVideoTrack ||
+        (videoContainerRef.current &&
+          !videoContainerRef.current.querySelector("video")))
+    ) {
+      console.log(
+        "[Health] Room exists but video track is missing, checking room health"
+      );
+
+      const healthCheck = setInterval(() => {
+        // Check if we really have a room participant
+        if (room.participants.size > 0) {
+          console.log(
+            `[Health] Room has ${room.participants.size} participants`
+          );
+
+          // Check each participant for video tracks
+          room.participants.forEach((participant, sid) => {
+            console.log(
+              `[Health] Checking participant ${participant.identity} (${sid}) for tracks`
+            );
+
+            // Check if this participant has tracks we're not seeing
+            participant.tracks.forEach((publication, trackSid) => {
+              console.log(
+                `[Health] Found track ${trackSid}: ${publication.kind}, isSubscribed: ${publication.isSubscribed}`
+              );
+
+              // If there's a video track that isn't properly showing up, try to resubscribe
+              if (
+                publication.kind === "video" &&
+                (!remoteVideoTrack ||
+                  !videoContainerRef.current?.querySelector("video"))
+              ) {
+                console.log(
+                  `[Health] Found video track that's not showing, attempting to resubscribe`
+                );
+
+                if (publication.isSubscribed && publication.track) {
+                  console.log(
+                    `[Health] Track is already subscribed, trying to attach again`
+                  );
+                  handleTrackSubscribed(publication.track);
+                } else {
+                  console.log(
+                    `[Health] Track is not subscribed, setting up subscription handler`
+                  );
+                  publication.on("subscribed", handleTrackSubscribed);
+                }
+              }
+            });
+          });
+        } else {
+          console.log("[Health] Room has no participants");
+        }
+      }, 5000); // Check every 5 seconds
+
+      return () => clearInterval(healthCheck);
+    }
+  }, [
+    room,
+    videoStatus,
+    streamerStatus.cameraOff,
+    remoteVideoTrack,
+    videoContainerRef,
+    handleTrackSubscribed,
   ]);
 
   if (!hasHydrated || !currentUser) return null;
@@ -1305,26 +1560,13 @@ export default function LiveViewPage() {
                     </>
                   ) : (
                     <>
-                      <div className="mb-6">
-                        <div className="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center mx-auto mb-4">
-                          <div className="animate-pulse">
-                            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                          </div>
-                        </div>
-                        <h2 className="text-xl font-bold">
-                          Waiting for Stream to Start
-                        </h2>
-                        <p className="text-sm text-gray-400 mt-2">
-                          The streamer hasn&apos;t started yet. Please wait or
-                          check back later.
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => window.location.reload()}
-                        className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-full mt-4"
-                      >
-                        Refresh
-                      </button>
+                      <Loader className="mb-6" />
+                      <h2 className="text-xl font-semibold text-white mb-2">
+                        Waiting for Stream to Begin
+                      </h2>
+                      <p className="text-gray-300">
+                        The streamer will be live soon. Please wait...
+                      </p>
                     </>
                   )}
                 </div>
@@ -1334,7 +1576,7 @@ export default function LiveViewPage() {
             {videoStatus === "connecting" && (
               <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 text-white rounded-lg">
                 <div className="animate-pulse flex flex-col items-center">
-                  <div className="w-4 h-4 bg-blue-500 rounded-full mb-2"></div>
+                  <Loader className="mb-6" />
                   <h2 className="text-xl font-bold">Connecting to Stream</h2>
                   <p className="text-sm text-gray-400 mt-2">Please wait...</p>
                 </div>
@@ -1454,67 +1696,12 @@ export default function LiveViewPage() {
                         setRemoteAudioTrack(null);
 
                         // Retry connection after a short delay
-                        setTimeout(() => {
-                          const checkStreamAndRetry = async () => {
-                            try {
-                              // Check if we've already hit the max attempts limit
-                              if (connectionAttempts >= maxConnectionAttempts) {
-                                console.error(
-                                  `[LiveView] Not retrying: Already reached max connection attempts (${connectionAttempts}/${maxConnectionAttempts})`
-                                );
-                                setConnectionError(
-                                  `Too many connection attempts. Please refresh the page.`
-                                );
-                                setVideoStatus("error");
-                                setIsRetrying(false);
-                                return;
-                              }
-
-                              // Check if stream exists and is active
-                              const streamDoc = await getDoc(
-                                doc(db, "streams", slug)
-                              );
-                              if (!streamDoc.exists()) {
-                                setVideoStatus("offline");
-                                setConnectionError("Stream not found");
-                                setIsRetrying(false);
-                                return;
-                              }
-
-                              const streamData = streamDoc.data();
-                              if (streamData.hasEnded) {
-                                setVideoStatus("ended");
-                                setConnectionError("Stream has ended");
-                                setIsRetrying(false);
-                                return;
-                              }
-
-                              if (!streamData.hasStarted) {
-                                setVideoStatus("waiting");
-                                setConnectionError(null);
-                                setIsRetrying(false);
-                                return;
-                              }
-
-                              // Initiate connection if stream is active
-                              await initiateConnection();
-                            } catch (error) {
-                              console.error(
-                                "[LiveView] Error in retry:",
-                                error
-                              );
-                              setConnectionError(
-                                `Failed to reconnect: ${
-                                  (error as Error).message
-                                }`
-                              );
-                              setVideoStatus("error");
-                            } finally {
-                              setIsRetrying(false);
-                            }
-                          };
-
-                          checkStreamAndRetry();
+                        setTimeout(async () => {
+                          try {
+                            await checkStreamAndRetry();
+                          } finally {
+                            setIsRetrying(false);
+                          }
                         }, 1000);
                       }}
                       disabled={isRetrying}
@@ -1522,26 +1709,7 @@ export default function LiveViewPage() {
                     >
                       {isRetrying ? (
                         <>
-                          <svg
-                            className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            ></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
+                          <Loader className="mr-2" />
                           Reconnecting...
                         </>
                       ) : (
@@ -1598,10 +1766,10 @@ export default function LiveViewPage() {
                   ></span>
                   <span>
                     {twilioConnectionStatus === "connected"
-                      ? "Twilio Connected"
+                      ? "Connected"
                       : twilioConnectionStatus === "connecting"
                       ? "Reconnecting..."
-                      : "Twilio Disconnected"}
+                      : "Disconnected"}
                   </span>
                 </div>
 

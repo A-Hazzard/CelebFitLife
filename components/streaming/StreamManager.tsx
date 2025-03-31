@@ -8,7 +8,7 @@ import React, {
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff, Video, VideoOff, Share2, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Stream } from "@/lib/models/Stream";
+import { Stream } from "@/lib/types/streaming";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -27,6 +27,7 @@ import { db } from "@/lib/config/firebase";
 import { StreamDuration } from "@/components/streaming/StreamDuration";
 import { ClientTwilioService } from "@/lib/services/ClientTwilioService";
 import { connect, Room } from "twilio-video";
+import Loader from "@/components/ui/Loader";
 
 interface StreamManagerProps {
   stream: Stream;
@@ -35,6 +36,13 @@ interface StreamManagerProps {
 
 // Create an instance of the ClientTwilioService
 const clientTwilioService = new ClientTwilioService();
+
+// Generate a unique identity for the streamer that includes a timestamp and random value
+const generateUniqueIdentity = (prefix: string, streamId: string): string => {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 10000);
+  return `${prefix}_${streamId}_${timestamp}_${random}`;
+};
 
 // Convert to forwardRef
 const StreamManager = forwardRef<
@@ -154,8 +162,63 @@ const StreamManager = forwardRef<
     }
   }, [stream.hasStarted, stream.title, twilioRoomRef.current, isConnecting]);
 
-  // Start streaming
+  // Fix the auto-connect mechanism to prevent infinite loops
+  useEffect(() => {
+    // If stream has already started, we should automatically connect to Twilio
+    const autoConnect = async () => {
+      // Only connect if ALL these conditions are true:
+      // 1. Stream is started
+      // 2. We're not already connected
+      // 3. We're not currently connecting
+      // 4. We don't have a connection error that needs user action
+      if (
+        stream.hasStarted &&
+        !twilioRoomRef.current &&
+        !isConnecting &&
+        !connectionError &&
+        connectionStatus !== "connected" // Critical addition: don't connect if already connected
+      ) {
+        console.log(
+          "[StreamManager] Auto-connecting to stream since it's already active"
+        );
+        try {
+          // Use setIsConnecting to prevent multiple connection attempts
+          setIsConnecting(true);
+          await startStream();
+        } catch (error) {
+          console.error("[StreamManager] Auto-connect failed:", error);
+          // Set reconnection flag to false on failure
+          setIsConnecting(false);
+        }
+      }
+    };
+
+    // Wait a short moment for component to fully mount before connecting
+    const timer = setTimeout(() => {
+      autoConnect();
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [stream.hasStarted, twilioRoomRef.current]);
+
+  // Fix the startStream function to guard against multiple connections
   const startStream = async () => {
+    // Guard against multiple simultaneous connection attempts
+    if (isConnecting) {
+      console.log(
+        "[StreamManager] Connection already in progress, ignoring duplicate request"
+      );
+      return;
+    }
+
+    // Also check if we're already connected
+    if (connectionStatus === "connected" && twilioRoomRef.current) {
+      console.log(
+        "[StreamManager] Already connected to streaming service, ignoring connection request"
+      );
+      return;
+    }
+
     try {
       setConnectionError(null);
       setIsConnecting(true);
@@ -277,205 +340,178 @@ const StreamManager = forwardRef<
           cameraOff: !isVideoEnabled, // Use cameraOff consistently
         });
 
-        // 2. Connect to Twilio room - Important step that was missing
-        try {
-          console.log("[StreamManager] Getting Twilio token for streamer...");
+        // 2. Connect to streaming service - only show one toast per connection attempt
+        if (retryCount === 0) {
           toast.info("Setting up streaming room. Please wait...");
+        }
 
-          // Generate a unique identity for the streamer
-          const streamerIdentity = `streamer-${stream.id}`;
+        // Generate a unique identity for the streamer
+        const streamerIdentity = generateUniqueIdentity("streamer", stream.id);
 
-          try {
-            // Get a token from Twilio API
-            const token = await clientTwilioService.getToken(
-              stream.id, // Room name
-              streamerIdentity // User identity
-            );
+        try {
+          // Get a token from Twilio API
+          const token = await clientTwilioService.getToken(
+            stream.id, // Room name
+            streamerIdentity // User identity
+          );
 
-            console.log(
-              "[StreamManager] Successfully received Twilio token, connecting to room..."
-            );
+          console.log(
+            "[StreamManager] Successfully received token, connecting to room..."
+          );
 
-            // Extra logging for debugging
-            console.log(
-              "[StreamManager] Token received, preparing to connect with tracks:",
-              {
-                trackCount: localStreamRef.current.getTracks().length,
-                audioTrack: localStreamRef.current.getAudioTracks().length > 0,
-                videoTrack: localStreamRef.current.getVideoTracks().length > 0,
-              }
-            );
+          // Extract MediaStreamTracks to create LocalTracks which Twilio needs
+          const audioTrack = localStreamRef.current.getAudioTracks()[0];
+          const videoTrack = localStreamRef.current.getVideoTracks()[0];
 
-            toast.info("Connecting to Twilio streaming service...");
-
-            // Connect to the Twilio room as a broadcaster (with local tracks)
-            const twilioRoom = await connect(token, {
-              name: stream.id,
-              tracks: localStreamRef.current.getTracks(),
-              bandwidthProfile: {
-                video: {
-                  mode: "collaboration",
-                  dominantSpeakerPriority: "high",
-                },
-              },
-              networkQuality: {
-                local: 1,
-                remote: 1,
-              },
+          if (!audioTrack || !videoTrack) {
+            console.error("[StreamManager] Missing audio or video track:", {
+              hasAudio: !!audioTrack,
+              hasVideo: !!videoTrack,
             });
-
-            console.log(
-              `[StreamManager] Successfully connected to Twilio room: ${twilioRoom.name}`
-            );
-
-            // Store the Twilio room reference
-            twilioRoomRef.current = twilioRoom;
-            setConnectionStatus("connected");
-            toast.success(
-              "Twilio room connected! You are now ready to stream."
-            );
-
-            // Set up event listeners for the room
-            twilioRoom.on("disconnected", (_room, error) => {
-              console.log(
-                `[StreamManager] Disconnected from Twilio room: ${
-                  error ? error.message : "No error"
-                }`
-              );
-              twilioRoomRef.current = null;
-              setConnectionStatus("disconnected");
-
-              if (error) {
-                const errorMessage = `Disconnected: ${error.message}`;
-                console.error(
-                  `[StreamManager] Twilio disconnection error: ${errorMessage}`
-                );
-                setConnectionError(errorMessage);
-                toast.error(`Stream disconnected: ${error.message}`);
-              } else {
-                console.log(
-                  "[StreamManager] Normal disconnect from Twilio room (no error)"
-                );
-                toast.warning(
-                  "Twilio disconnected. Viewers may not be able to see your stream."
-                );
-              }
-            });
-
-            twilioRoom.on("participantConnected", (participant) => {
-              console.log(
-                `[StreamManager] Participant connected: ${participant.identity}`
-              );
-              toast.info(
-                `Viewer joined: ${participant.identity.split("_")[0]}`
-              );
-            });
-
-            twilioRoom.on("participantDisconnected", (participant) => {
-              console.log(
-                `[StreamManager] Participant disconnected: ${participant.identity}`
-              );
-            });
-
-            twilioRoom.on("reconnecting", (error) => {
-              console.log(
-                `[StreamManager] Reconnecting to Twilio room: ${error.message}`
-              );
-              setConnectionStatus("connecting");
-              toast.warning(
-                "Stream connection interrupted. Attempting to reconnect..."
-              );
-            });
-
-            twilioRoom.on("reconnected", () => {
-              console.log(`[StreamManager] Reconnected to Twilio room`);
-              setConnectionStatus("connected");
-              toast.success("Stream reconnected successfully!");
-            });
-
-            // Log info about the Twilio debug environment
-            console.log("[StreamManager] Twilio connection info:", {
-              twilioSessionId:
-                clientTwilioService.getDebugInfo?.()?.sessionId ||
-                "debug-unavailable",
-              roomName: twilioRoom.name,
-              localParticipantIdentity: twilioRoom.localParticipant.identity,
-              twilioRoomSid: twilioRoom.sid,
-            });
-          } catch (tokenError) {
-            // Specific error handling for token retrieval or connection issues
-            console.error(
-              "[StreamManager] Error with Twilio token or connection:",
-              tokenError
-            );
-
-            let errorMsg = "Unknown Twilio error";
-            if (tokenError instanceof Error) {
-              errorMsg = tokenError.message;
-              // Log additional details about the error
-              console.error("[StreamManager] Detailed error info:", {
-                name: tokenError.name,
-                message: tokenError.message,
-                stack: tokenError.stack,
-              });
-            }
-
-            setConnectionStatus("disconnected");
-            setConnectionError(`Twilio error: ${errorMsg}`);
-            toast.error(
-              `Stream started but Twilio connection failed: ${errorMsg}`
-            );
-
-            // Don't re-throw, we want the stream to be considered started even if Twilio connection fails
+            throw new Error("Failed to get required audio or video tracks");
           }
 
-          // The stream was successfully started in Firestore, so we consider it successful
-          // even if Twilio connection failed
-          toast.success("Stream started successfully!");
-        } catch (dbError) {
+          // Make sure tracks are enabled based on UI state
+          audioTrack.enabled = isMicEnabled;
+          videoTrack.enabled = isVideoEnabled;
+
+          // Only show one connecting toast to avoid toast spam
+          if (retryCount === 0 && connectionStatus !== "connected") {
+            toast.info("Connecting to streaming service...");
+          }
+
+          // Connect to the Twilio room with the tracks
+          console.log(
+            `[StreamManager] Connecting with unique identity: ${streamerIdentity}`
+          );
+          const twilioRoom = await connect(token, {
+            name: stream.id,
+            tracks: [audioTrack, videoTrack], // Explicitly pass individual tracks
+            bandwidthProfile: {
+              video: {
+                mode: "collaboration",
+                dominantSpeakerPriority: "high",
+              },
+            },
+            networkQuality: {
+              local: 1,
+              remote: 1,
+            },
+          });
+
+          console.log(
+            `[StreamManager] Successfully connected to room: ${twilioRoom.name}`
+          );
+
+          // Store the Twilio room reference
+          twilioRoomRef.current = twilioRoom;
+          setConnectionStatus("connected");
+
+          // Only show success toast if this is the first successful connection or after error
+          if (retryCount === 0 || connectionError) {
+            toast.success("Connected! You are now live.");
+          }
+
+          // Set up event listeners for the room
+          twilioRoom.on("disconnected", (_room, error) => {
+            console.log(
+              `[StreamManager] Disconnected from Twilio room: ${
+                error ? error.message : "No error"
+              }`
+            );
+            twilioRoomRef.current = null;
+            setConnectionStatus("disconnected");
+
+            if (error) {
+              const errorMessage = `Disconnected: ${error.message}`;
+              console.error(
+                `[StreamManager] Twilio disconnection error: ${errorMessage}`
+              );
+              setConnectionError(errorMessage);
+              toast.error(`Stream disconnected: ${error.message}`);
+            } else {
+              console.log(
+                "[StreamManager] Normal disconnect from Twilio room (no error)"
+              );
+              toast.warning(
+                "Stream disconnected. Viewers may not be able to see your stream."
+              );
+            }
+          });
+
+          twilioRoom.on("participantConnected", (participant) => {
+            console.log(
+              `[StreamManager] Participant connected: ${participant.identity}`
+            );
+            toast.info(`Viewer joined: ${participant.identity.split("_")[0]}`);
+          });
+
+          twilioRoom.on("participantDisconnected", (participant) => {
+            console.log(
+              `[StreamManager] Participant disconnected: ${participant.identity}`
+            );
+          });
+
+          twilioRoom.on("reconnecting", (error) => {
+            console.log(
+              `[StreamManager] Reconnecting to Twilio room: ${error.message}`
+            );
+            setConnectionStatus("connecting");
+            toast.warning(
+              "Stream connection interrupted. Attempting to reconnect..."
+            );
+          });
+
+          twilioRoom.on("reconnected", () => {
+            console.log(`[StreamManager] Reconnected to Twilio room`);
+            setConnectionStatus("connected");
+            toast.success("Stream reconnected successfully!");
+          });
+
+          // Log info about the Twilio debug environment
+          console.log("[StreamManager] Twilio connection info:", {
+            twilioSessionId:
+              clientTwilioService.getDebugInfo?.()?.sessionId ||
+              "debug-unavailable",
+            roomName: twilioRoom.name,
+            localParticipantIdentity: twilioRoom.localParticipant.identity,
+            twilioRoomSid: twilioRoom.sid,
+          });
+        } catch (tokenError) {
+          // Specific error handling for token retrieval or connection issues
           console.error(
-            "[StreamManager] Error updating stream status:",
-            dbError
+            "[StreamManager] Error with Twilio token or connection:",
+            tokenError
           );
+
+          let errorMsg = "Unknown Twilio error";
+          if (tokenError instanceof Error) {
+            errorMsg = tokenError.message;
+            // Log additional details about the error
+            console.error("[StreamManager] Detailed error info:", {
+              name: tokenError.name,
+              message: tokenError.message,
+              stack: tokenError.stack,
+            });
+          }
+
+          setConnectionStatus("disconnected");
+          setConnectionError(`Twilio error: ${errorMsg}`);
           toast.error(
-            "Stream started locally but failed to update status in database."
+            `Stream started but Twilio connection failed: ${errorMsg}`
           );
-        }
-      } catch (error) {
-        console.error("[StreamManager] Error starting stream:", error);
 
-        // Increment retry count
-        const newRetryCount = retryCount + 1;
-        setRetryCount(newRetryCount);
-        setConnectionStatus("disconnected");
-
-        if (newRetryCount >= maxRetries) {
-          setConnectionError(
-            `Failed to start stream after ${maxRetries} attempts. Please check your camera and microphone permissions.`
-          );
-        } else {
-          setConnectionError(
-            `Connection attempt ${newRetryCount} of ${maxRetries} failed. Retry or check permissions.`
-          );
+          // Don't re-throw, we want the stream to be considered started even if Twilio connection fails
         }
 
+        // The stream was successfully started in Firestore, so we consider it successful
+        // even if Twilio connection failed
+        toast.success("Stream started successfully!");
+      } catch (dbError) {
+        console.error("[StreamManager] Error updating stream status:", dbError);
         toast.error(
-          "Failed to start stream. Please check your camera and microphone permissions."
+          "Stream started locally but failed to update status in database."
         );
-
-        // Clean up any partial resources
-        if (localStreamRef.current) {
-          localStreamRef.current.getTracks().forEach((track) => track.stop());
-          localStreamRef.current = null;
-        }
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = null;
-        }
-
-        throw error;
-      } finally {
-        setIsConnecting(false);
       }
     } catch (error) {
       console.error("[StreamManager] Error starting stream:", error);
@@ -485,19 +521,49 @@ const StreamManager = forwardRef<
       setRetryCount(newRetryCount);
       setConnectionStatus("disconnected");
 
+      // Only change to error state if we've reached max retries
+      // This prevents flickering between connected and error states
       if (newRetryCount >= maxRetries) {
         setConnectionError(
           `Failed to start stream after ${maxRetries} attempts. Please check your camera and microphone permissions.`
         );
-      } else {
-        setConnectionError(
-          `Connection attempt ${newRetryCount} of ${maxRetries} failed. Retry or check permissions.`
+        // Only show one error toast
+        toast.error(
+          "Failed to start stream. Please check your camera and microphone permissions."
         );
-      }
+      } else {
+        // Auto-retry once immediately for first failure
+        setConnectionError(
+          `Connection attempt ${newRetryCount} of ${maxRetries} failed. Attempting to reconnect...`
+        );
 
-      toast.error(
-        "Failed to start stream. Please check your camera and microphone permissions."
-      );
+        // Only show reconnecting toast on first retry
+        if (newRetryCount === 1) {
+          toast.info("Reconnecting automatically...");
+        }
+
+        // Wait a moment and try again, but with increasing delay
+        const delay = Math.min(3000 * newRetryCount, 10000); // 3s, 6s, 9s, max 10s
+        console.log(
+          `[StreamManager] Scheduling auto-retry attempt ${newRetryCount} in ${delay}ms`
+        );
+
+        setTimeout(() => {
+          // Only retry if component is still mounted and we're not already connected
+          if (!twilioRoomRef.current && connectionStatus !== "connected") {
+            console.log(`[StreamManager] Auto-retry attempt ${newRetryCount}`);
+            startStream().catch((e) => {
+              console.error("[StreamManager] Auto-retry failed:", e);
+            });
+          } else {
+            console.log(
+              "[StreamManager] Skipping auto-retry, already connected or unmounted"
+            );
+          }
+        }, delay);
+
+        return; // Don't clean up resources yet for retry
+      }
 
       // Clean up any partial resources
       if (localStreamRef.current) {
@@ -510,11 +576,22 @@ const StreamManager = forwardRef<
       }
 
       throw error;
+    } finally {
+      setIsConnecting(false);
     }
   };
 
-  // Try to reconnect if disconnected
+  // Fix re-connection logic to be cleaner
   const reconnect = async () => {
+    // Don't try to reconnect if we're already connecting
+    if (isConnecting) {
+      console.log(
+        "[StreamManager] Already attempting to connect, ignoring duplicate reconnect request"
+      );
+      return;
+    }
+
+    // Disconnect existing room if any
     if (twilioRoomRef.current) {
       toast.info("Disconnecting from current session before reconnecting...");
       twilioRoomRef.current.disconnect();
@@ -526,9 +603,22 @@ const StreamManager = forwardRef<
 
     // Retry the connection
     try {
+      // Clear error state
       setConnectionError(null);
+
+      // Reset retry count to give a fresh start
+      setRetryCount(0);
+
+      // Show only one toast at the beginning
+      toast.info("Reconnecting to stream...");
+
+      // Start the stream
       await startStream();
-      toast.success("Successfully reconnected to stream!");
+
+      // Only show success toast if we actually succeeded
+      if (connectionStatus === "connected") {
+        toast.success("Successfully reconnected to stream!");
+      }
     } catch (error) {
       console.error("[StreamManager] Reconnection failed:", error);
       toast.error("Failed to reconnect. Please try again.");
@@ -788,39 +878,6 @@ const StreamManager = forwardRef<
     }
   };
 
-  // Add a useEffect to auto-connect to Twilio when component mounts and stream is active
-  useEffect(() => {
-    // If stream has already started, we should automatically connect to Twilio
-    const autoConnectToTwilio = async () => {
-      // Only connect if stream is started and we're not already connected
-      if (
-        stream.hasStarted &&
-        !twilioRoomRef.current &&
-        !isConnecting &&
-        !connectionError
-      ) {
-        console.log(
-          "[StreamManager] Auto-connecting to Twilio since stream is already active"
-        );
-        try {
-          await startStream();
-        } catch (error) {
-          console.error(
-            "[StreamManager] Auto-connect to Twilio failed:",
-            error
-          );
-        }
-      }
-    };
-
-    // Wait a short moment for component to fully mount before connecting
-    const timer = setTimeout(() => {
-      autoConnectToTwilio();
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [stream.hasStarted, twilioRoomRef.current]);
-
   return (
     <div className={`flex flex-col ${className}`}>
       {/* Debug Panel - Remove this in production */}
@@ -866,6 +923,15 @@ const StreamManager = forwardRef<
           </div>
         )}
 
+        {connectionStatus === "connecting" && !connectionError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+            <div className="text-brandWhite text-center">
+              <Loader className="mb-4" />
+              <p>Connecting to Stream...</p>
+            </div>
+          </div>
+        )}
+
         {/* Connection Error Display */}
         {connectionError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 p-4">
@@ -880,7 +946,7 @@ const StreamManager = forwardRef<
               >
                 {isConnecting ? (
                   <>
-                    <RefreshCw size={16} className="mr-2 animate-spin" />
+                    <Loader className="mr-2" />
                     Reconnecting...
                   </>
                 ) : (
@@ -930,10 +996,10 @@ const StreamManager = forwardRef<
               ></span>
               <span>
                 {connectionStatus === "connected"
-                  ? "Twilio Connected"
+                  ? "Stream Connected"
                   : connectionStatus === "connecting"
-                  ? "Connecting to Twilio..."
-                  : "Twilio Disconnected"}
+                  ? "Connecting..."
+                  : "Disconnected"}
               </span>
             </div>
 
@@ -963,12 +1029,10 @@ const StreamManager = forwardRef<
           !connectionError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 p-4">
               <div className="text-amber-500 text-center max-w-md">
-                <p className="text-lg font-bold mb-2">
-                  Twilio Connection Issue
-                </p>
+                <p className="text-lg font-bold mb-2">Connection Issue</p>
                 <p className="mb-4">
-                  Your stream is active but viewers cannot connect because
-                  Twilio is disconnected.
+                  Your stream is active but viewers cannot connect because the
+                  streaming service is disconnected.
                 </p>
                 <Button
                   variant="outline"
@@ -978,13 +1042,13 @@ const StreamManager = forwardRef<
                 >
                   {isConnecting ? (
                     <>
-                      <RefreshCw size={16} className="mr-2 animate-spin" />
+                      <Loader className="mr-2" />
                       Reconnecting...
                     </>
                   ) : (
                     <>
                       <RefreshCw size={16} className="mr-2" />
-                      Reconnect to Twilio
+                      Reconnect Now
                     </>
                   )}
                 </Button>
@@ -1026,6 +1090,7 @@ const StreamManager = forwardRef<
               >
                 {isConnecting ? (
                   <>
+                    <Loader className="mr-2" />
                     <RefreshCw size={18} className="mr-2 animate-spin" />
                     Connecting...
                   </>

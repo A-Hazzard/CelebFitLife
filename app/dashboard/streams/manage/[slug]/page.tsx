@@ -12,7 +12,7 @@ import DeviceTester from "@/components/streaming/DeviceTester";
 import { Button } from "@/components/ui/button";
 import { Settings, RefreshCw } from "lucide-react";
 // Import Stream type from the models
-import { Stream } from "@/lib/types/streaming";
+import { Stream } from "@/lib/models/Stream";
 import { toast } from "sonner";
 
 export default function ManageStreamPage() {
