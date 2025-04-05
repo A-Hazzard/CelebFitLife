@@ -11,6 +11,7 @@ import { Play, Calendar } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { createStream } from "@/lib/helpers/streaming";
 import { getDefaultScheduleTime } from "@/lib/utils/streaming";
+import { toast } from "sonner";
 
 export default function CreateStreamPage() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function CreateStreamPage() {
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [showSchedule, setShowSchedule] = useState(false);
   const [selectedTime, setSelectedTime] = useState(new Date());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!currentUser) router.push("/login");
@@ -27,25 +29,60 @@ export default function CreateStreamPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
     if (!currentUser || !currentUser.uid) {
-      console.error("User is not authenticated or UID is missing.");
-      return; // Handle the case where the user is not logged in
+      toast.error("Authentication error", {
+        description: "You must be logged in to create a stream",
+      });
+      setIsSubmitting(false);
+      return;
     }
 
-    const result = await createStream(
-      currentUser.uid, // Now guaranteed to be a string
-      title,
-      description,
-      thumbnailUrl,
-      showSchedule ? selectedTime : null
-    );
+    if (!title.trim()) {
+      toast.error("Missing title", {
+        description: "Please provide a title for your stream",
+      });
+      setIsSubmitting(false);
+      return;
+    }
 
-    // Handle the result of the stream creation
-    if (result.success) {
-      router.push(`/dashboard/streams/manage/${result.slug}`);
-    } else {
-      alert(`Failed to create stream: ${result.error}`);
+    try {
+      const result = await createStream(
+        currentUser.uid,
+        title,
+        description,
+        thumbnailUrl,
+        showSchedule ? selectedTime : null
+      );
+
+      if (result.success) {
+        toast.success("Stream created successfully", {
+          description: "Redirecting to stream manager...",
+        });
+        router.push(`/dashboard/streams/manage/${result.slug}`);
+      } else {
+        const errorMessage = result.error || "Unknown error occurred";
+
+        // Show a user-friendly error toast
+        toast.error("Failed to create stream", {
+          description: errorMessage.includes("technical details:")
+            ? errorMessage.split("technical details:")[0].trim()
+            : errorMessage,
+        });
+
+        // Log the full technical error for debugging
+        if (errorMessage.includes("technical details:")) {
+          console.error("Stream creation error:", errorMessage);
+        }
+      }
+    } catch (error) {
+      toast.error("Stream creation failed", {
+        description: "An unexpected error occurred. Please try again later.",
+      });
+      console.error("Unhandled error creating stream:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -134,9 +171,10 @@ export default function CreateStreamPage() {
             type="submit"
             className="w-full bg-brandOrange text-brandBlack hover:bg-brandOrange/90 
             transition-colors duration-300 flex items-center justify-center gap-2"
+            disabled={isSubmitting}
           >
             <Play className="w-5 h-5" />
-            Create Stream
+            {isSubmitting ? "Creating..." : "Create Stream"}
           </Button>
         </form>
       </div>

@@ -61,7 +61,7 @@ export const createStream = async (
       createdBy: userId,
       hasStarted: false,
       hasEnded: false,
-      scheduledAt: scheduledAt ? Timestamp.fromDate(scheduledAt) : undefined,
+      ...(scheduledAt ? { scheduledAt: Timestamp.fromDate(scheduledAt) } : {}),
       audioMuted: false,
       cameraOff: false,
     };
