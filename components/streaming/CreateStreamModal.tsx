@@ -1,19 +1,26 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/useAuthStore";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
-import { Play, Calendar, X, Hash } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
+import { Calendar, Hash, Play, X, AlertCircle } from "lucide-react";
 import { createStream } from "@/lib/helpers/streaming";
 import { getDefaultScheduleTime } from "@/lib/utils/streaming";
 import { toast } from "sonner";
 import { tagCategories } from "@/lib/data/tags";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -21,40 +28,48 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import Image from "next/image";
 
-export default function CreateStreamPage() {
+interface CreateStreamModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
   const router = useRouter();
   const { currentUser } = useAuthStore();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [thumbnail, setThumbnail] = useState("");
   const [showSchedule, setShowSchedule] = useState(false);
-  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [selectedTime, setSelectedTime] = useState(getDefaultScheduleTime(10));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [category, setCategory] = useState("Fitness");
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!currentUser) router.push("/login");
-  }, [currentUser, router]);
+    if (isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setFormError(null);
 
     if (!currentUser || !currentUser.uid) {
-      toast.error("Authentication error", {
-        description: "You must be logged in to create a stream",
-      });
+      setFormError(
+        "Authentication error. You must be logged in to create a stream."
+      );
       setIsSubmitting(false);
       return;
     }
 
     if (!title.trim()) {
-      toast.error("Missing title", {
-        description: "Please provide a title for your stream",
-      });
+      setFormError("Please provide a title for your stream.");
       setIsSubmitting(false);
       return;
     }
@@ -71,30 +86,16 @@ export default function CreateStreamPage() {
       );
 
       if (result.success && result.streamId) {
-        toast.success("Stream created successfully", {
-          description: "Redirecting to stream manager...",
-        });
+        toast.success("Stream created successfully");
+        onClose();
         router.push(`/dashboard/streams/manage/${result.streamId}`);
       } else {
         const errorMessage = result.error || "Unknown error occurred";
-
-        // Show a user-friendly error toast
-        toast.error("Failed to create stream", {
-          description: errorMessage.includes("technical details:")
-            ? errorMessage.split("technical details:")[0].trim()
-            : errorMessage,
-        });
-
-        // Log the full technical error for debugging
-        if (errorMessage.includes("technical details:")) {
-          console.error("Stream creation error:", errorMessage);
-        }
+        setFormError(errorMessage);
       }
     } catch (error) {
-      toast.error("Stream creation failed", {
-        description: "An unexpected error occurred. Please try again later.",
-      });
       console.error("Unhandled error creating stream:", error);
+      setFormError("An unexpected error occurred. Please try again later.");
     } finally {
       setIsSubmitting(false);
     }
@@ -154,50 +155,76 @@ export default function CreateStreamPage() {
     }
   };
 
-  if (!currentUser) {
-    return null;
-  }
+  const resetForm = () => {
+    setTitle("");
+    setDescription("");
+    setThumbnail("");
+    setShowSchedule(false);
+    setSelectedTime(getDefaultScheduleTime(10));
+    setTags([]);
+    setTagInput("");
+    setCategory("Fitness");
+    setFormError(null);
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
 
   return (
-    <div className="min-h-screen bg-brandBlack text-brandWhite flex items-center justify-center p-8">
-      <div className="bg-brandBlack border border-brandOrange/30 rounded-xl w-full max-w-md p-8 space-y-6 shadow-lg">
-        <h2 className="text-3xl font-bold text-brandOrange text-center mb-6">
-          Create New Stream
-        </h2>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold text-brandOrange">
+            Create New Stream
+          </DialogTitle>
+        </DialogHeader>
 
-        <form onSubmit={handleCreate} className="space-y-4">
-          <div>
-            <label className="block text-brandWhite mb-2">Stream Title</label>
+        <form onSubmit={handleCreate} className="space-y-4 py-4">
+          {formError && (
+            <div className="bg-red-500/20 text-red-400 p-3 rounded-md flex items-start">
+              <AlertCircle className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
+              <p>{formError}</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="title" className="text-white">
+              Stream Title <span className="text-red-500">*</span>
+            </Label>
             <Input
-              className="bg-brandBlack border border-brandOrange/30 text-brandWhite 
-              focus:ring-2 focus:ring-brandOrange placeholder-brandGray/50"
-              type="text"
+              id="title"
+              placeholder="E.g. Morning Yoga Session"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              className="bg-gray-800 border-gray-700 text-white focus:border-purple-500"
               required
-              placeholder="E.g. Morning Yoga Session"
             />
           </div>
 
-          <div>
-            <label className="block text-brandWhite mb-2">Description</label>
+          <div className="space-y-2">
+            <Label htmlFor="description" className="text-white">
+              Description
+            </Label>
             <Textarea
-              className="bg-brandBlack border border-brandOrange/30 text-brandWhite 
-              focus:ring-2 focus:ring-brandOrange placeholder-brandGray/50"
-              rows={3}
+              id="description"
+              placeholder="Optional details about the workout, difficulty level, etc."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional details about the workout, difficulty level, etc."
+              className="bg-gray-800 border-gray-700 text-white focus:border-purple-500 min-h-[100px]"
             />
           </div>
 
-          <div>
-            <Label className="block text-brandWhite mb-2">Category</Label>
+          <div className="space-y-2">
+            <Label htmlFor="category" className="text-white">
+              Category
+            </Label>
             <Select onValueChange={setCategory} defaultValue={category}>
-              <SelectTrigger className="bg-brandBlack border border-brandOrange/30 text-brandWhite">
+              <SelectTrigger className="bg-gray-800 border-gray-700 text-white focus:border-purple-500">
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-700 text-white">
+              <SelectContent className="bg-gray-800 border-gray-700 text-white">
                 <SelectItem value="Fitness">Fitness</SelectItem>
                 <SelectItem value="Yoga">Yoga</SelectItem>
                 <SelectItem value="Nutrition">Nutrition</SelectItem>
@@ -211,8 +238,10 @@ export default function CreateStreamPage() {
             </Select>
           </div>
 
-          <div>
-            <Label className="block text-brandWhite mb-2">Tags (up to 5)</Label>
+          <div className="space-y-2">
+            <Label htmlFor="tags" className="text-white">
+              Tags (up to 5)
+            </Label>
             <div className="flex flex-wrap gap-2 mb-2">
               {tags.map((tag) => (
                 <div
@@ -237,15 +266,14 @@ export default function CreateStreamPage() {
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleTagKeyDown}
-                className="bg-brandBlack border border-brandOrange/30 text-brandWhite 
-                focus:ring-2 focus:ring-brandOrange placeholder-brandGray/50"
+                className="bg-gray-800 border-gray-700 text-white focus:border-purple-500"
                 disabled={tags.length >= 5}
               />
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="ml-2 bg-transparent border-gray-700 hover:bg-gray-800"
+                className="ml-2 bg-transparent border-gray-700 hover:bg-gray-700"
                 onClick={() => addTag(tagInput)}
                 disabled={tagInput.trim() === "" || tags.length >= 5}
               >
@@ -290,16 +318,27 @@ export default function CreateStreamPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-brandWhite mb-2">Thumbnail URL</label>
+          <div className="space-y-2">
+            <Label htmlFor="thumbnail" className="text-white">
+              Thumbnail URL
+            </Label>
             <Input
-              className="bg-brandBlack border border-brandOrange/30 text-brandWhite 
-              focus:ring-2 focus:ring-brandOrange placeholder-brandGray/50"
-              type="text"
+              id="thumbnail"
+              placeholder="Optional thumbnail URL"
               value={thumbnail}
               onChange={(e) => setThumbnail(e.target.value)}
-              placeholder="Optional thumbnail URL"
+              className="bg-gray-800 border-gray-700 text-white focus:border-purple-500"
             />
+            {thumbnail && (
+              <div className="relative w-full aspect-video rounded-md overflow-hidden mt-2 border border-gray-700">
+                <Image
+                  src={thumbnail}
+                  alt="Stream thumbnail preview"
+                  fill
+                  className="object-cover"
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex items-center space-x-2">
@@ -308,35 +347,53 @@ export default function CreateStreamPage() {
               checked={showSchedule}
               onCheckedChange={handleScheduleChange}
             />
-            <label
+            <Label
               htmlFor="schedule"
               className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center"
             >
               <Calendar className="w-4 h-4 mr-2" />
               Schedule for later
-            </label>
+            </Label>
           </div>
 
           {showSchedule && (
-            <div>
-              <label className="block text-brandWhite mb-2">
+            <div className="space-y-2 pl-6">
+              <Label htmlFor="scheduleTime" className="text-white">
                 Schedule Time
-              </label>
+              </Label>
               <TimePickerDialog date={selectedTime} setDate={setSelectedTime} />
             </div>
           )}
 
-          <Button
-            type="submit"
-            className="w-full bg-brandOrange text-brandBlack hover:bg-brandOrange/90 
-            transition-colors duration-300 flex items-center justify-center gap-2"
-            disabled={isSubmitting}
-          >
-            <Play className="w-5 h-5" />
-            {isSubmitting ? "Creating..." : "Create Stream"}
-          </Button>
+          <DialogFooter className="pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClose}
+              className="bg-transparent border-gray-700 text-white hover:bg-gray-800"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="bg-brandOrange hover:bg-brandOrange/90 text-white"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center">
+                  <span className="h-4 w-4 mr-2 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
+                  Creating...
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <Play className="w-4 h-4 mr-2" />
+                  Create Stream
+                </span>
+              )}
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

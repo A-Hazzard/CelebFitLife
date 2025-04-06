@@ -247,3 +247,43 @@ export function toStreamingError(error: unknown): StreamingErrorType {
     message: String(error),
   };
 }
+
+/**
+ * Stream document interface for Firestore
+ */
+export interface StreamDoc {
+  id: string;
+  title: string;
+  description: string;
+  thumbnail: string;
+  userId: string;
+  username: string;
+  userPhotoURL: string;
+  category: string;
+  tags: string[];
+  language: string;
+  hasStarted: boolean;
+  hasEnded: boolean;
+  isPrivate: boolean;
+  requiresSubscription: boolean;
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  slug: string;
+  isScheduled: boolean;
+  scheduledAt: Timestamp | null;
+  startedAt?: string | Timestamp;
+  endedAt?: string | Timestamp;
+}
+
+/**
+ * Interface for stream update operations
+ */
+export interface StreamUpdateObject {
+  [key: string]: unknown; // Using unknown instead of any for better type safety
+  updatedAt: Timestamp;
+  slug?: string;
+  scheduledAt?: Timestamp | null;
+}

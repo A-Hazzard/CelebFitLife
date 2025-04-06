@@ -994,7 +994,13 @@ const StreamManager = forwardRef<
               LIVE
             </div>
             {stream.startedAt && (
-              <StreamDuration startedAt={stream.startedAt} />
+              <StreamDuration
+                startTime={
+                  typeof stream.startedAt === "string"
+                    ? new Date(stream.startedAt)
+                    : stream.startedAt
+                }
+              />
             )}
           </div>
         )}

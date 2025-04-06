@@ -19,6 +19,7 @@ export interface Stream {
   status?: "scheduled" | "live" | "ended";
   category?: string;
   tags?: string[];
+  language?: string;
 
   // Streamer profile data
   streamerName?: string;

@@ -72,7 +72,7 @@ export default function LiveViewPage() {
     null
   );
   const [streamTitle, setStreamTitle] = useState("");
-  const [thumbnailUrl, setThumbnailUrl] = useState("");
+  const [thumbnail, setThumbnail] = useState("");
 
   // Enhanced error states for better error handling
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -177,7 +177,7 @@ export default function LiveViewPage() {
           return;
         }
 
-        console.log(
+      console.log(
           `Track subscribed: ${newTrack.name || "unnamed"}, kind: ${
             newTrack.kind
           }, enabled: ${newTrack.isEnabled}`
@@ -198,9 +198,9 @@ export default function LiveViewPage() {
               try {
                 console.log("Attaching video track to container");
                 const videoElement = newTrack.attach();
-                videoElement.style.width = "100%";
-                videoElement.style.height = "100%";
-                videoContainerRef.current.appendChild(videoElement);
+        videoElement.style.width = "100%";
+        videoElement.style.height = "100%";
+          videoContainerRef.current.appendChild(videoElement);
 
                 // Update remote track state
                 setRemoteVideoTrack(newTrack as RemoteVideoTrack);
@@ -209,7 +209,7 @@ export default function LiveViewPage() {
                   cameraOff: !newTrack.isEnabled,
                 }));
 
-                console.log(
+            console.log(
                   `Video track attached successfully, enabled: ${newTrack.isEnabled}`
                 );
               } catch (attachError) {
@@ -230,19 +230,19 @@ export default function LiveViewPage() {
               // Try to start audio playback
               audioElement
                 .play()
-                .then(() => {
-                  console.log("[Track] Audio playback started successfully");
-                })
-                .catch((error) => {
-                  console.error("[Track] Audio playback failed:", error);
-                  // If autoplay fails, we need user interaction, show a button to the user
-                  setIsAudioMuted(true);
-                });
+            .then(() => {
+              console.log("[Track] Audio playback started successfully");
+            })
+            .catch((error) => {
+              console.error("[Track] Audio playback failed:", error);
+              // If autoplay fails, we need user interaction, show a button to the user
+              setIsAudioMuted(true);
+            });
             } catch (attachError) {
               console.error("Error attaching audio track:", attachError);
-            }
+        }
 
-            // Update state to reflect we have an audio track
+        // Update state to reflect we have an audio track
             setRemoteAudioTrack(newTrack as RemoteAudioTrack);
           }
         }
@@ -829,7 +829,7 @@ export default function LiveViewPage() {
 
         // Store stream information
         setStreamTitle(data.title || "Live Stream");
-        setThumbnailUrl(data.thumbnail || "/favicon.ico");
+        setThumbnail(data.thumbnail || "/favicon.ico");
 
         // Store stream start time - handle both Timestamp and string/date formats
         if (data.startedAt) {
@@ -1283,10 +1283,10 @@ export default function LiveViewPage() {
                   <p className="text-gray-400 mb-4">
                     Thank you for watching! This stream has ended.
                   </p>
-                  {thumbnailUrl && (
+                  {thumbnail && (
                     <div className="relative w-full h-40 mb-4 rounded-lg overflow-hidden">
                       <Image
-                        src={thumbnailUrl}
+                        src={thumbnail}
                         alt={streamTitle || "Stream thumbnail"}
                         fill
                         className="object-cover"
@@ -1342,10 +1342,10 @@ export default function LiveViewPage() {
                     <Countdown scheduledTime={scheduledTime.toString()} />
                   </div>
 
-                  {thumbnailUrl && (
+                  {thumbnail && (
                     <div className="relative w-full h-48 rounded-lg overflow-hidden">
                       <Image
-                        src={thumbnailUrl}
+                        src={thumbnail}
                         alt={streamTitle || "Stream thumbnail"}
                         fill
                         className="object-cover"
@@ -1417,29 +1417,9 @@ export default function LiveViewPage() {
           </div>
 
           {/* Chat panel */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-4">
-              <StreamChat streamId={slug} />
+          <div className="flex-1 overflow-hidden">
+            <StreamChat streamId={slug} className="h-full" />
             </div>
-            <div className="p-4 border-t border-gray-800">
-              <div className="relative">
-                <div className="flex items-center space-x-2 absolute bottom-3 left-3">
-                  <button className="text-brandOrange">
-                    <Mic size={20} />
-                  </button>
-                  <button className="text-brandOrange">
-                    <VideoOff size={20} />
-                  </button>
-                  <button className="text-brandOrange">😊</button>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Text box"
-                  className="w-full bg-gray-800 text-white border-0 rounded-lg p-3 pl-28 focus:ring-brandOrange focus:ring-1 focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

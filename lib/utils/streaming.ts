@@ -114,13 +114,16 @@ export function getStreamingUrl(streamId: string): string {
 // ===== DATE AND TIME HANDLING =====
 
 /**
- * Calculates a default schedule time (minutes from now)
+ * Returns a Date object set to a specified number of minutes in the future
+ * Useful for scheduling streams with a default time
+ * @param minutesInFuture Minutes to add to the current time
+ * @returns Date object set to specified minutes in the future
  */
-export function getDefaultScheduleTime(minutesFromNow: number = 15): Date {
+export const getDefaultScheduleTime = (minutesInFuture: number = 10): Date => {
   const date = new Date();
-  date.setMinutes(date.getMinutes() + minutesFromNow);
+  date.setMinutes(date.getMinutes() + minutesInFuture);
   return date;
-}
+};
 
 /**
  * Formats a date for display in stream details

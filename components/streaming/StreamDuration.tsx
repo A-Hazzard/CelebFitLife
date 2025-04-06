@@ -1,68 +1,53 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import { Clock } from "lucide-react";
 import { Timestamp } from "firebase/firestore";
 
 type StreamDurationProps = {
-  startedAt: Timestamp | string | Date | null;
+  startTime: Timestamp | Date | null;
   className?: string;
 };
 
 export function StreamDuration({
-  startedAt,
+  startTime,
   className = "",
 }: StreamDurationProps) {
-  const [duration, setDuration] = useState(0);
+  const [duration, setDuration] = useState("00:00:00");
 
   useEffect(() => {
-    if (!startedAt) return;
+    if (!startTime) return;
 
-    // Initial calculation
-    const calculateDuration = () => {
-      try {
-        // Handle different formats of startedAt
-        const startTime =
-          startedAt instanceof Timestamp
-            ? startedAt.toDate().getTime()
-            : startedAt instanceof Date
-            ? startedAt.getTime()
-            : new Date(startedAt).getTime();
+    const updateDuration = () => {
+      const start =
+        startTime instanceof Timestamp ? startTime.toDate() : startTime;
+      const now = new Date();
+      const diffMs = now.getTime() - start.getTime();
 
-        const now = Date.now();
-        const elapsedSeconds = Math.floor((now - startTime) / 1000);
-        return elapsedSeconds > 0 ? elapsedSeconds : 0;
-      } catch (error) {
-        console.error("Error calculating stream duration:", error);
-        return 0;
-      }
+      // Calculate hours, minutes, seconds
+      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+      const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+      // Format as HH:MM:SS
+      const formattedHours = hours.toString().padStart(2, "0");
+      const formattedMinutes = minutes.toString().padStart(2, "0");
+      const formattedSeconds = seconds.toString().padStart(2, "0");
+
+      setDuration(`${formattedHours}:${formattedMinutes}:${formattedSeconds}`);
     };
 
-    // Set initial duration
-    setDuration(calculateDuration());
+    // Update immediately and then every second
+    updateDuration();
+    const intervalId = setInterval(updateDuration, 1000);
 
-    // Update every second
-    const timer = setInterval(() => {
-      setDuration(calculateDuration());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [startedAt]);
-
-  // Format the duration as HH:MM:SS
-  const formatDuration = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours.toString().padStart(2, "0")}:${minutes
-      .toString()
-      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
+    return () => clearInterval(intervalId);
+  }, [startTime]);
 
   return (
-    <div
-      className={`bg-black bg-opacity-60 px-3 py-1 rounded-full text-white text-sm ${className}`}
-    >
-      {formatDuration(duration)}
+    <div className={`flex items-center ${className}`}>
+      <Clock className="w-4 h-4 mr-1.5 text-brandOrange" />
+      <span className="font-medium">{duration}</span>
     </div>
   );
 }

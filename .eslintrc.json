@@ -1,11 +1,3 @@
 {
-  "extends": "next/core-web-vitals",
-  "overrides": [
-    {
-      "files": ["app/streaming/live/[slug]/page.tsx"],
-      "rules": {
-        "react-hooks/exhaustive-deps": "off"
-      }
-    }
-  ]
+  "extends": "next/core-web-vitals"
 } 

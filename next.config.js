@@ -27,6 +27,14 @@ const nextConfig = {
         protocol: "https",
         hostname: "**.blogspot.com",
       },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "source.unsplash.com",
+      },
     ],
   },
   webpack: (config, { isServer }) => {

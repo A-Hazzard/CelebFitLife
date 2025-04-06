@@ -8,11 +8,13 @@ import { formatDistanceToNow } from "date-fns";
 interface StreamChatProps {
   streamId: string;
   className?: string;
+  onUserClick?: (username: string, userId: string) => void;
 }
 
 const StreamChat: React.FC<StreamChatProps> = ({
   streamId,
   className = "",
+  onUserClick,
 }) => {
   const {
     messages,
@@ -49,7 +51,26 @@ const StreamChat: React.FC<StreamChatProps> = ({
     >
       {/* Chat Header */}
       <div className="p-3 border-b border-gray-800 bg-gray-900">
-        <h3 className="font-medium text-brandWhite">Live Chat</h3>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            {isLoading && (
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-t-brandOrange border-gray-600"></div>
+            )}
+            {error && (
+              <div className="text-red-500 text-xs">Connection Error</div>
+            )}
+          </div>
+          {error && (
+            <Button
+              variant="ghost"
+              onClick={retryConnection}
+              className="h-8 px-2 text-xs text-brandOrange hover:bg-gray-800"
+            >
+              <RefreshCw size={14} className="mr-1" />
+              Retry
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Messages Area */}
@@ -82,7 +103,10 @@ const StreamChat: React.FC<StreamChatProps> = ({
                 <span
                   className={`font-medium ${
                     message.isHost ? "text-brandOrange" : "text-brandWhite"
-                  }`}
+                  } ${onUserClick ? "cursor-pointer hover:underline" : ""}`}
+                  onClick={() =>
+                    onUserClick && onUserClick(message.sender, message.id)
+                  }
                 >
                   {message.sender}
                   {message.isHost && (

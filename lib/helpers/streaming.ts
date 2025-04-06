@@ -2,72 +2,101 @@ import { doc, setDoc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/config/firebase";
 import { v4 as uuidv4 } from "uuid";
 import {
-  Stream,
   StreamingProfileData,
   toStreamingError,
+  StreamDoc,
+  StreamUpdateObject,
+  Stream,
 } from "@/lib/types/streaming";
-import {
-  Room,
-  connect,
-  createLocalAudioTrack,
-  createLocalVideoTrack,
-  LocalAudioTrack,
-  LocalVideoTrack,
-} from "twilio-video";
-import { clearVideoContainer } from "@/lib/utils/twilio";
+import { Room, LocalAudioTrack, LocalVideoTrack } from "twilio-video";
 import { createLogger } from "@/lib/utils/logger";
+import { collection, addDoc, deleteDoc, increment } from "firebase/firestore";
+import { auth } from "@/lib/config/firebase";
 
 // Create context-specific loggers
 const streamLogger = createLogger("Streaming");
 const trackLogger = streamLogger.withContext("Track");
-const roomLogger = streamLogger.withContext("Room");
+
+/**
+ * Generates a URL-friendly slug from a title
+ * @param title The title to convert to a slug
+ * @returns A URL-friendly slug
+ */
+const generateSlug = (title: string): string => {
+  if (!title) return uuidv4();
+  return `${title
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "") // Remove special chars
+    .replace(/\s+/g, "-") // Replace spaces with hyphens
+    .replace(/-+/g, "-") // Remove consecutive hyphens
+    .substring(0, 40)}-${uuidv4().substring(0, 8)}`;
+};
 
 /**
  * Creates a new stream document in Firestore.
  * @param userId - The UID of the user creating the stream.
  * @param title - The title of the stream.
  * @param description - The description of the stream.
- * @param [thumbnailUrl=""] - Optional URL for the stream thumbnail.
+ * @param [thumbnail=""] - Optional URL for the stream thumbnail.
  * @param [scheduledAt=null] - Optional date object for scheduling the stream.
+ * @param category - The category of the stream.
+ * @param tags - An array of tags for the stream.
  * @returns A promise resolving to an object indicating success or failure,
- *          including the generated slug on success or an error message on failure.
+ *          including the generated streamId on success or an error message on failure.
  */
 export const createStream = async (
   userId: string,
   title: string,
-  description: string,
-  thumbnailUrl: string = "",
-  scheduledAt: Date | null = null
-): Promise<{ success: boolean; slug?: string; error?: string }> => {
+  description: string = "",
+  thumbnail: string = "",
+  scheduledTime: Date | null = null,
+  category: string = "Fitness",
+  tags: string[] = []
+): Promise<{ success: boolean; streamId?: string; error?: string }> => {
   try {
     if (!userId || !title) {
       return { success: false, error: "Missing required fields" };
     }
 
-    const slug = `${title
-      .trim()
-      .replace(/\s+/g, "-")
-      .toLowerCase()}-${uuidv4()}`;
+    // Generate a unique ID for the stream
+    const streamId = uuidv4();
 
-    const streamData: Stream = {
-      id: uuidv4(),
-      title,
-      description,
+    // Prepare stream document data using proper type
+    const now = Timestamp.now();
+
+    const streamDoc: StreamDoc = {
+      id: streamId,
+      title: title.trim(),
+      description: description.trim(),
       thumbnail:
-        thumbnailUrl ||
+        thumbnail ||
         "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg",
-      slug,
-      createdAt: new Date().toISOString(),
-      createdBy: userId,
+      userId,
+      username: "", // This will be set by the UI
+      userPhotoURL: "", // This will be set by the UI
+      category,
+      tags,
+      language: "en",
       hasStarted: false,
       hasEnded: false,
-      ...(scheduledAt ? { scheduledAt: Timestamp.fromDate(scheduledAt) } : {}),
-      audioMuted: false,
-      cameraOff: false,
+      isPrivate: false,
+      requiresSubscription: false,
+      viewCount: 0,
+      likeCount: 0,
+      commentCount: 0,
+      createdAt: now,
+      updatedAt: now,
+      slug: generateSlug(title),
+      isScheduled: Boolean(scheduledTime),
+      scheduledAt: scheduledTime ? Timestamp.fromDate(scheduledTime) : null,
     };
 
-    await setDoc(doc(db, "streams", slug), streamData);
-    return { success: true, slug };
+    // Use the streamId as document ID, not the slug
+    await setDoc(doc(db, "streams", streamId), streamDoc);
+
+    // Return both the streamId for database operations
+    return { success: true, streamId };
   } catch (err) {
     const error = toStreamingError(err);
     streamLogger.error("Error creating stream:", error);
@@ -142,20 +171,20 @@ export const fetchStreamInfo = async (
  * Updates the title and thumbnail URL of a stream document in Firestore.
  * @param slug - The unique slug identifier of the stream.
  * @param title - The new title for the stream.
- * @param thumbnailUrl - The new thumbnail URL for the stream.
+ * @param thumbnail - The new thumbnail URL for the stream.
  * @returns A promise resolving to an object indicating success or failure.
  */
 export const updateStreamInfo = async (
   slug: string,
   title: string,
-  thumbnailUrl: string
+  thumbnail: string
 ): Promise<{ success: boolean; error?: string }> => {
   if (!slug) return { success: false, error: "Slug is required" };
   try {
     const streamDocRef = doc(db, "streams", slug);
     await updateDoc(streamDocRef, {
       title,
-      thumbnail: thumbnailUrl,
+      thumbnail,
     });
     return { success: true };
   } catch (err) {
@@ -426,7 +455,7 @@ export const endStream = async (
     await updateDoc(streamDocRef, {
       hasEnded: true,
       hasStarted: false,
-      endedAt: new Date().toISOString(),
+      endedAt: Timestamp.now(),
     });
     logger.info(`Stream marked as ended in Firestore`);
 
@@ -442,12 +471,8 @@ export const endStream = async (
     return { success: true };
   } catch (error: unknown) {
     const streamingError = toStreamingError(error);
-    logger.error(`Failed to end stream properly:`, streamingError);
-    logger.trace(`End stream error stack trace`);
-    return {
-      success: false,
-      error: streamingError.message,
-    };
+    logger.error(`Error ending stream:`, streamingError);
+    return { success: false, error: streamingError.message };
   }
 };
 
@@ -490,398 +515,421 @@ export const updateStreamDeviceStatus = async (
 };
 
 /**
- * Sets up a Twilio room connection with audio and video tracks.
- * This function handles creating tracks, connecting to the Twilio room,
- * attaching video to the DOM, and setting up event listeners.
- *
- * @param slug - The stream slug, used as the room name.
- * @param userName - User's display name for the Twilio room.
- * @param currentCameraId - The ID of the camera device to use.
- * @param currentMicId - The ID of the microphone device to use.
- * @param videoContainerRef - Reference to the video container DOM element.
- * @param initialState - Optional object with initial audioMuted and cameraOff values.
- * @param addVideoTrackFn - Optional React hook function to handle video rendering
- * @param addAudioTrackFn - Optional React hook function to handle audio rendering
- * @returns A promise resolving to an object with the room and tracks.
+ * Creates a new stream in Firebase
+ * @param streamData The stream data to create
+ * @returns Promise with the created stream ID and success status
  */
-export const setupTwilioRoom = async (
-  slug: string,
-  userName: string,
-  currentCameraId: string,
-  currentMicId: string,
-  videoContainerRef: React.RefObject<HTMLDivElement>,
-  initialState?: { audioMuted?: boolean; cameraOff?: boolean },
-  addVideoTrackFn?: (track: LocalVideoTrack) => void,
-  addAudioTrackFn?: (
-    track: LocalAudioTrack,
-    options?: { muted?: boolean }
-  ) => void
-): Promise<{
-  success: boolean;
-  room: Room | null;
-  videoTrack: LocalVideoTrack | null;
-  audioTrack: LocalAudioTrack | null;
-  error?: string;
-}> => {
-  const logger = roomLogger.withContext("Setup");
-
-  let videoTrack: LocalVideoTrack | null = null;
-  let audioTrack: LocalAudioTrack | null = null;
-  let room: Room | null = null;
-
+export const createStreamFirebase = async (streamData: {
+  title: string;
+  description?: string;
+  thumbnail?: string;
+  category?: string;
+  tags?: string[];
+  language?: string;
+  isScheduled?: boolean;
+  scheduledFor?: Date | null;
+  isPrivate?: boolean;
+  requiresSubscription?: boolean;
+}): Promise<{ streamId: string | null; success: boolean }> => {
   try {
-    logger.info(`Setting up Twilio room for stream: ${slug}`);
-    logger.debug(`Setup parameters:`, {
-      slug,
-      userName,
-      currentCameraId: currentCameraId
-        ? currentCameraId.substring(0, 8) + "..."
-        : "none",
-      currentMicId: currentMicId
-        ? currentMicId.substring(0, 8) + "..."
-        : "none",
-      hasVideoContainer: !!videoContainerRef.current,
-      initialAudioMuted: initialState?.audioMuted,
-      initialCameraOff: initialState?.cameraOff,
+    if (!auth.currentUser) {
+      throw new Error("User must be authenticated to create a stream");
+    }
+
+    const userId = auth.currentUser.uid;
+    const username = auth.currentUser.displayName || "Anonymous";
+    const userPhotoURL = auth.currentUser.photoURL || "";
+
+    // Generate a unique ID for the stream
+    const streamId = uuidv4();
+
+    // Prepare stream document data
+    const now = Timestamp.now();
+
+    const streamDoc: StreamDoc = {
+      id: streamId,
+      title: streamData.title,
+      description: streamData.description || "",
+      thumbnail: streamData.thumbnail || "",
+      userId,
+      username,
+      userPhotoURL,
+      category: streamData.category || "Fitness",
+      tags: streamData.tags || [],
+      language: streamData.language || "English",
+      hasStarted: false,
+      hasEnded: false,
+      isPrivate: streamData.isPrivate || false,
+      requiresSubscription: streamData.requiresSubscription || false,
+      viewCount: 0,
+      likeCount: 0,
+      commentCount: 0,
+      createdAt: now,
+      updatedAt: now,
+      slug: generateSlug(streamData.title),
+      isScheduled: false,
+      scheduledAt: null,
+    };
+
+    // Add scheduled metadata if applicable
+    if (streamData.isScheduled && streamData.scheduledFor) {
+      streamDoc.isScheduled = true;
+      streamDoc.scheduledAt = Timestamp.fromDate(streamData.scheduledFor);
+    }
+
+    // Create the document with the specified ID
+    await setDoc(doc(db, "streams", streamId), streamDoc);
+
+    // Log the stream creation in user activity
+    await addDoc(collection(db, "userActivities"), {
+      userId,
+      type: "stream_created",
+      streamId,
+      streamTitle: streamData.title,
+      timestamp: now,
+      read: false,
     });
 
-    // 1. Fetch Twilio token
-    let token: string;
-    try {
-      logger.debug(`Fetching Twilio token from API...`);
-      const res = await fetch("/api/twilio/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomName: slug,
-          userName: userName,
-        }),
-      });
+    streamLogger.info(
+      `Stream ${streamId} created successfully by user ${userId}`
+    );
+    return { streamId, success: true };
+  } catch (error) {
+    streamLogger.error("Error creating stream:", toStreamingError(error));
+    return { streamId: null, success: false };
+  }
+};
 
-      if (!res.ok) {
-        const errorText = await res.text().catch(() => res.statusText);
-        logger.error(
-          `Failed to fetch Twilio token: ${res.status} ${res.statusText}`
-        );
-        logger.debug(`Error response: ${errorText}`);
-        throw new Error(`Failed to fetch Twilio token: ${res.statusText}`);
-      }
-
-      const data = await res.json();
-      if (!data.token) {
-        logger.error(`No Twilio token returned from API`);
-        throw new Error("No Twilio token returned from API");
-      }
-
-      token = data.token;
-      logger.info(`Successfully obtained Twilio token`);
-    } catch (tokenError: unknown) {
-      const error = toStreamingError(tokenError);
-      logger.error(`Token acquisition failed:`, error);
-      logger.trace(`Token error stack trace`);
-      return {
-        success: false,
-        room: null,
-        videoTrack: null,
-        audioTrack: null,
-        error: error.message,
-      };
+/**
+ * Updates a stream in Firebase
+ * @param streamId The ID of the stream to update
+ * @param updateData The stream data to update
+ * @returns Promise with success status
+ */
+export const updateStreamFirebase = async (
+  streamId: string,
+  updateData: Partial<{
+    title: string;
+    description: string;
+    thumbnail: string;
+    category: string;
+    tags: string[];
+    language: string;
+    isPrivate: boolean;
+    requiresSubscription: boolean;
+    isScheduled: boolean;
+    scheduledFor: Date | null;
+  }>
+): Promise<boolean> => {
+  try {
+    if (!auth.currentUser) {
+      throw new Error("User must be authenticated to update a stream");
     }
 
-    // 2. Create media tracks with proper error handling
-    try {
-      // Create video track
-      logger.debug(
-        `Creating local video track with camera ID: ${currentCameraId.substring(
-          0,
-          8
-        )}...`
-      );
-      videoTrack = await createLocalVideoTrack({
-        width: 1280,
-        height: 720,
-        deviceId: currentCameraId,
-        name: `camera-${
-          currentCameraId?.substring(0, 8) || "default"
-        }-${Date.now()}`,
-      });
-      logger.debug(`Video track created successfully (ID: ${videoTrack.id})`);
+    // Get the current user ID
+    const userId = auth.currentUser.uid;
 
-      // Create audio track
-      logger.debug(
-        `Creating local audio track with mic ID: ${currentMicId.substring(
-          0,
-          8
-        )}...`
-      );
-      audioTrack = await createLocalAudioTrack({
-        deviceId: currentMicId,
-        name: "microphone",
-      });
-      logger.debug(`Audio track created successfully (ID: ${audioTrack.id})`);
+    // Get the current stream to verify ownership
+    const streamRef = doc(db, "streams", streamId);
+    const streamSnap = await getDoc(streamRef);
 
-      logger.info(`Successfully created local audio and video tracks`);
-    } catch (trackError: unknown) {
-      // Clean up any tracks that were created before failure
-      const error = toStreamingError(trackError);
-      logger.error(`Failed to create media tracks:`, error);
-      logger.debug(`Cleanup after track creation failure`);
-
-      if (videoTrack) {
-        logger.debug(`Stopping video track after error`);
-        videoTrack.stop();
-      }
-
-      if (audioTrack) {
-        logger.debug(`Stopping audio track after error`);
-        audioTrack.stop();
-      }
-
-      logger.trace(`Track creation error stack trace`);
-      return {
-        success: false,
-        room: null,
-        videoTrack: null,
-        audioTrack: null,
-        error: error.message,
-      };
+    if (!streamSnap.exists()) {
+      throw new Error("Stream not found");
     }
 
-    // 3. Connect to room
-    try {
-      logger.debug(`Connecting to Twilio room: ${slug}`);
-      room = await connect(token, {
-        name: slug,
-        tracks: [videoTrack, audioTrack],
-        bandwidthProfile: {
-          video: {
-            mode: "collaboration",
-            maxTracks: 2,
-            dominantSpeakerPriority: "high",
-            maxSubscriptionBitrate: 1500000, // 1.5 Mbps
-          },
-        },
-        dominantSpeaker: true,
-      });
-
-      logger.info(`Successfully connected to Twilio room: ${slug}`);
-      logger.debug(
-        `Room SID: ${room.sid}, Local participant SID: ${room.localParticipant.sid}`
-      );
-    } catch (connectError: unknown) {
-      // Clean up tracks if room connection fails
-      const error = toStreamingError(connectError);
-      logger.error(`Failed to connect to Twilio room:`, error);
-      logger.debug(`Cleanup after connection failure`);
-
-      if (videoTrack) {
-        logger.debug(`Stopping video track after connection error`);
-        videoTrack.stop();
-      }
-
-      if (audioTrack) {
-        logger.debug(`Stopping audio track after connection error`);
-        audioTrack.stop();
-      }
-
-      logger.trace(`Room connection error stack trace`);
-      return {
-        success: false,
-        room: null,
-        videoTrack: null,
-        audioTrack: null,
-        error: error.message,
-      };
+    const streamData = streamSnap.data();
+    if (streamData.userId !== userId) {
+      throw new Error("User does not have permission to update this stream");
     }
 
-    // 4. Handle local video rendering
-    if (videoTrack) {
-      try {
-        logger.debug(`Handling local video rendering`);
-
-        // If a React add function was provided, use it (preferred)
-        if (addVideoTrackFn) {
-          logger.debug(`Using React hook to render video track`);
-          addVideoTrackFn(videoTrack);
-        }
-        // Legacy approach with direct DOM manipulation if no React function was provided
-        else if (videoContainerRef.current) {
-          logger.debug(`Using legacy DOM approach to render video track`);
-
-          // Safely clear any existing video elements first
-          logger.debug(`Clearing video container before attaching new video`);
-          clearVideoContainer(videoContainerRef.current);
-
-          // Create and attach the video element
-          logger.debug(`Creating video element for local track`);
-          const videoEl = videoTrack.attach();
-          videoEl.style.width = "100%";
-          videoEl.style.height = "100%";
-          videoEl.style.objectFit = "cover";
-          videoEl.setAttribute("data-track-id", videoTrack.id);
-
-          // Add to container and verify
-          logger.debug(`Appending video element to container`);
-          videoContainerRef.current.appendChild(videoEl);
-          logger.info(`Successfully attached video to container`);
-
-          // Verify the attachment worked
-          const attachedElements =
-            videoContainerRef.current.querySelectorAll("video");
-          logger.debug(
-            `Container now has ${attachedElements.length} video elements`
-          );
-        } else {
-          if (!videoContainerRef.current) {
-            logger.warn(`Video container ref is null, cannot attach video`);
-          }
-        }
-      } catch (attachError: unknown) {
-        const error = toStreamingError(attachError);
-        logger.error(`Error handling video rendering:`, error);
-        logger.trace(`Video rendering error stack trace`);
-      }
-    } else {
-      logger.warn(`Video track is null, cannot render`);
-    }
-
-    // 5. Handle audio track
-    if (audioTrack) {
-      try {
-        logger.debug(`Handling audio track setup`);
-
-        // If a React audio hook function was provided, use it
-        if (addAudioTrackFn) {
-          logger.debug(`Using React hook to handle audio track`);
-          const muted = initialState?.audioMuted || false;
-          addAudioTrackFn(audioTrack, { muted });
-        } else {
-          logger.debug(
-            `No React audio hook provided, audio will be handled automatically by Twilio`
-          );
-        }
-      } catch (audioError: unknown) {
-        const error = toStreamingError(audioError);
-        logger.error(`Error handling audio track:`, error);
-        logger.trace(`Audio handling error stack trace`);
-        // Continue despite audio error - not critical for streaming
-      }
-    } else {
-      logger.warn(`No audio track created, skipping audio setup`);
-    }
-
-    // 6. Apply initial state if provided
-    if (initialState && room) {
-      try {
-        logger.debug(`Applying initial track states:`, initialState);
-
-        if (initialState.audioMuted && audioTrack) {
-          logger.debug(`Setting initial audio track state to muted`);
-          await audioTrack.disable();
-        }
-
-        if (initialState.cameraOff && videoTrack) {
-          logger.debug(`Setting initial video track state to disabled`);
-          await videoTrack.disable();
-        }
-
-        logger.debug(`Successfully applied initial track states`);
-      } catch (stateError: unknown) {
-        const error = toStreamingError(stateError);
-        logger.error(`Failed to apply initial track states:`, error);
-        logger.trace(`State error stack trace`);
-        // Continue despite state error - not critical
-      }
-    }
-
-    // 7. Update stream device IDs in Firestore (non-critical operation)
-    try {
-      logger.debug(`Updating device IDs in Firestore`);
-      await updateStreamDeviceStatus(slug, {
-        currentCameraId: currentCameraId,
-        currentMicId: currentMicId,
-      });
-      logger.debug(`Successfully updated device IDs in Firestore`);
-    } catch (firestoreError: unknown) {
-      const error = toStreamingError(firestoreError);
-      logger.error(`Failed to update device IDs in Firestore:`, error);
-      logger.debug(
-        `Continuing despite Firestore error - room connection is valid`
-      );
-      // Continue despite Firestore error - not critical
-    }
-
-    // Setup room event listeners for monitoring
-    if (room) {
-      room.on("disconnected", (_disconnectedRoom, error) => {
-        logger.info(`Room disconnected event triggered`);
-        if (error) {
-          logger.error(`Room disconnected due to error:`, error);
-        }
-      });
-
-      room.on("participantConnected", (participant) => {
-        logger.info(`Participant connected: ${participant.identity}`);
-      });
-
-      room.on("participantDisconnected", (participant) => {
-        logger.info(`Participant disconnected: ${participant.identity}`);
-      });
-
-      room.on("reconnecting", (error) => {
-        logger.warn(`Room reconnecting due to error:`, error);
-      });
-
-      room.on("reconnected", () => {
-        logger.info(`Room successfully reconnected`);
-      });
-    }
-
-    logger.info(`Twilio room setup completed successfully`);
-    return {
-      success: true,
-      room,
-      videoTrack,
-      audioTrack,
+    // Use the proper StreamUpdateObject type
+    const updateObj: StreamUpdateObject = {
+      ...updateData,
+      updatedAt: Timestamp.now(),
     };
-  } catch (error: unknown) {
-    logger.error(`Error setting up Twilio room:`, error as Error);
-    logger.trace(`General setup error stack trace`);
 
-    // Clean up resources in case of general failure
-    try {
-      logger.debug(`Cleaning up resources after general failure`);
-
-      if (room) {
-        logger.debug(`Disconnecting room after failure`);
-        (room as Room).disconnect();
-      }
-
-      if (videoTrack) {
-        logger.debug(`Stopping video track after failure`);
-        (videoTrack as LocalVideoTrack).stop();
-      }
-
-      if (audioTrack) {
-        logger.debug(`Stopping audio track after failure`);
-        (audioTrack as LocalAudioTrack).stop();
-      }
-
-      logger.debug(`Cleanup after general failure completed`);
-    } catch (cleanupError: unknown) {
-      logger.error(
-        `Error during cleanup after failure:`,
-        cleanupError as Error
-      );
+    // Handle scheduled time if provided
+    if (updateData.isScheduled && updateData.scheduledFor) {
+      updateObj.scheduledAt = Timestamp.fromDate(updateData.scheduledFor);
+    } else if (updateData.isScheduled === false) {
+      updateObj.scheduledAt = null;
     }
 
-    const streamingError = toStreamingError(error);
-    return {
-      success: false,
-      room: null,
-      videoTrack: null,
-      audioTrack: null,
-      error: streamingError.message,
-    };
+    // If title is updated, update the slug
+    if (updateData.title) {
+      updateObj.slug = generateSlug(updateData.title);
+    }
+
+    // Update the stream
+    await updateDoc(streamRef, updateObj);
+
+    // Log the update in user activity
+    await addDoc(collection(db, "userActivities"), {
+      userId,
+      type: "stream_updated",
+      streamId,
+      streamTitle: updateData.title || streamData.title,
+      timestamp: Timestamp.now(),
+      read: false,
+    });
+
+    streamLogger.info(
+      `Stream ${streamId} updated successfully by user ${userId}`
+    );
+    return true;
+  } catch (error) {
+    streamLogger.error(
+      `Error updating stream ${streamId}:`,
+      toStreamingError(error)
+    );
+    return false;
+  }
+};
+
+/**
+ * Starts a stream in Firebase
+ * @param streamId The ID of the stream to start
+ * @returns Promise with success status
+ */
+export const startStreamFirebase = async (
+  streamId: string
+): Promise<boolean> => {
+  try {
+    if (!auth.currentUser) {
+      throw new Error("User must be authenticated to start a stream");
+    }
+
+    const userId = auth.currentUser.uid;
+
+    // Get the current stream
+    const streamRef = doc(db, "streams", streamId);
+    const streamSnap = await getDoc(streamRef);
+
+    if (!streamSnap.exists()) {
+      throw new Error("Stream not found");
+    }
+
+    const streamData = streamSnap.data();
+    if (streamData.userId !== userId) {
+      throw new Error("User does not have permission to start this stream");
+    }
+
+    if (streamData.hasStarted && !streamData.hasEnded) {
+      // Stream is already live, don't need to update
+      return true;
+    }
+
+    // Update the stream status
+    const now = Timestamp.now();
+    await updateDoc(streamRef, {
+      hasStarted: true,
+      hasEnded: false,
+      startedAt: now,
+      endedAt: null,
+      updatedAt: now,
+      viewCount: 0, // Reset view count when starting/restarting
+    });
+
+    // Log the stream start in user activity
+    await addDoc(collection(db, "userActivities"), {
+      userId,
+      type: "stream_started",
+      streamId,
+      streamTitle: streamData.title,
+      timestamp: now,
+      read: false,
+    });
+
+    streamLogger.info(`Stream ${streamId} started by user ${userId}`);
+    return true;
+  } catch (error) {
+    streamLogger.error(
+      `Error starting stream ${streamId}:`,
+      toStreamingError(error)
+    );
+    return false;
+  }
+};
+
+/**
+ * Ends a stream in Firebase
+ * @param streamId The ID of the stream to end
+ * @returns Promise with success status
+ */
+export const endStreamFirebase = async (streamId: string): Promise<boolean> => {
+  try {
+    if (!auth.currentUser) {
+      throw new Error("User must be authenticated to end a stream");
+    }
+
+    const userId = auth.currentUser.uid;
+
+    // Get the current stream
+    const streamRef = doc(db, "streams", streamId);
+    const streamSnap = await getDoc(streamRef);
+
+    if (!streamSnap.exists()) {
+      throw new Error("Stream not found");
+    }
+
+    const streamData = streamSnap.data();
+    if (streamData.userId !== userId) {
+      throw new Error("User does not have permission to end this stream");
+    }
+
+    if (!streamData.hasStarted || streamData.hasEnded) {
+      // Stream is not live, don't need to update
+      return true;
+    }
+
+    // Update the stream status
+    const now = Timestamp.now();
+    await updateDoc(streamRef, {
+      hasEnded: true,
+      endedAt: now,
+      updatedAt: now,
+    });
+
+    // Log the stream end in user activity
+    await addDoc(collection(db, "userActivities"), {
+      userId,
+      type: "stream_ended",
+      streamId,
+      streamTitle: streamData.title,
+      timestamp: now,
+      read: false,
+    });
+
+    streamLogger.info(`Stream ${streamId} ended by user ${userId}`);
+    return true;
+  } catch (error) {
+    streamLogger.error(
+      `Error ending stream ${streamId}:`,
+      toStreamingError(error)
+    );
+    return false;
+  }
+};
+
+/**
+ * Deletes a stream from Firebase
+ * @param streamId The ID of the stream to delete
+ * @returns Promise with success status
+ */
+export const deleteStreamFirebase = async (
+  streamId: string
+): Promise<boolean> => {
+  try {
+    if (!auth.currentUser) {
+      throw new Error("User must be authenticated to delete a stream");
+    }
+
+    const userId = auth.currentUser.uid;
+
+    // Get the current stream
+    const streamRef = doc(db, "streams", streamId);
+    const streamSnap = await getDoc(streamRef);
+
+    if (!streamSnap.exists()) {
+      throw new Error("Stream not found");
+    }
+
+    const streamData = streamSnap.data();
+    if (streamData.userId !== userId) {
+      throw new Error("User does not have permission to delete this stream");
+    }
+
+    // Delete the stream
+    await deleteDoc(streamRef);
+
+    // Log the deletion in user activity
+    await addDoc(collection(db, "userActivities"), {
+      userId,
+      type: "stream_deleted",
+      streamTitle: streamData.title,
+      timestamp: Timestamp.now(),
+      read: false,
+    });
+
+    streamLogger.info(`Stream ${streamId} deleted by user ${userId}`);
+    return true;
+  } catch (error) {
+    streamLogger.error(
+      `Error deleting stream ${streamId}:`,
+      toStreamingError(error)
+    );
+    return false;
+  }
+};
+
+/**
+ * Adds a viewer to a stream and updates view count
+ * @param streamId The ID of the stream to update
+ * @param viewerId The ID of the viewer
+ * @returns Promise with success status
+ */
+export const addStreamViewer = async (
+  streamId: string,
+  viewerId: string
+): Promise<boolean> => {
+  try {
+    // Get the stream reference
+    const streamRef = doc(db, "streams", streamId);
+    const streamSnap = await getDoc(streamRef);
+
+    if (!streamSnap.exists()) {
+      throw new Error("Stream not found");
+    }
+
+    const streamData = streamSnap.data();
+    if (!streamData.hasStarted || streamData.hasEnded) {
+      throw new Error("Stream is not live");
+    }
+
+    // Add viewer to viewers collection
+    const viewerRef = doc(db, "streams", streamId, "viewers", viewerId);
+    await setDoc(viewerRef, {
+      joinedAt: Timestamp.now(),
+      lastActiveAt: Timestamp.now(),
+    });
+
+    // Increment view count in the stream document
+    await updateDoc(streamRef, {
+      viewCount: increment(1),
+    });
+
+    return true;
+  } catch (error) {
+    streamLogger.error(
+      `Error adding viewer ${viewerId} to stream ${streamId}:`,
+      toStreamingError(error)
+    );
+    return false;
+  }
+};
+
+/**
+ * Updates a viewer's active status in a stream
+ * @param streamId The ID of the stream
+ * @param viewerId The ID of the viewer
+ * @returns Promise with success status
+ */
+export const updateViewerActivity = async (
+  streamId: string,
+  viewerId: string
+): Promise<boolean> => {
+  try {
+    const viewerRef = doc(db, "streams", streamId, "viewers", viewerId);
+    await updateDoc(viewerRef, {
+      lastActiveAt: Timestamp.now(),
+    });
+
+    return true;
+  } catch (error) {
+    streamLogger.error(
+      `Error updating viewer ${viewerId} activity in stream ${streamId}:`,
+      toStreamingError(error)
+    );
+    return false;
   }
 };
