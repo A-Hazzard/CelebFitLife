@@ -6,7 +6,6 @@
 
 import { LoginResult, RegistrationData } from "@/lib/types/auth";
 import axios, { AxiosError } from "axios";
-import { validateRegistrationInput } from "../utils/auth";
 import { User } from "../types/user";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -143,31 +142,83 @@ export async function handleLogin({
  * @throws Error if validation fails or the API returns an error.
  */
 export async function registerUser(data: RegistrationData): Promise<void> {
-  const { username, email, password, phone, country, city, age, acceptedTnC } =
-    data;
-  const inputs = [username, email, password, phone, country, city, String(age)];
-
-  if (!validateRegistrationInput(inputs, acceptedTnC)) {
-    throw new Error(
-      "Please fill out all required fields and accept the Terms & Conditions."
-    );
+  const { username, email, password, phone, country, city, age, role } = data;
+  
+  // Ensure all required fields are present according to server schema
+  if (!username || !email || !password) {
+    throw new Error("Username, email, and password are required.");
   }
+  
+  if (username.length < 3) {
+    throw new Error("Username must be at least 3 characters");
+  }
+  
+  if (password.length < 6) {
+    throw new Error("Password must be at least 6 characters");
+  }
+
+  // Ensure role is properly set with viewer: true
+  const userRole = {
+    viewer: true,
+    streamer: false,
+    admin: false,
+    ...(role || {})
+  };
+
+  // Prepare request data - only include fields expected by the server schema
+  const requestData = {
+    username,
+    email,
+    password,
+    age: Number(age),
+    phone: phone || undefined,
+    country: country || undefined,
+    city: city || undefined,
+    role: userRole,
+    myStreamers: [] // Initialize empty myStreamers array
+  };
+  
+  console.log("[CLIENT] Sending registration data:", {
+    username,
+    email: email.substring(0, 3) + "...",
+    hasPassword: !!password,
+    phone: phone ? phone.substring(0, 3) + "..." : undefined,
+    country,
+    city,
+    age,
+    role: userRole
+  });
 
   try {
     const response = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify(requestData),
     });
 
-    const resData = await response.json();
+    // Read the response body as text first for debugging
+    const responseText = await response.text();
+    console.log("[CLIENT] Registration response text:", responseText);
+    
+    // Try to parse as JSON if possible
+    let resData;
+    try {
+      resData = responseText ? JSON.parse(responseText) : {};
+    } catch (e) {
+      console.error("[CLIENT] Failed to parse response as JSON:", e);
+      resData = { error: "Invalid response from server" };
+    }
 
     if (!response.ok) {
       throw new Error(
-        resData.error || "Registration failed. Please try again."
+        resData.error || `Registration failed with status ${response.status}`
       );
     }
+
+    console.log("[CLIENT] Registration successful:", resData);
+    return resData.user;
   } catch (error: unknown) {
+    console.error("[CLIENT] Registration error details:", error);
     if (error instanceof Error) {
       throw new Error(error.message);
     }

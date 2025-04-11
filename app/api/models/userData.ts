@@ -61,4 +61,5 @@ export interface UserData {
     streamerId: string;
     streamerName: string;
   }>;
+  myStreamers?: string[]; // Array of streamer IDs the user follows
 }

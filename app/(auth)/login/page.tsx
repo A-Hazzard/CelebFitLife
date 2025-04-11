@@ -93,15 +93,15 @@ function LoginPageContent() {
   }
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-black">
+    <div className="h-screen w-screen flex flex-col md:flex-row overflow-hidden bg-black">
       {/* Left Section */}
-      <div className="w-1/2 relative flex flex-col justify-center pl-32 pr-10 z-10 text-white">
+      <div className="w-full md:w-1/2 relative flex flex-col justify-center p-10 z-10 text-white">
         {/* Vertical Text (Left-Aligned & Vertical) */}
         <motion.div
           initial={{ opacity: 0, y: 60 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="absolute left-16 top-[10%] -translate-y-1/2 transform -rotate-90 origin-left text-9xl font-extrabold tracking-widest z-0"
+          className="absolute left-16 top-[10%] -translate-y-1/2 transform -rotate-90 origin-left text-9xl font-extrabold tracking-widest z-0 hidden md:block"
         >
           {["F", "I", "T", "\u00A0", "G", "E", "T"].map((char, index) => (
             <span
@@ -122,7 +122,7 @@ function LoginPageContent() {
           initial={{ opacity: 0, x: 60 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.8, delay: 0.3 }}
-          className="relative z-10 pl-24 pr-10"
+          className="relative z-10 lg:ml-32"
         >
           <button
             onClick={() => router.back()}
@@ -134,7 +134,7 @@ function LoginPageContent() {
           <h2 className="text-xl text-gray-400 mb-1">
             Signing back into your account?
           </h2>
-          <h1 className="text-5xl font-extrabold text-white mb-2 leading-tight">
+          <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-2 leading-tight">
             Login<span className="text-orange-500">.</span>
           </h1>
           <p className="mb-2 text-gray-400 text-sm">
@@ -199,7 +199,7 @@ function LoginPageContent() {
               animate="visible"
               custom={4}
             >
-              <div className="flex gap-4 pt-2">
+              <div className="flex flex-col md:flex-row gap-4 pt-2">
                 <Button
                   type="button"
                   className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-full text-sm"
@@ -220,7 +220,7 @@ function LoginPageContent() {
       </div>
 
       {/* Right Section (Image) */}
-      <div className="w-1/2 h-full relative">
+      <div className="w-full md:w-1/2 h-full relative">
         <Image
           src={fitImage}
           alt="Fitness woman"
