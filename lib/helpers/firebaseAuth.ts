@@ -6,6 +6,8 @@ import {
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/config/firebase";
 import { RegistrationData } from "@/lib/types/auth";
+import bcrypt from 'bcryptjs';
+import { auth } from "@/lib/firebase";
 
 interface FirebaseRegisterResult {
   success: boolean;
@@ -28,57 +30,65 @@ interface FirebaseRegisterResult {
   };
 }
 
+export interface UserData {
+  email: string;
+  username: string;
+  password: string;
+  age?: number;
+  phone?: string;
+  country?: string;
+  city?: string;
+  role?: string;
+  plan?: string;
+  myStreamers?: string[];
+  createdAt?: string;
+}
+
 /**
  * Registers a user directly with Firebase, bypassing the server API
  */
-export async function registerUserWithFirebase(data: RegistrationData): Promise<FirebaseRegisterResult> {
-  const { email, password, username, age, phone, country, city, role } = data;
-  
+export async function registerUserWithFirebase(userData: UserData): Promise<FirebaseRegisterResult> {
   try {
-    console.log("[FIREBASE] Attempting to create user:", email);
-    
-    // Create the user with Firebase Authentication
-    const auth = getAuth();
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-    
-    // Update the user profile with the username
-    await updateProfile(user, {
-      displayName: username
+    // Hash the password before storing
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(userData.password, salt);
+
+    // Create user with Firebase Auth
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      userData.email,
+      userData.password // Use original password for auth
+    );
+
+    // Update display name
+    await updateProfile(userCredential.user, {
+      displayName: userData.username,
     });
-    
+
     // Prepare user data for Firestore
-    const userData = {
-      username,
-      email,
-      uid: user.uid,
-      age: Number(age),
-      phone: phone || "",
-      country: country || "",
-      city: city || "",
-      role: {
-        viewer: true,
-        streamer: false,
-        admin: false,
-        ...(role || {})
-      },
-      myStreamers: [],
-      createdAt: new Date().toISOString()
+    const userDataForFirestore = {
+      ...userData,
+      uid: userCredential.user.uid,
+      password: hashedPassword, // Store hashed password
+      createdAt: userData.createdAt || new Date().toISOString(),
+      role: userData.role || 'user',
+      plan: userData.plan || 'basic',
+      myStreamers: userData.myStreamers || []
     };
-    
-    // Save user data to Firestore
-    console.log("[FIREBASE] Saving user data to Firestore:", user.uid);
-    await setDoc(doc(db, "users", user.uid), userData);
-    
-    console.log("[FIREBASE] User successfully created:", user.uid);
+
+    // Remove sensitive/redundant fields
+    delete userDataForFirestore.planDetails;
+    delete userDataForFirestore.planId;
+    delete userDataForFirestore.selectedStreamers;
+
+    // Save to Firestore using email as document ID
+    await setDoc(doc(db, "users", userData.email), userDataForFirestore);
+
     return {
       success: true,
-      user: {
-        ...userData,
-        id: user.uid
-      }
+      user: userCredential.user,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("[FIREBASE] Registration error:", error);
     
     // Handle Firebase specific errors

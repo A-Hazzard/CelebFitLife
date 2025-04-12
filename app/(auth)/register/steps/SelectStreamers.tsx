@@ -187,18 +187,8 @@ export default function SelectStreamers() {
         return;
       }
       
-      // Format the selected streamers data
-      const streamerSelections = selectedStreamers.map(id => {
-        const streamer = streamers.find(s => s.id === id);
-        return {
-          streamerId: id,
-          streamerName: streamer?.name || ""
-        };
-      });
-      
       // Update the userData with selected streamers
       completeSignup({ 
-        selectedStreamers: streamerSelections,
         myStreamers: selectedStreamers 
       });
       
@@ -207,10 +197,15 @@ export default function SelectStreamers() {
         // Prepare the final user data object
         const finalUserData = {
           ...userData,
-          selectedStreamers: streamerSelections,
           myStreamers: selectedStreamers,
+          plan: userData.planDetails?.name || 'basic', // Only keep the plan name
           createdAt: new Date().toISOString()
         };
+
+        // Remove redundant fields
+        delete finalUserData.selectedStreamers;
+        delete finalUserData.planId;
+        delete finalUserData.planDetails;
         
         // Check if email already exists
         const userDocRef = doc(db, "users", userData.email);

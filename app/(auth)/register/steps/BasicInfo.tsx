@@ -127,7 +127,7 @@ export default function BasicInfo() {
             />
           </motion.div>
 
-          <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={5}>
+          <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={6}>
             <Input
               type="text"
               name="city"
@@ -140,7 +140,7 @@ export default function BasicInfo() {
           </motion.div>
         </div>
 
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={6}>
+        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={8}>
           <Input
             type="number"
             name="age"
@@ -156,7 +156,7 @@ export default function BasicInfo() {
           </div>
         </motion.div>
 
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={7}>
+        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={9}>
           <label className="flex items-center space-x-2 cursor-pointer">
             <input
               type="checkbox"
@@ -169,7 +169,7 @@ export default function BasicInfo() {
           </label>
         </motion.div>
 
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={8}>
+        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={10}>
           <Button
             type="submit"
             className="bg-orange-500 hover:bg-orange-600 text-white w-full px-6 py-3 rounded-full text-sm"

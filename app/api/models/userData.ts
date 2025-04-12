@@ -9,6 +9,7 @@ export interface UserData {
   specialty?: string;
   tags?: string[];
   bio?: string;
+  profileImage?: string; // URL to the user's profile image
   socialLinks?: {
     instagram?: string;
     youtube?: string;
