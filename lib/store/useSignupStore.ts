@@ -10,7 +10,7 @@ interface SignupState {
 }
 
 export const useSignupStore = create<SignupState>((set) => ({
-  step: 1,
+  step: 0,
   userData: {
     username: "",
     email: "",
@@ -20,6 +20,11 @@ export const useSignupStore = create<SignupState>((set) => ({
     city: "",
     age: 0,
     acceptedTnC: false,
+    role: {
+      viewer: true,
+      streamer: false,
+      admin: false
+    },
     plan: "",
     planDetails: {
       price: 0,
@@ -30,6 +35,7 @@ export const useSignupStore = create<SignupState>((set) => ({
       amount: 0,
       status: "",
     },
+    myStreamers: [],
   },
   nextStep: (data: Partial<UserData>) =>
     set((state) => ({
@@ -38,7 +44,7 @@ export const useSignupStore = create<SignupState>((set) => ({
     })),
   prevStep: () =>
     set((state) => ({
-      step: Math.max(state.step - 1, 1),
+      step: Math.max(state.step - 1, 0),
     })),
   completeSignup: (data: Partial<UserData>) =>
     set((state) => ({
