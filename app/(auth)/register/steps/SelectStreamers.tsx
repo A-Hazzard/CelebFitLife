@@ -198,7 +198,7 @@ export default function SelectStreamers() {
         const finalUserData = {
           ...userData,
           myStreamers: selectedStreamers,
-          plan: userData.planDetails?.name || 'basic', // Only keep the plan name
+          plan: userData.plan || 'basic',
           createdAt: new Date().toISOString()
         };
 

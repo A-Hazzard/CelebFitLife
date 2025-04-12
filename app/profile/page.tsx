@@ -36,7 +36,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 // Custom debounce function
-function debounce<T extends (...args: any[]) => any>(
+function debounce<T extends (...args: string[]) => unknown>(
   func: T,
   wait: number
 ): (...args: Parameters<T>) => void {
@@ -108,7 +108,7 @@ const useProfileUpdate = () => {
   // Add debounce to prevent too many API calls
   const debouncedCheckUsername = useCallback(
     debounce(checkUsername, 500),
-    []
+    [checkUsername]
   );
 
   const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {

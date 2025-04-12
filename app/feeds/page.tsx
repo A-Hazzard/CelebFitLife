@@ -449,7 +449,7 @@ export default function FeedsPage() {
                   transition={{ delay: 0.3 }}
                   className="text-2xl font-bold text-white mb-2"
                 >
-                  "Your body can stand almost anything. It's your mind you have to convince."
+                  &ldquo;Your body can stand almost anything. It&apos;s your mind you have to convince.&rdquo;
                 </motion.h2>
                 <motion.p
                   initial={{ opacity: 0 }}

@@ -1,13 +1,10 @@
 import { 
-  getAuth, 
   createUserWithEmailAndPassword,
   updateProfile 
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
-import { RegistrationData } from "@/lib/types/auth";
+import { db, auth } from "@/lib/config/firebase";
 import bcrypt from 'bcryptjs';
-import { auth } from "@/lib/firebase";
 
 interface FirebaseRegisterResult {
   success: boolean;
@@ -76,19 +73,30 @@ export async function registerUserWithFirebase(userData: UserData): Promise<Fire
       myStreamers: userData.myStreamers || []
     };
 
-    // Remove sensitive/redundant fields
-    delete userDataForFirestore.planDetails;
-    delete userDataForFirestore.planId;
-    delete userDataForFirestore.selectedStreamers;
-
     // Save to Firestore using email as document ID
     await setDoc(doc(db, "users", userData.email), userDataForFirestore);
 
     return {
       success: true,
-      user: userCredential.user,
+      user: {
+        id: userCredential.user.uid,
+        username: userData.username,
+        email: userData.email,
+        uid: userCredential.user.uid,
+        age: userData.age,
+        phone: userData.phone,
+        country: userData.country,
+        city: userData.city,
+        role: {
+          viewer: true,
+          streamer: false,
+          admin: false
+        },
+        myStreamers: userData.myStreamers || [],
+        createdAt: userData.createdAt || new Date().toISOString()
+      },
     };
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error("[FIREBASE] Registration error:", error);
     
     // Handle Firebase specific errors
