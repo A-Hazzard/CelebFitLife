@@ -9,6 +9,7 @@ import {
   NotFoundError,
   InvalidDataError,
 } from "../errors/apiErrors"; // Updated path
+import { UserSessionData } from "@/lib/types/auth"; // Import type from shared types
 
 // Zod Schema for login request validation
 const loginSchema = z.object({
@@ -18,14 +19,6 @@ const loginSchema = z.object({
 
 // Type for validated login data
 type LoginInput = z.infer<typeof loginSchema>;
-
-// Convert interface to type
-type UserSessionData = {
-  isStreamer: boolean;
-  isAdmin: boolean;
-  userId: string;
-  email: string;
-};
 
 // LoginService class to encapsulate login logic
 export class LoginService {

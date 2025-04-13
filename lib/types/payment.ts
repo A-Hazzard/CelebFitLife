@@ -18,7 +18,7 @@ export type PaymentDetails = {
 };
 
 // Import service payment details type
-import { PaymentDetails as ServicePaymentDetails } from "@/lib/services/paymentService";
+import { PaymentDetails as ServicePaymentDetails } from "@/lib/types/services";
 
 /**
  * Maps payment details from UI to service format

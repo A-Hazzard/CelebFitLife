@@ -12,7 +12,6 @@ import {
 } from "recharts";
 import { DashboardAreaChartProps } from "@/lib/types/dashboard";
 
-// Props interface for the component
 export default function DashboardAreaChart({ data }: DashboardAreaChartProps) {
   return (
     <div className="w-full h-[400px] bg-gray-900 rounded-lg p-4 shadow-lg">

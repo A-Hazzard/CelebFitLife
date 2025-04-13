@@ -4,7 +4,7 @@ This directory contains the TypeScript type definitions used throughout the Cele
 
 ## Structure
 
-- `user.ts`: Core user-related types, including User interfaces and DTOs
+- `user.ts`: Core user-related types, including User types and DTOs
 - `streaming.ts`: Streaming-related types, including Stream, Streamer, and error types
 - `auth.ts`: Authentication-related types like LoginResult
 
@@ -18,18 +18,19 @@ This directory contains the TypeScript type definitions used throughout the Cele
 
 3. **Versioning**: When making changes to these types, ensure backward compatibility or update all references.
 
-## Type vs Interface
+## Types vs Interfaces
 
-As a general guideline:
-- Use `interface` for object structures that might be extended
-- Use `type` for union types, mapped types, or when you need type aliases
+For consistency across the codebase, we use `type` declarations for all our type definitions:
+
+- Use `type` for object types, union types, mapped types, and type aliases
+- Use intersection (`&`) to combine types rather than inheritance
 
 ## Extensions
 
-If you need to extend existing types for specific use cases, use interfaces and inheritance where possible:
+If you need to extend existing types for specific use cases, use intersection types:
 
 ```typescript
-interface ExtendedUser extends User {
+type ExtendedUser = User & {
   additionalProperty: string;
 }
 ``` 

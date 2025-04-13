@@ -1,22 +1,9 @@
 import bcrypt from "bcryptjs";
 import jwt, { Secret } from "jsonwebtoken";
 import { User, UserResponseDTO } from "../types/user";
+import { JwtPayload } from "@/lib/types/services";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
-
-interface JwtPayload {
-  id?: string;
-  email: string;
-  username: string;
-  role: {
-    admin: boolean;
-    streamer: boolean;
-    viewer: boolean;
-  };
-  isAdmin: boolean;
-  iat?: number;
-  exp?: number;
-}
 
 /**
  * Hashes a password using bcrypt

@@ -1,24 +1,17 @@
 import { useRef, useState, useEffect } from "react";
-import {
-  LocalVideoTrack,
-  RemoteVideoTrack,
-  LocalAudioTrack,
-  RemoteAudioTrack,
-} from "twilio-video";
 import { cleanupMediaTracks } from "@/lib/utils/twilio";
 import { createLogger } from "@/lib/utils/logger";
+import {
+  VideoTrack,
+  AudioTrack,
+  TrackWithSid,
+  TrackWithId,
+  VideoElement,
+  VideoContainerHookResult,
+} from "@/lib/types/streaming-hooks";
 
 // Create logger for this hook
 const logger = createLogger("useVideoContainer");
-
-type VideoTrack = LocalVideoTrack | RemoteVideoTrack;
-type AudioTrack = LocalAudioTrack | RemoteAudioTrack;
-
-// Extended interface for Twilio tracks
-interface TrackWithSid {
-  sid?: string;
-  id?: string;
-}
 
 // Type guard to check if a track has sid
 function hasTrackSid(
@@ -27,19 +20,9 @@ function hasTrackSid(
   return "sid" in track;
 }
 
-interface TrackWithId {
-  id: string;
-}
-
 // Type guard to check if a track has id
 function hasTrackId(track: unknown): track is TrackWithId {
   return typeof track === "object" && track !== null && "id" in track;
-}
-
-interface VideoElement {
-  id: string;
-  track: VideoTrack;
-  style?: React.CSSProperties;
 }
 
 /**
@@ -53,7 +36,7 @@ interface VideoElement {
  *   - clearVideos: Function to clear all videos
  *   - videoContainerRef: Ref to attach to the video container
  */
-export const useVideoContainer = () => {
+export const useVideoContainer = (): VideoContainerHookResult => {
   // State to track video elements
   const [videoElements, setVideoElements] = useState<VideoElement[]>([]);
 

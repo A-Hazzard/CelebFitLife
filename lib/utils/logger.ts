@@ -1,22 +1,11 @@
 /**
  * Application logging utilities
  *
- * Provides a consistent logging interface with context tracking
+ * Provides a consistent logging type with context tracking
  * and environment-specific behavior.
  */
 
-type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
-
-// Define types for log data rather than using any
-type LogData =
-  | string
-  | number
-  | boolean
-  | null
-  | undefined
-  | Error
-  | Record<string, unknown>
-  | Array<unknown>;
+import { LogLevel, LogData, Logger } from "@/lib/types/utils";
 
 const LOG_LEVELS: Record<LogLevel, number> = {
   trace: 0,
@@ -44,15 +33,6 @@ function getMinLogLevel(): LogLevel {
   }
 
   return DEFAULT_LOG_LEVEL;
-}
-
-interface Logger {
-  trace: (message: string, ...args: LogData[]) => void;
-  debug: (message: string, ...args: LogData[]) => void;
-  info: (message: string, ...args: LogData[]) => void;
-  warn: (message: string, ...args: LogData[]) => void;
-  error: (message: string, ...args: LogData[]) => void;
-  withContext: (context: string) => Logger;
 }
 
 /**

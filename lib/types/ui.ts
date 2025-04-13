@@ -136,7 +136,7 @@ export type CreateStreamFormData = {
 export type EditStreamFormData = Partial<CreateStreamFormData>;
 
 /**
- * ActivityItem interface for dashboard activity log
+ * ActivityItem type for dashboard activity log
  */
 export type ActivityItem = {
   id: string;

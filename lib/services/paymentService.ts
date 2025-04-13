@@ -3,12 +3,7 @@
  * This service contains client-side functions for handling payment processing through the API.
  */
 
-export interface PaymentDetails {
-  cardNumber: string;
-  expiryDate: string;
-  cvv: string;
-  name: string;
-}
+import { PaymentDetails } from "@/lib/types/services";
 
 export async function processPayment(
   paymentDetails: PaymentDetails,

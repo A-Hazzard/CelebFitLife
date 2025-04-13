@@ -7,7 +7,7 @@ import { LocalAudioTrack, RemoteAudioTrack } from "twilio-video";
 // Audio source type
 export type AudioSourceType = "microphone" | "speaker";
 
-// Audio track interface for Twilio compatibility
+// Audio track type for Twilio compatibility
 export type AudioTrack = {
   detach: () => HTMLMediaElement[];
   // Add other properties as needed

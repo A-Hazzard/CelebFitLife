@@ -9,17 +9,7 @@ import {
 } from "@/components/ui/popover";
 import { format } from "date-fns";
 import Image from "next/image";
-
-interface UpcomingStream {
-  id: string;
-  title: string;
-  date: Date;
-  category: string;
-  thumbnailUrl: string;
-  duration: number; // in minutes
-  isSubscriberOnly: boolean;
-  description?: string;
-}
+import { UpcomingStream } from "@/lib/types/ui";
 
 // Generate fake streams for the next 2 weeks
 const generateFakeUpcomingStreams = (): UpcomingStream[] => {

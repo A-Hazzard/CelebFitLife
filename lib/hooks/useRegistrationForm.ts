@@ -1,6 +1,5 @@
 import { useState, FormEvent } from "react";
 import { useSignupStore } from "@/lib/store/useSignupStore";
-import { RegistrationData } from "@/lib/types/auth";
 import { db } from "@/lib/firebase/client";
 import { collection, getDocs, query, where } from "firebase/firestore";
 
@@ -138,8 +137,8 @@ export function useRegistrationForm() {
         );
       }
 
-      // Create registration data with proper role structure
-      const registrationData: RegistrationData = {
+      // Convert to UserData format for nextStep
+      nextStep({
         ...formData,
         age: ageNum,
         role: {
@@ -147,11 +146,6 @@ export function useRegistrationForm() {
           streamer: false,
           admin: false,
         },
-      };
-
-      // Just move to next step without registering now
-      nextStep({
-        ...registrationData,
       });
     } catch (err: unknown) {
       const errorMessage =

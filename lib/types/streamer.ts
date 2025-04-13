@@ -5,7 +5,7 @@ import { User } from "./user";
  */
 
 /**
- * Basic streamer selection interface for user preferences
+ * Basic streamer selection type for user preferences
  */
 export type StreamerSelection = {
   streamerId: string;
@@ -13,7 +13,7 @@ export type StreamerSelection = {
 };
 
 /**
- * Recommended streamer interface with additional display data
+ * Recommended streamer type with additional display data
  */
 export type RecommendedStreamer = {
   id: string;
@@ -29,9 +29,9 @@ export type RecommendedStreamer = {
 };
 
 /**
- * Streamer profile interface extending user
+ * Streamer profile type extending user
  */
-export interface StreamerProfile extends User {
+export type StreamerProfile = User & {
   bio?: string;
   specialty?: string;
   followers?: number;
@@ -43,7 +43,7 @@ export interface StreamerProfile extends User {
     youtube?: string;
     tiktok?: string;
   };
-}
+};
 
 // Types related to streamers and categories
 

@@ -11,14 +11,7 @@ import {
 } from "firebase/firestore";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { toast } from "sonner";
-
-export interface ChatMessage {
-  id: string;
-  createdAt: string;
-  sender: string;
-  message: string;
-  isHost: boolean;
-}
+import { ChatMessage, StreamChatHookResult } from "@/lib/types/streaming-hooks";
 
 /**
  * Custom hook to manage chat functionality for streams.
@@ -27,7 +20,7 @@ export interface ChatMessage {
  * @param streamId - The ID of the stream document containing the messages subcollection
  * @returns Object containing messages, sending functionality, and message input state
  */
-export const useStreamChat = (streamId: string) => {
+export const useStreamChat = (streamId: string): StreamChatHookResult => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);

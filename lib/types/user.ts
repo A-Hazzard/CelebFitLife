@@ -9,7 +9,7 @@ export type Role = {
 };
 
 /**
- * Core User interface used across the application
+ * Core User type used across the application
  */
 export type User = {
   id?: string;

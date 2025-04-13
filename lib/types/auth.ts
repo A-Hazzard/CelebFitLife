@@ -1,23 +1,46 @@
-import { UserData } from "@/app/api/models/userData";
+import { User } from "./user";
 
+/**
+ * Authentication related types
+ */
+
+/**
+ * Result of a login operation
+ */
 export type LoginResult = {
   success: boolean;
+  user?: User;
+  token?: string;
   error?: string;
-  user?: UserData;
 };
 
+/**
+ * Registration data for creating a new user
+ */
 export type RegistrationData = {
-  username: string;
   email: string;
+  username: string;
   password: string;
-  phone: string;
-  country: string;
-  city: string;
-  age: number;
-  acceptedTnC: boolean;
+  confirmPassword: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  country?: string;
+  city?: string;
+  age?: number;
   role?: {
-    streamer: boolean;
-    admin: boolean;
-    viewer: boolean;
+    viewer?: boolean;
+    streamer?: boolean;
+    admin?: boolean;
   };
+};
+
+/**
+ * User session data for token payloads and session management
+ */
+export type UserSessionData = {
+  isStreamer: boolean;
+  isAdmin: boolean;
+  userId: string;
+  email: string;
 };

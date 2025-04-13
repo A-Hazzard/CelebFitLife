@@ -5,6 +5,11 @@ import {
   LocalTrack,
   Room,
 } from "twilio-video";
+import {
+  TrackStatusChangeHandler,
+  NetworkQualityStats,
+  QualityChangeHandler,
+} from "@/lib/types/streaming-hooks";
 
 /**
  * Custom hook to manage Twilio track events.
@@ -19,10 +24,7 @@ export const useTwilioTrackEvents = (
   isConnected: boolean,
   videoTrack: LocalVideoTrack | null,
   audioTrack: LocalAudioTrack | null,
-  onTrackStatusChange: (
-    trackType: "video" | "audio",
-    isEnabled: boolean
-  ) => void
+  onTrackStatusChange: TrackStatusChangeHandler
 ) => {
   useEffect(() => {
     if (!isConnected) return;
@@ -75,10 +77,7 @@ export const useNetworkQualityMonitor = (
   room: Room | null,
   currentCameraId: string,
   currentVideoTrack: LocalVideoTrack | null,
-  onQualityChange: (
-    quality: "low" | "medium" | "high",
-    result: { success: boolean; track: LocalVideoTrack | null; error?: string }
-  ) => void,
+  onQualityChange: QualityChangeHandler,
   interval: number = 5000
 ) => {
   useEffect(() => {
@@ -87,10 +86,6 @@ export const useNetworkQualityMonitor = (
     const networkQualityInterval = setInterval(async () => {
       const localParticipant = room?.localParticipant;
       if (!localParticipant) return;
-
-      interface NetworkQualityStats {
-        networkQualityLevel?: number;
-      }
 
       const quality = (localParticipant as NetworkQualityStats)
         .networkQualityLevel;

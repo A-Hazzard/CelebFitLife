@@ -17,14 +17,7 @@ import {
   setupReconnectionHandlers,
 } from "@/lib/utils/twilio";
 import { createLogger } from "@/lib/utils/logger";
-
-// Cache for storing tokens and room connections
-interface TokenCache {
-  [key: string]: {
-    token: string;
-    expiresAt: number; // Timestamp in milliseconds
-  };
-}
+import { TokenCache } from "@/lib/types/services";
 
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000; // 5 minutes buffer before token expiry
 

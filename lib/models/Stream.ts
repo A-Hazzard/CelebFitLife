@@ -1,6 +1,6 @@
 import { Timestamp } from "firebase/firestore";
 
-export interface Stream {
+export type Stream = {
   id: string;
   slug: string;
   title: string;
@@ -31,4 +31,4 @@ export interface Stream {
   uniqueViewers?: number;
   maxConcurrentViewers?: number;
   totalWatchTime?: number;
-}
+};
