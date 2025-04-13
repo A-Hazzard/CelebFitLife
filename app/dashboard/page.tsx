@@ -10,7 +10,7 @@ import { StreamerCard } from "@/components/streaming/StreamerCard";
 import ActivityLog from "@/components/dashboard/ActivityLog";
 import StreamStats from "@/components/dashboard/StreamStats";
 import { fetchAllUserStreams } from "@/lib/helpers/dashboard";
-import { StreamDoc } from "@/lib/types/streaming";
+import { StreamDoc } from "@/lib/types/streaming.types";
 import {
   Activity,
   Bell,
@@ -244,7 +244,7 @@ export default function DashboardPage() {
     <div className="w-56 mt-1 bg-gray-800 border-gray-700 rounded-md overflow-hidden">
       <DropdownMenuLabel>
         <div className="flex flex-col">
-          <span className="font-medium">{currentUser?.name || "User"}</span>
+          <span className="font-medium">{currentUser?.username || "User"}</span>
           <span className="text-xs text-gray-400 mt-1 break-words">
             {currentUser?.email || ""}
           </span>
@@ -489,7 +489,7 @@ export default function DashboardPage() {
           {/* Quick Actions Section */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
             <h2 className="text-xl font-semibold">
-              Welcome back, {currentUser?.name || "Streamer"}!
+              Welcome back, {currentUser?.username || "Streamer"}!
             </h2>
             <div className="flex space-x-3 w-full sm:w-auto">
               <Button

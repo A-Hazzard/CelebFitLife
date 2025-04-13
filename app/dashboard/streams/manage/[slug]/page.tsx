@@ -63,7 +63,7 @@ import {
   Speech,
 } from "lucide-react";
 // Import Stream type from the models
-import { Stream } from "@/lib/models/Stream";
+import { Stream } from "@/lib/types/streaming.types";
 import { toast } from "sonner";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import ActivityLog from "@/components/streaming/ActivityLog";
@@ -1321,7 +1321,7 @@ export default function ManageStreamPage() {
                       <div className="flex justify-between">
                         <span className="text-gray-400">Started At</span>
                         <span className="font-medium">
-                          {stream.startedAt.toDate().toLocaleString()}
+                          {formatTimestamp(stream.startedAt)}
                         </span>
                       </div>
                     )}
@@ -1330,7 +1330,7 @@ export default function ManageStreamPage() {
                       <div className="flex justify-between">
                         <span className="text-gray-400">Ended At</span>
                         <span className="font-medium">
-                          {stream.endedAt.toDate().toLocaleString()}
+                          {formatTimestamp(stream.endedAt)}
                         </span>
                       </div>
                     )}
@@ -1541,4 +1541,22 @@ function ModerateUserModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+function formatTimestamp(
+  timestamp: string | Date | { toDate: () => Date } | number
+): string {
+  if (timestamp instanceof Date) {
+    return timestamp.toLocaleString();
+  } else if (typeof timestamp === "string") {
+    return new Date(timestamp).toLocaleString();
+  } else if (typeof timestamp === "number") {
+    return new Date(timestamp).toLocaleString();
+  } else if (timestamp && typeof timestamp.toDate === "function") {
+    // Handle Firebase Timestamp objects
+    return timestamp.toDate().toLocaleString();
+  } else {
+    // Fallback for any other types
+    return String(timestamp);
+  }
 }

@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { ActivityItem } from "@/lib/types/ui";
-import { StreamDoc } from "@/lib/types/streaming";
+import { StreamDoc } from "@/lib/types/streaming.types";
 
 /**
  * Fetches live streams for the specified user
@@ -88,22 +88,49 @@ export const fetchPastStreams = async (
     throw new Error("User ID is required to fetch past streams");
   }
 
-  const pastStreamQuery = query(
-    collection(db, "streams"),
-    where("userId", "==", userId),
-    where("hasEnded", "==", true),
-    orderBy("endedAt", "desc"),
-    limit(limitCount)
-  );
+  try {
+    // First get streams by userId without the complex ordering that requires an index
+    const userStreamsQuery = query(
+      collection(db, "streams"),
+      where("userId", "==", userId),
+      where("hasEnded", "==", true)
+    );
 
-  const snapshot = await getDocs(pastStreamQuery);
-  return snapshot.docs.map(
-    (doc) =>
-      ({
-        id: doc.id,
-        ...doc.data(),
-      } as StreamDoc)
-  );
+    const snapshot = await getDocs(userStreamsQuery);
+
+    // Then manually sort and limit the results in memory
+    // This approach won't be efficient for large datasets but works well for small datasets
+    const pastStreams = snapshot.docs
+      .map(
+        (doc) =>
+          ({
+            id: doc.id,
+            ...doc.data(),
+          } as StreamDoc)
+      )
+      .sort((a, b) => {
+        // Sort by endedAt date, most recent first
+        const aDate = a.endedAt
+          ? typeof a.endedAt === "string"
+            ? new Date(a.endedAt)
+            : a.endedAt.toDate()
+          : new Date(0);
+
+        const bDate = b.endedAt
+          ? typeof b.endedAt === "string"
+            ? new Date(b.endedAt)
+            : b.endedAt.toDate()
+          : new Date(0);
+
+        return bDate.getTime() - aDate.getTime();
+      })
+      .slice(0, limitCount);
+
+    return pastStreams;
+  } catch (error) {
+    console.error("Error fetching past streams:", error);
+    return [];
+  }
 };
 
 /**

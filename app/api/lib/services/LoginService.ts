@@ -2,14 +2,13 @@ import { adminDb } from "@/lib/firebase/admin";
 import bcrypt from "bcryptjs";
 import { SessionManager } from "@/lib/session";
 import { z } from "zod";
-import { UserData } from "../models/userData"; // Updated path
+import { User, UserSessionData } from "@/lib/types/user"; // Import types from user.ts
 import {
   ValidationError,
   AuthenticationError,
   NotFoundError,
   InvalidDataError,
 } from "../errors/apiErrors"; // Updated path
-import { UserSessionData } from "@/lib/types/auth"; // Import type from shared types
 
 // Zod Schema for login request validation
 const loginSchema = z.object({
@@ -83,27 +82,30 @@ export class LoginService {
   prepareUserData(
     userDoc: FirebaseFirestore.DocumentSnapshot,
     userData: FirebaseFirestore.DocumentData
-  ): UserData {
+  ): User {
     const userId = typeof userDoc.id === "string" ? userDoc.id : "";
     if (!userId) {
       console.error("Firestore document ID is missing or not a string.");
       throw new InvalidDataError("User ID is missing or invalid.");
     }
 
-    // Construct the response user object matching the API's UserData type
+    // Construct the response user object matching the User type
     return {
-      uid: userId, // Keep uid as expected by the API's UserData type
+      id: userId,
+      uid: userId, // Keep uid as expected by the API's User type
       email: userData.email || "",
       username: userData.username || "",
       phone: userData.phone || "",
       country: userData.country || "",
       city: userData.city || "",
       age: userData.age || 0,
-      // Include isStreamer and isAdmin based on the role object
-      isStreamer: userData.role?.streamer || false,
-      isAdmin: userData.role?.admin || false,
+      // Use role structure from User type
+      role: {
+        admin: userData.role?.admin || false,
+        streamer: userData.role?.streamer || false,
+        viewer: userData.role?.viewer || true, // Default to true
+      },
       createdAt: userData.createdAt || new Date().toISOString(),
-      // Removed the nested 'role' object and other fields not in the API's UserData type
     };
   }
 }

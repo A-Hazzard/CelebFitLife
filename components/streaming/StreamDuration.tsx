@@ -5,7 +5,7 @@ import { Clock } from "lucide-react";
 import { Timestamp } from "firebase/firestore";
 
 type StreamDurationProps = {
-  startTime: Timestamp | Date | null;
+  startTime: Timestamp | Date | string | null;
   className?: string;
 };
 
@@ -19,8 +19,21 @@ export function StreamDuration({
     if (!startTime) return;
 
     const updateDuration = () => {
-      const start =
-        startTime instanceof Timestamp ? startTime.toDate() : startTime;
+      // Convert startTime to Date based on its type
+      let start: Date;
+
+      if (startTime instanceof Timestamp) {
+        start = startTime.toDate();
+      } else if (startTime instanceof Date) {
+        start = startTime;
+      } else if (typeof startTime === "string") {
+        start = new Date(startTime);
+      } else {
+        // If we can't determine a valid date, return early
+        console.error("Invalid startTime format:", startTime);
+        return;
+      }
+
       const now = new Date();
       const diffMs = now.getTime() - start.getTime();
 

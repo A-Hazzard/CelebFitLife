@@ -1,6 +1,6 @@
 import { TwilioError, connect } from "twilio-video";
 import { ClientTwilioService } from "@/lib/services/ClientTwilioService";
-import { TwilioConnectionResult } from "@/lib/types/streaming";
+import { TwilioConnectionResult } from "@/lib/types/streaming.types";
 
 /**
  * Manages connection to a Twilio Video room with comprehensive error handling

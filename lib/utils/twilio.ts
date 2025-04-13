@@ -17,8 +17,11 @@ import {
   RemoteTrack,
 } from "twilio-video";
 import { createLogger } from "@/lib/utils/logger";
-import { toStreamingError } from "@/lib/types/streaming";
-import { VideoTrackOptions, AudioTrackOptions } from "@/lib/types/twilio";
+import { toStreamingError } from "@/lib/utils/errorHandler";
+import {
+  VideoTrackOptions,
+  AudioTrackOptions,
+} from "@/lib/types/streaming.types";
 
 // Create context-specific loggers
 const twilioLogger = createLogger("Twilio");
@@ -283,15 +286,15 @@ export function setupReconnectionHandlers(
     if (onReconnected) onReconnected();
   };
 
-  const handleDisconnected = (_room: Room, error?: Error) => {
+  const handleDisconnected = (disconnectedRoom: Room, error?: Error) => {
     if (error) {
       roomLogger.error(
-        `Room ${room.name} disconnected with error:`,
+        `Room ${disconnectedRoom.name} disconnected with error:`,
         toStreamingError(error)
       );
       if (onFailed) onFailed(error);
     } else {
-      roomLogger.info(`Room ${room.name} disconnected normally`);
+      roomLogger.info(`Room ${disconnectedRoom.name} disconnected normally`);
     }
   };
 

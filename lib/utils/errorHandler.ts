@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server";
+import { TwilioError } from "twilio-video";
+import {
+  StreamingErrorType,
+  UnknownError,
+  TwilioStreamingError,
+  NetworkError,
+} from "@/lib/types/streaming.types";
 
 export class ApiError extends Error {
   statusCode: number;
@@ -35,3 +42,91 @@ export const ErrorTypes = {
     new ApiError(message, 500),
   VALIDATION: (message: string) => new ApiError(message, 422),
 };
+
+/**
+ * Converts an unknown error to a StreamingErrorType
+ * Handles various error types including Twilio errors, standard errors, and custom errors
+ */
+export function toStreamingError(error: unknown): StreamingErrorType {
+  if (!error) {
+    return {
+      name: "UnknownError",
+      message: "An unknown error occurred",
+      unknownError: true,
+    };
+  }
+
+  // Return as is if it's already a StreamingError
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    "message" in error
+  ) {
+    // Check if it's already one of our specific error types
+    if (
+      "twilioError" in error ||
+      "domError" in error ||
+      "deviceError" in error ||
+      "trackError" in error ||
+      "networkError" in error ||
+      "firestoreError" in error
+    ) {
+      return error as StreamingErrorType;
+    }
+
+    // If it's a TwilioError, convert it
+    if (error instanceof TwilioError) {
+      const twilioStreamingError: TwilioStreamingError = {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        twilioError: true,
+      };
+      return twilioStreamingError;
+    }
+
+    // For standard Error objects
+    if (error instanceof Error) {
+      const unknownError: UnknownError = {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        unknownError: true,
+      };
+
+      // Check for network errors
+      if (
+        error.message.includes("network") ||
+        error.message.includes("connection") ||
+        error.message.includes("offline") ||
+        error.message.includes("internet")
+      ) {
+        const networkError: NetworkError = {
+          ...unknownError,
+          networkError: true,
+        };
+        return networkError;
+      }
+
+      return unknownError;
+    }
+  }
+
+  // For string errors
+  if (typeof error === "string") {
+    return {
+      name: "StringError",
+      message: error,
+      unknownError: true,
+    };
+  }
+
+  // Fallback for truly unknown errors
+  return {
+    name: "UnknownError",
+    message: "Unknown error type: " + typeof error,
+    unknownError: true,
+  };
+}

@@ -4,9 +4,13 @@ This directory contains the TypeScript type definitions used throughout the Cele
 
 ## Structure
 
+- `streaming.types.ts`: Consolidated streaming-related types (combines the former `streaming.ts`, `streaming-components.ts`, `streaming-hooks.ts`, and `twilio.ts`)
 - `user.ts`: Core user-related types, including User types and DTOs
-- `streaming.ts`: Streaming-related types, including Stream, Streamer, and error types
-- `auth.ts`: Authentication-related types like LoginResult
+- `ui.ts`: UI component props and related types
+- `dashboard.ts`: Dashboard-related types
+- `streamer.ts`: Streamer profile and related types
+- `payment.ts`: Payment-related types
+- Additional type files for other domain-specific types
 
 ## Usage Guidelines
 
@@ -16,7 +20,11 @@ This directory contains the TypeScript type definitions used throughout the Cele
    - Relative imports within the `lib` directory: `import { User } from '../types/user'`
    - Absolute imports from root: `import { User } from '@/lib/types/user'`
 
-3. **Versioning**: When making changes to these types, ensure backward compatibility or update all references.
+3. **Types Only, No Functions**: This directory should contain only type definitions. Utility functions should be placed in:
+   - `lib/utils/`: For general utility functions
+   - `lib/helpers/`: For API and business logic-related helpers
+
+4. **Versioning**: When making changes to these types, ensure backward compatibility or update all references.
 
 ## Types vs Interfaces
 
@@ -24,6 +32,7 @@ For consistency across the codebase, we use `type` declarations for all our type
 
 - Use `type` for object types, union types, mapped types, and type aliases
 - Use intersection (`&`) to combine types rather than inheritance
+- Do not use `interface` - prefer `type` for all type definitions
 
 ## Extensions
 

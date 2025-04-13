@@ -1,3 +1,7 @@
+/**
+ * Category type definitions
+ */
+
 export type Category = {
   id?: string;
   name: string;

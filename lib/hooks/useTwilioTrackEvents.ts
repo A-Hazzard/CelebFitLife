@@ -9,7 +9,7 @@ import {
   TrackStatusChangeHandler,
   NetworkQualityStats,
   QualityChangeHandler,
-} from "@/lib/types/streaming-hooks";
+} from "@/lib/types/streaming.types";
 
 /**
  * Custom hook to manage Twilio track events.

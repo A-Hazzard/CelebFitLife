@@ -1,4 +1,4 @@
-import { Streamer } from "@/lib/types/streaming";
+import { Streamer } from "@/lib/types/streaming.types";
 
 export const fetchStreamersFromDB = async (): Promise<Streamer[]> => {
   try {

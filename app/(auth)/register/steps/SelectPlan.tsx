@@ -59,7 +59,6 @@ export default function SelectPlan() {
   const handleNextStep = () => {
     nextStep({
       selectedPlan: selectedPlan.name,
-      planId: selectedPlan.id,
       plan: selectedPlan.id,
       planDetails: {
         price: selectedPlan.price,

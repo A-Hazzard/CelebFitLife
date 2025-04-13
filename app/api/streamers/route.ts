@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/client";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { Stream, StreamerWithStreams } from "@/lib/types/streaming";
+import { Stream, StreamerWithStreams } from "@/lib/types/streaming.types";
 
 // Define a simpler Streamer type that matches the database structure
 type Streamer = Omit<StreamerWithStreams, "streams" | "Category" | "Tags">;

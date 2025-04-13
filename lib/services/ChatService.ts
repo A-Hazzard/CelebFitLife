@@ -4,7 +4,7 @@
  */
 
 import { db } from "@/lib/firebase/client";
-import { ChatMessage } from "@/lib/types/streaming";
+import { ChatMessage } from "@/lib/types/streaming.types";
 import {
   collection,
   addDoc,

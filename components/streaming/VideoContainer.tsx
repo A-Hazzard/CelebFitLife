@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { VideoContainerProps } from "@/lib/types/streaming-components";
+import { VideoContainerProps } from "@/lib/types/streaming.types";
 import { clearVideoContainer } from "@/lib/utils/twilio";
 
 export const VideoContainer = ({

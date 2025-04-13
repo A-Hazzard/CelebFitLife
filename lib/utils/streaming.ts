@@ -10,13 +10,13 @@
 
 import { createLogger } from "./logger";
 import {
-  Streamer,
   Stream,
   StreamStatus,
   StreamUpdateData,
   StreamWithDetails,
-  toStreamingError,
-} from "@/lib/types/streaming";
+  StreamerWithStreams,
+} from "@/lib/types/streaming.types";
+import { toStreamingError } from "@/lib/utils/errorHandler";
 
 // Create context-specific logger
 const streamLogger = createLogger("Streaming");
@@ -27,10 +27,10 @@ const streamLogger = createLogger("Streaming");
  * Filters an array of streamers based on selected categories and tags
  */
 export function filterStreamers(
-  streamers: Streamer[],
+  streamers: StreamerWithStreams[],
   selectedCategories: string[] = [],
   selectedTags: string[] = []
-): Streamer[] {
+): StreamerWithStreams[] {
   if (!streamers || streamers.length === 0) {
     return [];
   }
@@ -41,19 +41,16 @@ export function filterStreamers(
   }
 
   return streamers.filter((streamer) => {
-    // Filter by categories if any are selected
+    // Filter by category if any are selected
     const matchesCategory =
       selectedCategories.length === 0 ||
-      (streamer.categories &&
-        streamer.categories.some((category) =>
-          selectedCategories.includes(category)
-        ));
+      (streamer.Category && selectedCategories.includes(streamer.Category));
 
     // Filter by tags if any are selected
     const matchesTags =
       selectedTags.length === 0 ||
-      (streamer.tags &&
-        streamer.tags.some((tag) => selectedTags.includes(tag)));
+      (streamer.Tags &&
+        streamer.Tags.some((tag) => selectedTags.includes(tag)));
 
     return matchesCategory && matchesTags;
   });

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { StreamChatProps } from "@/lib/types/streaming-components";
+import { StreamChatProps } from "@/lib/types/streaming.types";
 
 const StreamChat: React.FC<StreamChatProps> = ({
   streamId,

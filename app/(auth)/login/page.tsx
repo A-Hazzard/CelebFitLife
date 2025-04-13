@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import Image from "next/image";
 import fitImage from "@/public/fitness.png";
-import { convertUserToUserData } from "@/lib/utils/userUtils";
+import { normalizeUser } from "@/lib/utils/userUtils";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 40 },
@@ -76,7 +76,7 @@ function LoginPageContent() {
         });
 
         // Convert User to UserData and set in global store
-        const userData = convertUserToUserData(result.user);
+        const userData = normalizeUser(result.user);
         setUser(userData);
 
         // Safe navigation with fallbacks for missing role - check explicitly for true

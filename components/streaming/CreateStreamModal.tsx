@@ -327,11 +327,26 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
             />
             {thumbnail && (
               <div className="relative w-full aspect-video rounded-md overflow-hidden mt-2 border border-gray-700">
+                <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
+                  <span className="text-sm text-gray-400">
+                    Loading thumbnail...
+                  </span>
+                </div>
                 <Image
                   src={thumbnail}
                   alt="Stream thumbnail preview"
                   fill
                   className="object-cover"
+                  onError={(e) => {
+                    // Hide the image on error and show a fallback message
+                    e.currentTarget.style.display = "none";
+                    e.currentTarget.parentElement
+                      ?.querySelector("div")
+                      ?.classList.remove("hidden");
+                    toast.error(
+                      "Couldn't load image from URL. Make sure it's a valid image URL."
+                    );
+                  }}
                 />
               </div>
             )}

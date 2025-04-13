@@ -4,8 +4,11 @@
  * It does not directly interact with the database.
  */
 
-import { UserCreateDTO, UserLoginDTO, UserResponseDTO } from "../types/user";
-import { RegistrationData } from "@/lib/types/auth";
+import {
+  UserResponseDTO,
+  UserLoginForm,
+  UserRegistrationData,
+} from "../types/user";
 import { z } from "zod";
 
 // Define login validation schema
@@ -21,7 +24,7 @@ export class AuthService {
   /**
    * Register a user by making an API call
    */
-  async register(userData: UserCreateDTO): Promise<UserResponseDTO> {
+  async register(userData: UserRegistrationData): Promise<UserResponseDTO> {
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -47,7 +50,7 @@ export class AuthService {
   /**
    * Login a user by making an API call
    */
-  async login(credentials: UserLoginDTO): Promise<UserResponseDTO> {
+  async login(credentials: UserLoginForm): Promise<UserResponseDTO> {
     try {
       // Validate inputs with Zod
       const validatedCredentials = loginSchema.parse(credentials);
@@ -119,7 +122,7 @@ export class AuthService {
   /**
    * Register a new user through the registration flow
    */
-  async registerUser(data: RegistrationData): Promise<void> {
+  async registerUser(data: UserRegistrationData): Promise<void> {
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",

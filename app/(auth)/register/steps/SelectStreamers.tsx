@@ -199,9 +199,7 @@ export default function SelectStreamers() {
           createdAt: new Date().toISOString(),
         };
 
-        // Remove redundant fields
-        delete finalUserData.selectedStreamers;
-        delete finalUserData.planId;
+        // Only delete known properties that should be excluded
         delete finalUserData.planDetails;
 
         // Check if email already exists

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { doc, onSnapshot, Unsubscribe } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import { Stream } from "@/lib/types/streaming";
+import { Stream } from "@/lib/types/streaming.types";
 import { useRouter } from "next/navigation";
 import { createLogger } from "@/lib/utils/logger";
 

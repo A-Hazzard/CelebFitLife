@@ -1,5 +1,5 @@
 import React from "react";
-import { EnrichedStreamer } from "@/lib/types/streaming";
+import { EnrichedStreamer } from "@/lib/types/streaming.types";
 import Image from "next/image";
 
 const StreamerCard: React.FC<{ streamer: EnrichedStreamer }> = ({

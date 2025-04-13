@@ -1,6 +1,6 @@
 import twilio from "twilio";
 import { ValidationError } from "../errors/apiErrors";
-import { CacheEntry } from "@/lib/types/twilio";
+import { CacheEntry } from "@/lib/types/streaming.types";
 
 /**
  * Typed token cache to avoid using any

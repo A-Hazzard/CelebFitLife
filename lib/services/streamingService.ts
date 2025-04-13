@@ -4,7 +4,7 @@
  */
 
 import { StreamerSelection, RecommendedStreamer } from "@/lib/types/streamer";
-import { toStreamingError } from "@/lib/types/streaming";
+import { toStreamingError } from "@/lib/utils/errorHandler";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 

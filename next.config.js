@@ -35,6 +35,14 @@ const nextConfig = {
         protocol: "https",
         hostname: "source.unsplash.com",
       },
+      {
+        protocol: "https",
+        hostname: "th.bing.com",
+      },
+      {
+        protocol: "https",
+        hostname: "**.bing.com",
+      },
     ],
   },
   webpack: (config, { isServer }) => {

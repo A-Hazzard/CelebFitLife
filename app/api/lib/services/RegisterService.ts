@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { UserService } from "./UserService";
-import { User } from "../models/User";
+import { User } from "@/lib/types/user";
 import {
   ValidationError,
   UserExistsError,

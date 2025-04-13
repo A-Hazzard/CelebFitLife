@@ -4,7 +4,7 @@ import { fetchStreamersWithStreams } from "@/app/api/streamers/route";
 import {
   StreamerWithStreams,
   EnrichedStreamer,
-} from "@/lib/types/streaming";
+} from "@/lib/types/streaming.types";
 
 type Store = {
   streamers: EnrichedStreamer[];

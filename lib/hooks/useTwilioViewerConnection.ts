@@ -11,7 +11,7 @@ import {
   clearVideoContainer,
   updateTrackEnabledState,
 } from "@/lib/utils/twilio";
-import { WithListeners, WithDetach } from "@/lib/types/streaming";
+import { WithListeners, WithDetach } from "@/lib/types/streaming.types";
 import { createLogger } from "@/lib/utils/logger";
 
 // Create logger

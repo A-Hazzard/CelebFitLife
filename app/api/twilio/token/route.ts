@@ -5,7 +5,7 @@ import {
   TokenRequestBody,
   TokenResponseSuccess,
   TokenResponseError,
-} from "@/lib/types/twilio";
+} from "@/lib/types/streaming.types";
 
 // Make sure this is a server-side route by using the 'use server' directive
 export const dynamic = "force-dynamic";

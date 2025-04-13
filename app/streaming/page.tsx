@@ -238,10 +238,8 @@ export default function UserDashboard() {
                   className="relative h-10 w-10 rounded-full"
                 >
                   <Image
-                    src={
-                      currentUser?.profileImage || "/images/default-avatar.jpg"
-                    }
-                    alt={currentUser?.name || "User"}
+                    src="/images/default-avatar.png"
+                    alt={currentUser?.username || "User"}
                     width={40}
                     height={40}
                     className="rounded-full"

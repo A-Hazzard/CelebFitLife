@@ -17,19 +17,4 @@ export type PaymentDetails = {
   customerId?: string;
 };
 
-// Import service payment details type
-import { PaymentDetails as ServicePaymentDetails } from "@/lib/types/services";
-
-/**
- * Maps payment details from UI to service format
- */
-export function mapToServicePaymentDetails(
-  details: PaymentDetails
-): ServicePaymentDetails {
-  return {
-    cardNumber: details.metadata?.cardNumber || "4242424242424242",
-    expiryDate: details.metadata?.expiryDate || "12/25",
-    cvv: details.metadata?.cvv || "123",
-    name: details.metadata?.name || "Test User",
-  };
-}
+// The mapToServicePaymentDetails function has been moved to lib/utils/paymentUtils.ts

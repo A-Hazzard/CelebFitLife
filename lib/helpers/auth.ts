@@ -4,7 +4,10 @@
  * They should remain in the root lib/helpers directory.
  */
 
-import { LoginResult, RegistrationData } from "@/lib/types/auth";
+import {
+  LoginResult,
+  UserRegistrationData as RegistrationData,
+} from "@/lib/types/user";
 import axios, { AxiosError } from "axios";
 import { User } from "../types/user";
 import { createLogger } from "@/lib/utils/logger";

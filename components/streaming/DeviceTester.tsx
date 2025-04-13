@@ -13,7 +13,7 @@ import {
 import {
   DeviceOption,
   DeviceTesterProps,
-} from "@/lib/types/streaming-components";
+} from "@/lib/types/streaming.types";
 
 // Constants
 // Comment out unused constants

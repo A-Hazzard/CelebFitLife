@@ -178,10 +178,8 @@ export default function FeedsPage() {
     const post: Post = {
       id: Date.now().toString(),
       user: {
-        name: currentUser.name || "Anonymous",
-        image:
-          currentUser.profileImage ||
-          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
+        name: currentUser.username || "Anonymous",
+        image: "/images/default-avatar.png",
         username: currentUser.username || "@anonymous",
         isStreamer: currentUser.role?.streamer || false,
       },
@@ -322,10 +320,8 @@ export default function FeedsPage() {
                   className="relative h-10 w-10 rounded-full"
                 >
                   <Image
-                    src={
-                      currentUser?.profileImage || "/images/default-avatar.jpg"
-                    }
-                    alt={currentUser?.name || "User"}
+                    src="/images/default-avatar.png"
+                    alt={currentUser?.username || "User"}
                     width={40}
                     height={40}
                     className="rounded-full"

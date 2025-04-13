@@ -69,6 +69,20 @@ export class ClientTwilioService {
             `Failed to get Twilio token: HTTP ${response.status}`
           );
         }
+
+        // Provide more specific error messages based on status code
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(
+            "Authentication required. Please refresh the page and try again."
+          );
+        } else if (response.status === 404) {
+          throw new Error(
+            "Stream not found. It may have ended or been removed."
+          );
+        } else if (response.status >= 500) {
+          throw new Error("Server error. Please try again later.");
+        }
+
         throw new Error(
           errorData.error ||
             `Failed to get Twilio token: HTTP ${response.status}`
@@ -98,6 +112,25 @@ export class ClientTwilioService {
       return data.token;
     } catch (error) {
       this.logger.error(`Error getting Twilio token:`, error as Error);
+
+      // Enhance error message with recovery steps
+      const originalError = error as Error;
+      const errorMessage = originalError.message || "Unknown error";
+
+      if (
+        errorMessage.includes("authentication") ||
+        errorMessage.includes("token")
+      ) {
+        throw new Error(`${errorMessage} Please try refreshing the page.`);
+      } else if (
+        errorMessage.includes("network") ||
+        navigator.onLine === false
+      ) {
+        throw new Error(
+          "Network error. Please check your internet connection and try again."
+        );
+      }
+
       throw error;
     }
   }

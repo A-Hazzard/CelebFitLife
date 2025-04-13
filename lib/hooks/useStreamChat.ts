@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { toast } from "sonner";
-import { ChatMessage, StreamChatHookResult } from "@/lib/types/streaming-hooks";
+import { ChatMessage, StreamChatHookResult } from "@/lib/types/streaming.types";
 
 /**
  * Custom hook to manage chat functionality for streams.

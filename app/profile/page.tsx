@@ -288,10 +288,8 @@ export default function ProfilePage() {
                   className="relative h-10 w-10 rounded-full"
                 >
                   <Image
-                    src={
-                      currentUser?.profileImage || "/images/default-avatar.jpg"
-                    }
-                    alt={currentUser?.name || "User"}
+                    src="/images/default-avatar.png"
+                    alt={currentUser?.username || "User"}
                     width={40}
                     height={40}
                     className="rounded-full"
@@ -335,17 +333,17 @@ export default function ProfilePage() {
           <div className="bg-gray-800 rounded-xl p-6 border border-brandOrange/30 relative">
             <div className="flex items-center gap-6">
               <Image
-                src={currentUser?.profileImage || "/images/default-avatar.jpg"}
-                alt={currentUser?.name || "User"}
+                src="/images/default-avatar.png"
+                alt={currentUser?.username || "User"}
                 width={120}
                 height={120}
                 className="rounded-full border-4 border-brandOrange"
               />
               <div className="flex-1">
                 <h1 className="text-2xl font-bold text-white mb-2">
-                  {currentUser?.name}
+                  {currentUser?.username}
                 </h1>
-                <p className="text-gray-400 mb-4">{currentUser?.username}</p>
+                <p className="text-gray-400 mb-4">@{currentUser?.username}</p>
                 <div className="flex gap-4">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-brandOrange">
@@ -1076,10 +1074,8 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex items-start gap-3 p-4 bg-gray-700/50 rounded-lg hover:bg-gray-700/70 transition-colors">
                   <Image
-                    src={
-                      currentUser?.profileImage || "/images/default-avatar.jpg"
-                    }
-                    alt="Profile"
+                    src="/images/default-avatar.png"
+                    alt={currentUser?.username || "User"}
                     width={40}
                     height={40}
                     className="rounded-full"
@@ -1087,7 +1083,7 @@ export default function ProfilePage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h4 className="font-medium text-white">
-                        {currentUser?.name}
+                        {currentUser?.username}
                       </h4>
                       <span className="text-xs text-gray-400">2 hours ago</span>
                       <Badge className="bg-blue-500/20 text-blue-400">
@@ -1113,10 +1109,8 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex items-start gap-3 p-4 bg-gray-700/50 rounded-lg hover:bg-gray-700/70 transition-colors">
                   <Image
-                    src={
-                      currentUser?.profileImage || "/images/default-avatar.jpg"
-                    }
-                    alt="Profile"
+                    src="/images/default-avatar.png"
+                    alt={currentUser?.username || "User"}
                     width={40}
                     height={40}
                     className="rounded-full"
@@ -1124,7 +1118,7 @@ export default function ProfilePage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h4 className="font-medium text-white">
-                        {currentUser?.name}
+                        {currentUser?.username}
                       </h4>
                       <span className="text-xs text-gray-400">1 day ago</span>
                       <Badge className="bg-green-500/20 text-green-400">

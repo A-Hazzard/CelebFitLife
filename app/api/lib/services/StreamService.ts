@@ -1,8 +1,12 @@
 import { adminDb, convertDocToObj } from "@/lib/firebase/admin"; // Correct path
-import { Stream, StreamCreateDTO, StreamUpdateDTO } from "../models/Stream"; // Correct path
+import {
+  Stream,
+  ApiStreamCreateDTO,
+  ApiStreamUpdateDTO,
+  StreamApiUpdateData,
+} from "@/lib/types/streaming.types"; // Import from consolidated types
 import { NotFoundError, InvalidDataError } from "../errors/apiErrors"; // Use API errors
 import { nanoid } from "nanoid";
-import { StreamApiUpdateData } from "@/lib/types/streaming";
 
 /**
  * Service for managing streams in the database (API-specific)
@@ -87,7 +91,7 @@ export class StreamService {
   /**
    * Create a new stream
    */
-  async create(streamData: StreamCreateDTO): Promise<Stream> {
+  async create(streamData: ApiStreamCreateDTO): Promise<Stream> {
     try {
       if (!streamData.createdBy) {
         throw new InvalidDataError(
@@ -96,13 +100,13 @@ export class StreamService {
       }
       const slug = await this.generateUniqueSlug();
 
-      const newStream: Omit<Stream, "id"> = {
+      // Create stream object without scheduledAt first
+      const newStream = {
         slug,
         createdBy: streamData.createdBy,
         createdAt: new Date().toISOString(),
         title: streamData.title || "Untitled Stream",
         description: streamData.description || "",
-        scheduledAt: streamData.scheduledAt || new Date().toISOString(), // Default to now if not provided
         hasStarted: false,
         hasEnded: false,
         audioMuted: false,
@@ -112,7 +116,16 @@ export class StreamService {
         lastUpdated: new Date().toISOString(),
       };
 
-      const docRef = await this.streamsCollection.add(newStream);
+      // Add scheduledAt field with the correct type for Firestore
+      // Firestore will convert this to a Timestamp object
+      const streamToCreate = {
+        ...newStream,
+        scheduledAt: streamData.scheduledAt
+          ? new Date(streamData.scheduledAt)
+          : new Date(),
+      };
+
+      const docRef = await this.streamsCollection.add(streamToCreate);
       const doc = await docRef.get();
       const result = convertDocToObj<Stream>(doc);
       if (!result) {
@@ -135,7 +148,7 @@ export class StreamService {
   /**
    * Update a stream
    */
-  async update(id: string, streamData: StreamUpdateDTO): Promise<Stream> {
+  async update(id: string, streamData: ApiStreamUpdateDTO): Promise<Stream> {
     const docRef = this.streamsCollection.doc(id);
     const doc = await docRef.get();
 
@@ -149,10 +162,17 @@ export class StreamService {
       throw new InvalidDataError("No valid fields provided for update.");
     }
 
-    await docRef.update({
+    // Convert scheduledAt to Date if it exists
+    const dataToUpdate = {
       ...safeUpdateData,
       lastUpdated: new Date().toISOString(),
-    });
+    };
+
+    if (dataToUpdate.scheduledAt) {
+      dataToUpdate.scheduledAt = new Date(dataToUpdate.scheduledAt);
+    }
+
+    await docRef.update(dataToUpdate);
 
     const updatedDoc = await docRef.get();
     if (!updatedDoc.exists) {

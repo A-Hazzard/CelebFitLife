@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { EditStreamFormData } from "@/lib/types/ui";
-import { Stream } from "@/lib/models/Stream";
+import { Stream } from "@/lib/types/streaming.types";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import {
@@ -52,7 +52,7 @@ const EditStreamModal: React.FC<EditStreamModalProps> = ({
   const [title, setTitle] = useState(stream.title || "");
   const [description, setDescription] = useState(stream.description || "");
   const [category, setCategory] = useState(stream.category || "Fitness");
-  const [language, setLanguage] = useState(stream.language || "en");
+  const [language, setLanguage] = useState("en");
   const [tagInput, setTagInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 

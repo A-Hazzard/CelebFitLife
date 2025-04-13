@@ -4,7 +4,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import Image from "next/image";
-import { StreamStatusOverlayProps } from "@/lib/types/streaming-components";
+import { StreamStatusOverlayProps } from "@/lib/types/streaming.types";
 
 export const StreamStatusOverlay = ({
   status,
@@ -16,7 +16,11 @@ export const StreamStatusOverlay = ({
   thumbnail,
   streamTitle,
 }: StreamStatusOverlayProps) => {
-  const getStatusMessage = (): { title: string; subtitle: string } => {
+  const getStatusMessage = (): {
+    title: string;
+    subtitle: string;
+    actionText?: string;
+  } => {
     switch (status) {
       case "waiting":
         return {
@@ -29,9 +33,23 @@ export const StreamStatusOverlay = ({
           subtitle: "Please wait while we connect you...",
         };
       case "error":
+        let actionText: string | undefined;
+
+        if (error) {
+          if (error.includes("token") || error.includes("refresh")) {
+            actionText = "Refresh Page";
+          } else if (error.includes("network") || error.includes("internet")) {
+            actionText = "Check Connection";
+          } else if (error.includes("ended") || error.includes("offline")) {
+          } else {
+            actionText = "Try Again";
+          }
+        }
+
         return {
           title: "Connection error",
           subtitle: error || "Failed to connect to the stream",
+          actionText,
         };
       case "ended":
         return {
@@ -53,7 +71,15 @@ export const StreamStatusOverlay = ({
 
   if (status === "active") return null;
 
-  const { title, subtitle } = getStatusMessage();
+  const { title, subtitle, actionText } = getStatusMessage();
+
+  const handleAction = () => {
+    if (error?.includes("token") || error?.includes("refresh")) {
+      window.location.reload();
+    } else if (onRetry) {
+      onRetry();
+    }
+  };
 
   return (
     <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center p-4 text-center z-10">
@@ -89,28 +115,40 @@ export const StreamStatusOverlay = ({
           <h3 className="text-lg font-medium text-white mt-2">{streamTitle}</h3>
         )}
 
-        {status === "error" && onRetry && (
+        {status === "error" && (
           <div className="mt-4">
-            <Button
-              onClick={onRetry}
-              disabled={
-                isRetrying || connectionAttempts >= (maxConnectionAttempts || 5)
-              }
-              className="bg-primary hover:bg-primary/90 text-white"
-            >
-              {isRetrying ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Retrying...
-                </>
-              ) : (
-                "Try Again"
-              )}
-            </Button>
+            {onRetry && (
+              <Button
+                onClick={handleAction}
+                disabled={
+                  isRetrying ||
+                  connectionAttempts >= (maxConnectionAttempts || 5)
+                }
+                className="bg-primary hover:bg-primary/90 text-white"
+              >
+                {isRetrying ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Retrying...
+                  </>
+                ) : (
+                  actionText || "Try Again"
+                )}
+              </Button>
+            )}
             {connectionAttempts > 0 && maxConnectionAttempts && (
               <p className="text-sm text-gray-400 mt-2">
                 Attempt {connectionAttempts} of {maxConnectionAttempts}
               </p>
+            )}
+
+            {connectionAttempts >= (maxConnectionAttempts || 5) && (
+              <Button
+                onClick={() => window.location.reload()}
+                className="mt-2 bg-gray-700 hover:bg-gray-600 text-white"
+              >
+                Refresh Page
+              </Button>
             )}
           </div>
         )}

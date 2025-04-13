@@ -8,7 +8,7 @@ import {
   TrackWithId,
   VideoElement,
   VideoContainerHookResult,
-} from "@/lib/types/streaming-hooks";
+} from "@/lib/types/streaming.types";
 
 // Create logger for this hook
 const logger = createLogger("useVideoContainer");

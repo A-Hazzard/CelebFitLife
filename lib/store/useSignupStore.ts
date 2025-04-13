@@ -1,12 +1,12 @@
 import { create } from "zustand";
-import { UserData } from "@/app/api/models/userData";
+import { User } from "@/lib/types/user";
 
 type SignupState = {
   step: number;
-  userData: UserData;
-  nextStep: (data: Partial<UserData>) => void;
+  userData: User;
+  nextStep: (data: Partial<User>) => void;
   prevStep: () => void;
-  completeSignup: (data: Partial<UserData>) => void;
+  completeSignup: (data: Partial<User>) => void;
 };
 
 export const useSignupStore = create<SignupState>((set) => ({
@@ -37,7 +37,7 @@ export const useSignupStore = create<SignupState>((set) => ({
     },
     myStreamers: [],
   },
-  nextStep: (data: Partial<UserData>) =>
+  nextStep: (data: Partial<User>) =>
     set((state) => ({
       step: state.step + 1,
       userData: { ...state.userData, ...data },
@@ -46,7 +46,7 @@ export const useSignupStore = create<SignupState>((set) => ({
     set((state) => ({
       step: Math.max(state.step - 1, 0),
     })),
-  completeSignup: (data: Partial<UserData>) =>
+  completeSignup: (data: Partial<User>) =>
     set((state) => ({
       userData: { ...state.userData, ...data },
     })),

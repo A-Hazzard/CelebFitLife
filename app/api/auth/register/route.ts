@@ -19,7 +19,7 @@ export async function POST(req: Request) {
         email: body.email?.substring(0, 3) + "...",
         hasPassword: !!body.password,
         role: body.role,
-        age: body.age
+        age: body.age,
       });
     } catch (err) {
       console.error("[SERVER] Failed to parse JSON:", err);
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       console.log("[SERVER] Validated registration data:", {
         username: validatedData.username,
         email: validatedData.email?.substring(0, 3) + "...",
-        role: validatedData.role
+        role: validatedData.role,
       });
     } catch (validationErr) {
       console.error("[SERVER] Validation error:", validationErr);
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
           phone: user.phone,
           role: user.role,
           isStreamer: user.role?.streamer || false,
-          isAdmin: user.isAdmin || false,
+          isAdmin: user.role?.admin || false,
           createdAt: user.createdAt,
         },
       },

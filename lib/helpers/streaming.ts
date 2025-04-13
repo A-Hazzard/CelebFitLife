@@ -3,14 +3,14 @@ import { db, auth } from "@/lib/firebase/client";
 import { v4 as uuidv4 } from "uuid";
 import {
   StreamingProfileData,
-  toStreamingError,
   StreamDoc,
   StreamUpdateObject,
   Stream,
-} from "@/lib/types/streaming";
+} from "@/lib/types/streaming.types";
 import { Room, LocalAudioTrack, LocalVideoTrack } from "twilio-video";
 import { createLogger } from "@/lib/utils/logger";
 import { collection, addDoc, deleteDoc, increment } from "firebase/firestore";
+import { toStreamingError } from "@/lib/utils/errorHandler";
 
 // Create context-specific loggers
 const streamLogger = createLogger("Streaming");
@@ -61,6 +61,44 @@ export const createStream = async (
     // Generate a unique ID for the stream
     const streamId = uuidv4();
 
+    // Validate thumbnail URL if provided
+    let validatedThumbnail = "";
+    if (thumbnail) {
+      try {
+        const url = new URL(thumbnail);
+        // List of allowed domains for thumbnails
+        const allowedDomains = [
+          "googleusercontent.com",
+          "firebasestorage.googleapis.com",
+          "lh3.googleusercontent.com",
+          "blogspot.com",
+          "unsplash.com",
+          "source.unsplash.com",
+          "img.icons8.com",
+          "randomuser.me",
+          "bing.com",
+          "th.bing.com",
+        ];
+
+        // Check if the URL is from an allowed domain
+        const isAllowedDomain = allowedDomains.some((domain) =>
+          url.hostname.endsWith(domain)
+        );
+
+        if (isAllowedDomain) {
+          validatedThumbnail = thumbnail;
+        } else {
+          streamLogger.warn(
+            `Rejected thumbnail URL from non-allowed domain: ${url.hostname}`
+          );
+        }
+      } catch (error) {
+        streamLogger.warn(`Invalid thumbnail URL provided: ${thumbnail}`, {
+          errorDetails: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     // Prepare stream document data using proper type
     const now = Timestamp.now();
 
@@ -69,7 +107,7 @@ export const createStream = async (
       title: title.trim(),
       description: description.trim(),
       thumbnail:
-        thumbnail ||
+        validatedThumbnail ||
         "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg",
       userId,
       username: "", // This will be set by the UI

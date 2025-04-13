@@ -1,3 +1,7 @@
+/**
+ * Tag type definitions
+ */
+
 export type Tag = {
   id?: string;
   name: string;

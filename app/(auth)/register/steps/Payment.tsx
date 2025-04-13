@@ -20,11 +20,13 @@ const fadeUp = {
 
 export default function Payment() {
   const { nextStep, prevStep, userData } = useSignupStore();
-  
+
   // Just go to next step without actual payment processing
   const handleContinue = () => {
     nextStep({
       paymentInfo: {
+        paymentMethodId: "pm_test_placeholder",
+        amount: userData.planDetails?.price || 19.99,
         status: "pending", // Just a placeholder status
       },
     });
@@ -46,22 +48,24 @@ export default function Payment() {
         <div className="mb-6">
           <h3 className="text-xl text-white font-bold mb-2">Payment Summary</h3>
           <div className="h-[1px] bg-gray-700 w-full mb-4"></div>
-          
+
           <div className="flex justify-between items-center mb-3">
             <span className="text-gray-300">Selected Plan</span>
             <span className="text-white font-medium">{planName}</span>
           </div>
-          
+
           <div className="flex justify-between items-center mb-3">
             <span className="text-gray-300">Price</span>
-            <span className="text-orange-500 font-bold">${planPrice.toFixed(2)}/month</span>
+            <span className="text-orange-500 font-bold">
+              ${planPrice.toFixed(2)}/month
+            </span>
           </div>
-          
+
           <div className="flex justify-between items-center">
             <span className="text-gray-300">Billing Cycle</span>
             <span className="text-white">Monthly</span>
           </div>
-          
+
           <div className="mt-6 flex items-center">
             <Shield className="h-5 w-5 text-green-500 mr-2" />
             <span className="text-sm text-gray-300">
@@ -69,8 +73,8 @@ export default function Payment() {
             </span>
           </div>
         </div>
-        
-        <Button 
+
+        <Button
           onClick={handleContinue}
           className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl text-base font-medium flex items-center justify-center"
         >

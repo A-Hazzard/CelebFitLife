@@ -1,5 +1,5 @@
 import { adminDb } from "@/lib/firebase/admin"; // Updated path
-import { User, UserCreateDTO } from "../models/User"; // Updated path
+import { User, UserRegistrationData } from "@/lib/types/user"; // Import from consolidated types
 import { hashPassword } from "../utils/authUtils"; // Updated path
 import {
   NotFoundError,
@@ -25,7 +25,6 @@ type UserUpdateData = {
   country?: string;
   phone?: string;
   role?: UserRole;
-  isAdmin?: boolean;
   updatedAt?: string;
 };
 
@@ -86,7 +85,6 @@ export class UserService {
         country: userData.country,
         phone: userData.phone,
         role: userData.role || { admin: false, streamer: false, viewer: true },
-        isAdmin: userData.isAdmin || false,
       };
       return user;
     } catch (error) {
@@ -112,7 +110,7 @@ export class UserService {
     }
   }
 
-  async create(userData: UserCreateDTO): Promise<User> {
+  async create(userData: UserRegistrationData): Promise<User> {
     try {
       // Check if email already exists (using email as ID)
       const existingEmailDoc = await this.usersCollection
@@ -146,7 +144,6 @@ export class UserService {
           streamer: userData.role?.streamer || false,
           viewer: userData.role?.viewer || true,
         },
-        isAdmin: userData.role?.admin || false,
       };
 
       // Save to database using email as document ID

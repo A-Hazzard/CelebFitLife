@@ -9,6 +9,15 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Re-export other utilities if needed
+/**
+ * Utils organization pattern:
+ * - Type definitions are strictly kept in lib/types directory
+ * - Utility functions are kept in lib/utils directory
+ * - API and business logic helpers are kept in lib/helpers directory
+ */
+
+// Re-export other utilities
 export * from "./validation";
 export * from "./typeChecking";
+export * from "./errorHandler";
+export * from "./paymentUtils";
