@@ -1,10 +1,5 @@
 import React from "react";
-
-interface PageContainerProps {
-  title?: string;
-  description?: string;
-  children: React.ReactNode;
-}
+import { PageContainerProps } from "@/lib/types/ui";
 
 export const PageContainer: React.FC<PageContainerProps> = ({
   title,

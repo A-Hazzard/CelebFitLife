@@ -9,13 +9,13 @@ import {
 import { convertDocToObj } from "@/lib/firebase/admin"; // Assuming convertDocToObj is here
 
 // More specific type for user role
-interface UserRole {
+type UserRole = {
   admin?: boolean;
   streamer?: boolean;
   viewer?: boolean;
-}
+};
 
-interface UserUpdateData {
+type UserUpdateData = {
   username?: string;
   displayName?: string;
   bio?: string;
@@ -27,7 +27,7 @@ interface UserUpdateData {
   role?: UserRole;
   isAdmin?: boolean;
   updatedAt?: string;
-}
+};
 
 /**
  * Service for managing users in the database (API-specific)

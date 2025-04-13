@@ -1,7 +1,7 @@
 /**
  * Stream model representing the data structure in Firestore
  */
-export interface Stream {
+export type Stream = {
   id: string;
   slug: string;
   title: string;
@@ -19,22 +19,22 @@ export interface Stream {
   startedAt?: string; // ISO date string, optional if not started yet
   endedAt?: string; // ISO date string, optional if not ended yet
   thumbnail?: string; // URL to thumbnail image
-}
+};
 
 /**
  * Data transfer object for creating a new stream
  */
-export interface StreamCreateDTO {
+export type StreamCreateDTO = {
   title: string;
   description?: string;
   createdBy: string; // User ID of the streamer
   scheduledAt?: string; // ISO date string, optional
-}
+};
 
 /**
  * Data transfer object for updating an existing stream
  */
-export interface StreamUpdateDTO {
+export type StreamUpdateDTO = {
   title?: string;
   description?: string;
   hasStarted?: boolean;
@@ -47,4 +47,4 @@ export interface StreamUpdateDTO {
   endedAt?: string;
   scheduledAt?: string;
   thumbnail?: string;
-}
+};

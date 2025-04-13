@@ -3,6 +3,13 @@
  */
 
 import { Timestamp } from "firebase/firestore";
+import React from "react";
+// Remove unused VariantProps import
+// import { VariantProps } from "class-variance-authority";
+import type {
+  BadgeVariantProps,
+  ButtonVariantProps,
+} from "@/components/ui/types";
 
 /**
  * Types for dashboard components
@@ -131,7 +138,7 @@ export type EditStreamFormData = Partial<CreateStreamFormData>;
 /**
  * ActivityItem interface for dashboard activity log
  */
-export interface ActivityItem {
+export type ActivityItem = {
   id: string;
   type:
     | ActivityLogType
@@ -152,7 +159,7 @@ export interface ActivityItem {
   userImage?: string;
   count?: number;
   read?: boolean;
-}
+};
 
 /**
  * Streamer type for displaying streamer cards
@@ -181,3 +188,98 @@ export type FitnessStreamer = {
   profileImage: string;
   bio: string;
 };
+
+// UI Component Props Types
+export type TimePickerDialogProps = {
+  date: Date;
+  setDate: (date: Date) => void;
+};
+
+export type StepProgressBarProps = {
+  currentStep: number;
+  totalSteps: number;
+  stepNames?: string[];
+};
+
+export type SpinnerProps = React.HTMLAttributes<HTMLDivElement> & {
+  size?: "sm" | "md" | "lg";
+  color?: "primary" | "white";
+};
+
+export type ShareButtonProps = {
+  streamLink: string;
+};
+
+export type PageContainerProps = {
+  title?: string;
+  description?: string;
+  children: React.ReactNode;
+};
+
+// Badge component
+export type BadgeProps = React.HTMLAttributes<HTMLDivElement> &
+  BadgeVariantProps;
+
+// Button component
+export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
+  ButtonVariantProps & {
+    asChild?: boolean;
+  };
+
+// AudioLevelMeter
+export type AudioLevelMeterProps = {
+  level: number; // 0-100
+  isActive: boolean;
+  type: "microphone" | "speaker";
+  className?: string;
+};
+
+// SlickArrow Props (from streamer.ts)
+export type SlickArrowProps = {
+  className?: string;
+  style?: React.CSSProperties;
+  onClick?: () => void;
+  direction: "prev" | "next";
+};
+
+// Modals types
+export type SettingsModalProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+export type StreamerGuideModalProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+export type CreateStreamModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+};
+
+// Notifications Dropdown
+export type Notification = {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+  type: "follow" | "comment" | "like" | "schedule" | "system";
+};
+
+// Upcoming Streams Calendar
+export type UpcomingStream = {
+  id: string;
+  title: string;
+  date: Date;
+  category: string;
+  thumbnailUrl: string;
+  duration: number; // in minutes
+  isSubscriberOnly: boolean;
+  description?: string;
+};
+
+// Remove the previous declarations and use imported types instead
+// export type BadgeVariants = typeof badgeVariants;
+// export type ButtonVariants = typeof buttonVariants;

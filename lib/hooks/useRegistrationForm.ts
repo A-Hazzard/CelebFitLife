@@ -1,7 +1,7 @@
 import { useState, FormEvent } from "react";
 import { useSignupStore } from "@/lib/store/useSignupStore";
 import { RegistrationData } from "@/lib/types/auth";
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import { collection, getDocs, query, where } from "firebase/firestore";
 
 // Simple email validation regex
@@ -20,11 +20,13 @@ export function useRegistrationForm() {
     age: "",
     acceptedTnC: false,
   });
-  
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [usernameChecking, setUsernameChecking] = useState(false);
-  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(
+    null
+  );
 
   // Check if username exists in Firebase
   const checkUsername = async (username: string) => {
@@ -72,14 +74,14 @@ export function useRegistrationForm() {
     });
 
     // Check username availability when username changes
-    if (name === 'username' && value.length >= 3) {
+    if (name === "username" && value.length >= 3) {
       const timeoutId = setTimeout(() => {
         checkUsername(value);
       }, 500);
-      
+
       return () => clearTimeout(timeoutId);
     }
-    
+
     // Return undefined for other input changes
     return undefined;
   };
@@ -99,7 +101,7 @@ export function useRegistrationForm() {
       if (formData.username.length < 3) {
         throw new Error("Username must be at least 3 characters");
       }
-      
+
       // Password length validation
       if (formData.password.length < 6) {
         throw new Error("Password must be at least 6 characters");
@@ -123,13 +125,17 @@ export function useRegistrationForm() {
 
       // Check if username is taken
       if (usernameAvailable === false) {
-        throw new Error("This username is already taken. Please choose another.");
+        throw new Error(
+          "This username is already taken. Please choose another."
+        );
       }
 
       // Check if email is already registered
       const emailAvailable = await checkEmail(formData.email);
       if (!emailAvailable) {
-        throw new Error("This email is already registered. Please use a different email.");
+        throw new Error(
+          "This email is already registered. Please use a different email."
+        );
       }
 
       // Create registration data with proper role structure
@@ -139,17 +145,19 @@ export function useRegistrationForm() {
         role: {
           viewer: true,
           streamer: false,
-          admin: false
-        }
+          admin: false,
+        },
       };
-      
+
       // Just move to next step without registering now
       nextStep({
-        ...registrationData
+        ...registrationData,
       });
-      
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Registration failed. Please try again.";
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Registration failed. Please try again.";
       setError(errorMessage);
       console.error("Registration validation error:", err);
     } finally {

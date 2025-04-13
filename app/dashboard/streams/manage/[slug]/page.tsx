@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { usePathname } from "next/navigation";
 // Import regular Firebase client for client components
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import {
   doc,
   getDoc,

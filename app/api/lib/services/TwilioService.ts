@@ -1,13 +1,6 @@
 import twilio from "twilio";
 import { ValidationError } from "../errors/apiErrors";
-
-/**
- * Cache entry for Twilio tokens
- */
-interface CacheEntry {
-  token: string;
-  expiresAt: number;
-}
+import { CacheEntry } from "@/lib/types/twilio";
 
 /**
  * Typed token cache to avoid using any
@@ -27,8 +20,8 @@ export class TwilioService {
   constructor() {
     // Load and validate environment variables
     this.accountSid = process.env.TWILIO_ACCOUNT_SID || "";
-    this.apiKey = process.env.TWILIO_API_KEY || "";
-    this.apiSecret = process.env.TWILIO_API_SECRET || "";
+    this.apiKey = process.env.TWILIO_API_KEY_SID || "";
+    this.apiSecret = process.env.TWILIO_API_KEY_SECRET || "";
 
     // Allow overriding default token TTL via environment
     const configTTL = process.env.TWILIO_TOKEN_TTL;
@@ -43,8 +36,8 @@ export class TwilioService {
     if (!this.accountSid || !this.apiKey || !this.apiSecret) {
       const missing = [];
       if (!this.accountSid) missing.push("TWILIO_ACCOUNT_SID");
-      if (!this.apiKey) missing.push("TWILIO_API_KEY");
-      if (!this.apiSecret) missing.push("TWILIO_API_SECRET");
+      if (!this.apiKey) missing.push("TWILIO_API_KEY_SID");
+      if (!this.apiSecret) missing.push("TWILIO_API_KEY_SECRET");
 
       throw new ValidationError(
         `Missing required Twilio configuration: ${missing.join(", ")}`

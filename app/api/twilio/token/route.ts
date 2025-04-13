@@ -1,42 +1,15 @@
 import { NextResponse } from "next/server";
 import { TwilioService } from "../../lib/services/TwilioService";
 import { ValidationError } from "../../lib/errors/apiErrors";
+import {
+  TokenRequestBody,
+  TokenResponseSuccess,
+  TokenResponseError,
+} from "@/lib/types/twilio";
 
 // Make sure this is a server-side route by using the 'use server' directive
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-/**
- * Interface for token request body
- */
-interface TokenRequestBody {
-  roomName: string;
-  identity: string;
-}
-
-/**
- * Interface for token response
- */
-interface TokenResponseSuccess {
-  success: boolean;
-  token: string;
-  identity: string;
-  roomName: string;
-  expiration: number;
-  requestId: string;
-  latency: number;
-}
-
-/**
- * Interface for token error response
- */
-interface TokenResponseError {
-  success: boolean;
-  error: string;
-  details?: string;
-  requestId: string;
-  latency?: number;
-}
 
 /**
  * POST handler for generating Twilio tokens for video rooms

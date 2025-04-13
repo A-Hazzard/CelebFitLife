@@ -7,15 +7,15 @@ import { User } from "./user";
 /**
  * Basic streamer selection interface for user preferences
  */
-export interface StreamerSelection {
+export type StreamerSelection = {
   streamerId: string;
   streamerName: string;
-}
+};
 
 /**
  * Recommended streamer interface with additional display data
  */
-export interface RecommendedStreamer {
+export type RecommendedStreamer = {
   id: string;
   name: string;
   username: string;
@@ -26,7 +26,7 @@ export interface RecommendedStreamer {
   followers?: number;
   isLive?: boolean;
   currentStreamTitle?: string;
-}
+};
 
 /**
  * Streamer profile interface extending user
@@ -44,3 +44,40 @@ export interface StreamerProfile extends User {
     tiktok?: string;
   };
 }
+
+// Types related to streamers and categories
+
+export type Streamer = {
+  id: string;
+  name: string;
+  profileImage: string;
+  thumbnail: string;
+  quote: string;
+  category: string;
+  categoryName?: string;
+};
+
+export type Category = {
+  id: string;
+  name: string;
+  description?: string;
+};
+
+export type SlickArrowProps = {
+  className?: string;
+  style?: React.CSSProperties;
+  onClick?: () => void;
+  direction: "prev" | "next";
+};
+
+// From Category model
+export type CategoryCreateDTO = {
+  name: string;
+  description: string;
+};
+
+// From Tag model
+export type TagCreateDTO = {
+  name: string;
+  category: string;
+};

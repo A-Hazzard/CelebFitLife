@@ -3,7 +3,7 @@
  * This service handles chat functionality in the client using Firebase direct SDK access.
  */
 
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import { ChatMessage } from "@/lib/types/streaming";
 import {
   collection,

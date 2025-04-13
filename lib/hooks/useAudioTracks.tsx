@@ -1,36 +1,28 @@
 import { useState, useEffect, useRef } from "react";
-import { LocalAudioTrack, RemoteAudioTrack } from "twilio-video";
 import { cleanupMediaTracks } from "@/lib/utils/twilio";
 import { createLogger } from "@/lib/utils/logger";
+import {
+  TwilioAudioTrack,
+  AudioTracksHookResult,
+  AudioElement,
+  // Remove these unused types
+  // AudioTrackOptions,
+  // AudioDeviceInfo,
+} from "@/lib/types/audio";
 
 // Create logger for this hook
 const logger = createLogger("useAudioTracks");
 
-type AudioTrack = LocalAudioTrack | RemoteAudioTrack;
-
-// Extended interface for Twilio tracks
-interface TrackWithSid {
-  sid: string;
-}
-
-interface TrackWithId {
-  id: string;
-}
-
 // Type guard to check if a track has sid
-function hasTrackSid(track: AudioTrack): track is AudioTrack & TrackWithSid {
+function hasTrackSid(
+  track: TwilioAudioTrack
+): track is TwilioAudioTrack & { sid: string } {
   return "sid" in track;
 }
 
 // Type guard to check if a track has id
-function hasTrackId(track: unknown): track is TrackWithId {
+function hasTrackId(track: unknown): track is { id: string } {
   return typeof track === "object" && track !== null && "id" in track;
-}
-
-interface AudioElement {
-  id: string;
-  track: AudioTrack;
-  muted: boolean;
 }
 
 /**
@@ -39,7 +31,7 @@ interface AudioElement {
  *
  * @returns An object containing functions to manage audio tracks
  */
-export const useAudioTracks = () => {
+export const useAudioTracks = (): AudioTracksHookResult => {
   // State to track audio elements
   const [audioElements, setAudioElements] = useState<AudioElement[]>([]);
 
@@ -47,12 +39,15 @@ export const useAudioTracks = () => {
   const [isGloballyMuted, setIsGloballyMuted] = useState(false);
 
   // Ref to active audio tracks for cleanup
-  const activeTracksRef = useRef<AudioTrack[]>([]);
+  const activeTracksRef = useRef<TwilioAudioTrack[]>([]);
 
   /**
    * Add an audio track
    */
-  const addAudio = (track: AudioTrack, options: { muted?: boolean } = {}) => {
+  const addAudio = (
+    track: TwilioAudioTrack,
+    options: { muted?: boolean } = {}
+  ) => {
     logger.info(`Adding ${track.kind} track (${track.name || "unnamed"})`);
 
     // Generate a unique ID for this track
@@ -182,7 +177,7 @@ export const AudioTrackRenderer = ({
   track,
   muted = false,
 }: {
-  track: AudioTrack;
+  track: TwilioAudioTrack;
   muted?: boolean;
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);

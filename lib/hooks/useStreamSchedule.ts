@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger("StreamSchedule");

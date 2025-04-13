@@ -1,4 +1,4 @@
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { Stream, StreamerWithStreams } from "@/lib/types/streaming";
 

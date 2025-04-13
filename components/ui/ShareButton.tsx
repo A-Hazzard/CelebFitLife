@@ -3,10 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Share, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface ShareButtonProps {
-  streamLink: string;
-}
+import { ShareButtonProps } from "@/lib/types/ui";
 
 export default function ShareButton({ streamLink }: ShareButtonProps) {
   const [isOpen, setIsOpen] = useState(false);

@@ -1,5 +1,5 @@
 import { doc, setDoc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
+import { db, auth } from "@/lib/firebase/client";
 import { v4 as uuidv4 } from "uuid";
 import {
   StreamingProfileData,
@@ -11,7 +11,6 @@ import {
 import { Room, LocalAudioTrack, LocalVideoTrack } from "twilio-video";
 import { createLogger } from "@/lib/utils/logger";
 import { collection, addDoc, deleteDoc, increment } from "firebase/firestore";
-import { auth } from "@/lib/config/firebase";
 
 // Create context-specific loggers
 const streamLogger = createLogger("Streaming");

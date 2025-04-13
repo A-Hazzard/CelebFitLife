@@ -2,31 +2,33 @@
  * User type definitions
  */
 
-export interface Role {
+export type Role = {
   admin: boolean;
   streamer: boolean;
   viewer: boolean;
-}
+};
 
 /**
  * Core User interface used across the application
  */
-export interface User {
-  id: string;
+export type User = {
+  id?: string;
   email: string;
-  username?: string;
-  displayName?: string;
-  firstName?: string;
-  lastName?: string;
-  profileImage?: string;
-  isStreamer: boolean;
-  isAdmin: boolean;
-  bio?: string;
-  role?: Role;
+  username: string;
+  password?: string;
+  createdAt: string;
   age?: number;
   city?: string;
   country?: string;
   phone?: string;
+  role: Role;
+  isAdmin: boolean;
+  profileImage?: string;
+  name?: string;
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
+  bio?: string;
   socialLinks?: {
     twitter?: string;
     instagram?: string;
@@ -36,28 +38,27 @@ export interface User {
   };
   categories?: string[];
   tags?: string[];
-  createdAt: string;
   updatedAt?: string;
-}
+};
 
-export interface UserLoginForm {
+export type UserLoginForm = {
   email: string;
   password: string;
-}
+};
 
-export interface UserRegistrationForm {
+export type UserRegistrationForm = {
   email: string;
   password: string;
   confirmPassword: string;
   firstName: string;
   lastName: string;
   displayName?: string;
-}
+};
 
 /**
  * Data transfer objects for user operations
  */
-export interface UserCreateDTO {
+export type UserCreateDTO = {
   email: string;
   username: string;
   password: string;
@@ -66,14 +67,14 @@ export interface UserCreateDTO {
   country?: string;
   phone?: string;
   role?: Partial<Role>;
-}
+};
 
-export interface UserLoginDTO {
+export type UserLoginDTO = {
   email: string;
   password: string;
-}
+};
 
-export interface UserResponseDTO {
+export type UserResponseDTO = {
   id: string;
   email: string;
   username: string;
@@ -85,4 +86,95 @@ export interface UserResponseDTO {
   role: Role;
   isAdmin: boolean;
   token?: string;
-}
+};
+
+// For API services
+export type UserRole = {
+  viewer?: boolean;
+  streamer?: boolean;
+  admin?: boolean;
+};
+
+export type UserUpdateData = {
+  username?: string;
+  email?: string;
+  password?: string;
+  displayName?: string;
+  bio?: string;
+  avatarUrl?: string;
+  age?: number;
+  city?: string;
+  country?: string;
+  phone?: string;
+  role?: UserRole;
+  isAdmin?: boolean;
+  updatedAt?: string;
+  profileImage?: string;
+  [key: string]: string | number | boolean | UserRole | undefined;
+};
+
+/**
+ * User data for the client application
+ */
+export type UserData = {
+  id?: string;
+  name?: string;
+  email?: string;
+  specialty?: string;
+  tags?: string[];
+  bio?: string;
+  profileImage?: string; // URL to the user's profile image
+  socialLinks?: {
+    instagram?: string;
+    youtube?: string;
+    twitter?: string;
+  };
+  role?: {
+    streamer: boolean;
+    admin: boolean;
+    viewer: boolean;
+  };
+  streams?: {
+    total: number;
+    totalViewers: number;
+    totalEarnings: number;
+    monthlyStats: Array<{
+      month: string;
+      streams: number;
+      viewers: number;
+      earnings: number;
+    }>;
+  };
+  createdAt?: Date;
+  updatedAt?: Date;
+  uid?: string;
+  username?: string;
+  password?: string;
+  phone?: string;
+  country?: string;
+  city?: string;
+  age?: number;
+  plan?:
+    | {
+        maxStreamers: number;
+      }
+    | string;
+  selectedPlan?: string;
+  planDetails?: {
+    price: number;
+    maxStreamers: number | string;
+  };
+  userId?: string;
+  planId?: string;
+  paymentInfo?: {
+    paymentMethodId?: string;
+    amount?: number;
+    status?: string;
+  };
+  acceptedTnC?: boolean;
+  selectedStreamers?: Array<{
+    streamerId: string;
+    streamerName: string;
+  }>;
+  myStreamers?: string[]; // Array of streamer IDs the user follows
+};

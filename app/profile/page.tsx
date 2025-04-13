@@ -1,7 +1,26 @@
-'use client';
+"use client";
 
 import { useAuthStore } from "@/lib/store/useAuthStore";
-import { Bell, User, Settings, MessageSquare, LogOut, ChevronRight, Calendar, CreditCard, Star, Crown, Heart, Share, UserPlus, Filter, Search, ChevronLeft, Lock, Edit2 } from "lucide-react";
+import {
+  Bell,
+  User,
+  Settings,
+  MessageSquare,
+  LogOut,
+  ChevronRight,
+  Calendar,
+  CreditCard,
+  Star,
+  Crown,
+  Heart,
+  Share,
+  UserPlus,
+  Filter,
+  Search,
+  ChevronLeft,
+  Lock,
+  Edit2,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -31,7 +50,11 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -50,71 +73,68 @@ function debounce<T extends (...args: string[]) => unknown>(
 
 // Create a custom hook for profile updates
 const useProfileUpdate = () => {
-  const { currentUser } = useAuthStore();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [usernameChecking, setUsernameChecking] = useState(false);
-  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
-
-  const checkUsername = async (username: string) => {
-    if (username.length < 3) {
-      setUsernameAvailable(null);
-      return;
-    }
-
-    // If the username is the same as current user's, it's available (no change)
-    if (username === currentUser?.username) {
-      setUsernameAvailable(true);
-      return;
-    }
-
-    setUsernameChecking(true);
-    try {
-      // Make the actual API call to check username availability
-      const response = await fetch('/api/auth/check-username', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username }),
-      });
-
-      const data = await response.json();
-
-      // Check if the response indicates success
-      if (response.ok) {
-        // The username is available if it doesn't exist in the database
-        setUsernameAvailable(!data.exists);
-        
-        if (data.error) {
-          toast.error(data.error);
-        }
-      } else {
-        // If the response is not ok, show the error message
-        throw new Error(data.message || 'Failed to check username');
-      }
-    } catch (error) {
-      console.error('Error checking username:', error);
-      toast.error("Failed to check username availability. Please try again.");
-      // Keep the previous availability state on error
-    } finally {
-      setUsernameChecking(false);
-    }
-  };
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(
+    null
+  );
 
   // Add debounce to prevent too many API calls
-  const debouncedCheckUsername = useCallback(
-    debounce(checkUsername, 500),
-    [checkUsername]
-  );
+  const debouncedCheckUsername = useCallback((username: string) => {
+    // Move checkUsername inside the useCallback
+    const checkUsernameInner = async (username: string) => {
+      if (!username) {
+        return;
+      }
+
+      setUsernameChecking(true);
+      setUsernameAvailable(null);
+
+      try {
+        // Make the actual API call to check username availability
+        const response = await fetch("/api/auth/check-username", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ username }),
+        });
+
+        const data = await response.json();
+
+        // Check if the response indicates success
+        if (response.ok) {
+          // The username is available if it doesn't exist in the database
+          setUsernameAvailable(!data.exists);
+
+          if (data.error) {
+            toast.error(data.error);
+          }
+        } else {
+          // If the response is not ok, show the error message
+          throw new Error(data.message || "Failed to check username");
+        }
+      } catch (error) {
+        console.error("Error checking username:", error);
+        toast.error("Failed to check username availability. Please try again.");
+        // Keep the previous availability state on error
+      } finally {
+        setUsernameChecking(false);
+      }
+    };
+
+    // Apply debounce to the inner function
+    debounce(checkUsernameInner, 500)(username);
+  }, []);
 
   const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.trim().toLowerCase(); // Normalize username
     setNewUsername(value);
-    
+
     if (value.length >= 3) {
       debouncedCheckUsername(value);
     } else {
@@ -140,10 +160,10 @@ const useProfileUpdate = () => {
 
     setIsUpdating(true);
     try {
-      const response = await fetch('/api/auth/update-profile', {
-        method: 'POST',
+      const response = await fetch("/api/auth/update-profile", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           currentPassword,
@@ -154,7 +174,7 @@ const useProfileUpdate = () => {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to update profile');
+        throw new Error(error.message || "Failed to update profile");
       }
 
       toast.success("Profile updated successfully!");
@@ -165,7 +185,9 @@ const useProfileUpdate = () => {
       setConfirmPassword("");
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update profile");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update profile"
+      );
       return false;
     } finally {
       setIsUpdating(false);
@@ -220,24 +242,24 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite font-inter">
       <Toaster richColors position="top-center" />
-      
+
       {/* Header */}
       <header className="flex items-center justify-between p-4 md:p-6 bg-brandBlack border-b border-brandOrange/30">
         <div className="flex items-center gap-6">
           <nav className="hidden md:flex items-center space-x-6">
-            <Link 
+            <Link
               href="/feeds"
               className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
             >
               Feeds
             </Link>
-            <Link 
+            <Link
               href="/streaming"
               className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
             >
               Streaming
             </Link>
-            <Link 
+            <Link
               href="/profile"
               className="text-sm font-medium text-orange-500 hover:text-orange-400 transition-colors"
             >
@@ -261,9 +283,14 @@ export default function ProfilePage() {
           {currentUser && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                <Button
+                  variant="ghost"
+                  className="relative h-10 w-10 rounded-full"
+                >
                   <Image
-                    src={currentUser?.profileImage || "/images/default-avatar.jpg"}
+                    src={
+                      currentUser?.profileImage || "/images/default-avatar.jpg"
+                    }
                     alt={currentUser?.name || "User"}
                     width={40}
                     height={40}
@@ -272,11 +299,15 @@ export default function ProfilePage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56 bg-gray-800 border-gray-700">
-                <DropdownMenuLabel className="text-gray-300">My Account</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-gray-300">
+                  My Account
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-gray-700" />
                 <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 cursor-pointer">
                   <User className="mr-2 h-4 w-4" />
-                  <Link href="/profile" className="w-full">Profile</Link>
+                  <Link href="/profile" className="w-full">
+                    Profile
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 cursor-pointer">
                   <Settings className="mr-2 h-4 w-4" />
@@ -300,7 +331,7 @@ export default function ProfilePage() {
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-6">
         <div className="max-w-5xl mx-auto space-y-6">
-        {/* Profile Header */}
+          {/* Profile Header */}
           <div className="bg-gray-800 rounded-xl p-6 border border-brandOrange/30 relative">
             <div className="flex items-center gap-6">
               <Image
@@ -311,19 +342,27 @@ export default function ProfilePage() {
                 className="rounded-full border-4 border-brandOrange"
               />
               <div className="flex-1">
-                <h1 className="text-2xl font-bold text-white mb-2">{currentUser?.name}</h1>
+                <h1 className="text-2xl font-bold text-white mb-2">
+                  {currentUser?.name}
+                </h1>
                 <p className="text-gray-400 mb-4">{currentUser?.username}</p>
                 <div className="flex gap-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-brandOrange">24</div>
+                    <div className="text-2xl font-bold text-brandOrange">
+                      24
+                    </div>
                     <div className="text-sm text-gray-400">Posts</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-brandOrange">156</div>
+                    <div className="text-2xl font-bold text-brandOrange">
+                      156
+                    </div>
                     <div className="text-sm text-gray-400">Followers</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-brandOrange">89</div>
+                    <div className="text-2xl font-bold text-brandOrange">
+                      89
+                    </div>
                     <div className="text-sm text-gray-400">Following</div>
                   </div>
                 </div>
@@ -333,19 +372,27 @@ export default function ProfilePage() {
             {/* Edit Profile Dialog */}
             <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="absolute top-6 right-6">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="absolute top-6 right-6"
+                >
                   <Settings className="h-4 w-4 mr-2" />
                   Edit Profile
                 </Button>
               </DialogTrigger>
               <DialogContent className="bg-gray-800 border-gray-700">
                 <DialogHeader>
-                  <DialogTitle className="text-white text-2xl">Profile Settings</DialogTitle>
+                  <DialogTitle className="text-white text-2xl">
+                    Profile Settings
+                  </DialogTitle>
                 </DialogHeader>
                 <div className="space-y-6 py-4">
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="current-password" className="text-white">Current Password</Label>
+                      <Label htmlFor="current-password" className="text-white">
+                        Current Password
+                      </Label>
                       <div className="relative">
                         <input
                           type="password"
@@ -358,8 +405,10 @@ export default function ProfilePage() {
                       </div>
                     </div>
                     <div>
-                      <Label htmlFor="new-username" className="text-white">New Username</Label>
-                      <motion.div 
+                      <Label htmlFor="new-username" className="text-white">
+                        New Username
+                      </Label>
+                      <motion.div
                         className="relative"
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -380,25 +429,33 @@ export default function ProfilePage() {
                         />
                         <Edit2 className="absolute right-3 top-3 h-4 w-4 text-gray-400" />
                         {newUsername.length >= 3 && (
-                          <motion.div 
+                          <motion.div
                             className="mt-1 text-xs"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.2 }}
                           >
                             {usernameChecking ? (
-                              <span className="text-gray-400">Checking availability...</span>
+                              <span className="text-gray-400">
+                                Checking availability...
+                              </span>
                             ) : usernameAvailable === true ? (
-                              <span className="text-green-500">Username is available</span>
+                              <span className="text-green-500">
+                                Username is available
+                              </span>
                             ) : usernameAvailable === false ? (
-                              <span className="text-red-500">Username is already taken</span>
+                              <span className="text-red-500">
+                                Username is already taken
+                              </span>
                             ) : null}
                           </motion.div>
                         )}
                       </motion.div>
                     </div>
                     <div>
-                      <Label htmlFor="new-password" className="text-white">New Password</Label>
+                      <Label htmlFor="new-password" className="text-white">
+                        New Password
+                      </Label>
                       <div className="relative">
                         <input
                           type="password"
@@ -411,7 +468,9 @@ export default function ProfilePage() {
                       </div>
                     </div>
                     <div>
-                      <Label htmlFor="confirm-password" className="text-white">Confirm New Password</Label>
+                      <Label htmlFor="confirm-password" className="text-white">
+                        Confirm New Password
+                      </Label>
                       <div className="relative">
                         <input
                           type="password"
@@ -425,16 +484,22 @@ export default function ProfilePage() {
                     </div>
                   </div>
                   <div className="flex justify-end gap-3">
-                    <Button variant="outline" onClick={() => setIsSettingsOpen(false)}>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsSettingsOpen(false)}
+                    >
                       Cancel
                     </Button>
-                    <Button 
+                    <Button
                       className="bg-brandOrange hover:bg-brandOrange/90"
                       onClick={async () => {
                         const success = await handleProfileUpdate();
                         if (success) setIsSettingsOpen(false);
                       }}
-                      disabled={isUpdating || (newUsername.length > 0 && !usernameAvailable)}
+                      disabled={
+                        isUpdating ||
+                        (newUsername.length > 0 && !usernameAvailable)
+                      }
                     >
                       {isUpdating ? (
                         <motion.div
@@ -455,11 +520,16 @@ export default function ProfilePage() {
             </Dialog>
           </div>
 
-        {/* Subscription Details */}
+          {/* Subscription Details */}
           <div className="bg-gray-800 rounded-xl p-6 border border-brandOrange/30">
-            <h2 className="text-xl font-bold text-white mb-4">Subscription Details</h2>
+            <h2 className="text-xl font-bold text-white mb-4">
+              Subscription Details
+            </h2>
             <div className="space-y-4">
-              <Dialog open={isSubscriptionOpen} onOpenChange={setIsSubscriptionOpen}>
+              <Dialog
+                open={isSubscriptionOpen}
+                onOpenChange={setIsSubscriptionOpen}
+              >
                 <DialogTrigger asChild>
                   <div className="flex items-center justify-between p-4 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700/70 transition-colors">
                     <div className="flex items-center gap-3">
@@ -468,7 +538,9 @@ export default function ProfilePage() {
                       </div>
                       <div>
                         <h3 className="font-medium text-white">Current Plan</h3>
-                        <p className="text-sm text-gray-400">Premium Membership</p>
+                        <p className="text-sm text-gray-400">
+                          Premium Membership
+                        </p>
                       </div>
                     </div>
                     <ChevronRight className="text-gray-400" />
@@ -476,7 +548,9 @@ export default function ProfilePage() {
                 </DialogTrigger>
                 <DialogContent className="bg-gray-800 border-gray-700 max-w-3xl">
                   <DialogHeader>
-                    <DialogTitle className="text-white text-2xl">Subscription Management</DialogTitle>
+                    <DialogTitle className="text-white text-2xl">
+                      Subscription Management
+                    </DialogTitle>
                   </DialogHeader>
                   <Tabs defaultValue="plans" className="mt-4">
                     <TabsList className="grid grid-cols-3 mb-6">
@@ -486,25 +560,47 @@ export default function ProfilePage() {
                     </TabsList>
                     <TabsContent value="plans" className="space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className={cn(
-                          "border rounded-lg p-4 cursor-pointer transition-all",
-                          selectedPlan === "basic" ? "border-brandOrange bg-brandOrange/10" : "border-gray-700 hover:border-gray-600"
-                        )} onClick={() => setSelectedPlan("basic")}>
+                        <div
+                          className={cn(
+                            "border rounded-lg p-4 cursor-pointer transition-all",
+                            selectedPlan === "basic"
+                              ? "border-brandOrange bg-brandOrange/10"
+                              : "border-gray-700 hover:border-gray-600"
+                          )}
+                          onClick={() => setSelectedPlan("basic")}
+                        >
                           <h3 className="font-bold text-white">Basic</h3>
-                          <p className="text-2xl font-bold text-brandOrange my-2">$9.99<span className="text-sm text-gray-400">/month</span></p>
+                          <p className="text-2xl font-bold text-brandOrange my-2">
+                            $9.99
+                            <span className="text-sm text-gray-400">
+                              /month
+                            </span>
+                          </p>
                           <ul className="text-sm text-gray-300 space-y-1">
                             <li>• Access to basic streams</li>
                             <li>• Limited workout content</li>
                             <li>• Standard support</li>
                           </ul>
                         </div>
-                        <div className={cn(
-                          "border rounded-lg p-4 cursor-pointer transition-all",
-                          selectedPlan === "premium" ? "border-brandOrange bg-brandOrange/10" : "border-gray-700 hover:border-gray-600"
-                        )} onClick={() => setSelectedPlan("premium")}>
-                          <Badge className="mb-2 bg-brandOrange">Current Plan</Badge>
+                        <div
+                          className={cn(
+                            "border rounded-lg p-4 cursor-pointer transition-all",
+                            selectedPlan === "premium"
+                              ? "border-brandOrange bg-brandOrange/10"
+                              : "border-gray-700 hover:border-gray-600"
+                          )}
+                          onClick={() => setSelectedPlan("premium")}
+                        >
+                          <Badge className="mb-2 bg-brandOrange">
+                            Current Plan
+                          </Badge>
                           <h3 className="font-bold text-white">Premium</h3>
-                          <p className="text-2xl font-bold text-brandOrange my-2">$19.99<span className="text-sm text-gray-400">/month</span></p>
+                          <p className="text-2xl font-bold text-brandOrange my-2">
+                            $19.99
+                            <span className="text-sm text-gray-400">
+                              /month
+                            </span>
+                          </p>
                           <ul className="text-sm text-gray-300 space-y-1">
                             <li>• Access to all premium streams</li>
                             <li>• Ad-free experience</li>
@@ -512,12 +608,22 @@ export default function ProfilePage() {
                             <li>• Priority support</li>
                           </ul>
                         </div>
-                        <div className={cn(
-                          "border rounded-lg p-4 cursor-pointer transition-all",
-                          selectedPlan === "pro" ? "border-brandOrange bg-brandOrange/10" : "border-gray-700 hover:border-gray-600"
-                        )} onClick={() => setSelectedPlan("pro")}>
+                        <div
+                          className={cn(
+                            "border rounded-lg p-4 cursor-pointer transition-all",
+                            selectedPlan === "pro"
+                              ? "border-brandOrange bg-brandOrange/10"
+                              : "border-gray-700 hover:border-gray-600"
+                          )}
+                          onClick={() => setSelectedPlan("pro")}
+                        >
                           <h3 className="font-bold text-white">Pro</h3>
-                          <p className="text-2xl font-bold text-brandOrange my-2">$29.99<span className="text-sm text-gray-400">/month</span></p>
+                          <p className="text-2xl font-bold text-brandOrange my-2">
+                            $29.99
+                            <span className="text-sm text-gray-400">
+                              /month
+                            </span>
+                          </p>
                           <ul className="text-sm text-gray-300 space-y-1">
                             <li>• All Premium features</li>
                             <li>• 1-on-1 coaching sessions</li>
@@ -528,14 +634,18 @@ export default function ProfilePage() {
                       </div>
                       <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-700">
                         <div className="flex items-center space-x-2">
-                          <Switch 
-                            id="auto-renew" 
-                            checked={autoRenew} 
+                          <Switch
+                            id="auto-renew"
+                            checked={autoRenew}
                             onCheckedChange={setAutoRenew}
                           />
-                          <Label htmlFor="auto-renew" className="text-gray-300">Auto-renew subscription</Label>
+                          <Label htmlFor="auto-renew" className="text-gray-300">
+                            Auto-renew subscription
+                          </Label>
                         </div>
-                        <Button className="bg-brandOrange hover:bg-brandOrange/90">Update Plan</Button>
+                        <Button className="bg-brandOrange hover:bg-brandOrange/90">
+                          Update Plan
+                        </Button>
                       </div>
                     </TabsContent>
                     <TabsContent value="benefits" className="space-y-4">
@@ -546,8 +656,12 @@ export default function ProfilePage() {
                               <Star className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <h4 className="font-medium text-white">Premium Benefits</h4>
-                              <p className="text-sm text-gray-400">Your current plan includes:</p>
+                              <h4 className="font-medium text-white">
+                                Premium Benefits
+                              </h4>
+                              <p className="text-sm text-gray-400">
+                                Your current plan includes:
+                              </p>
                             </div>
                           </div>
                           <ul className="text-sm text-gray-300 space-y-2 ml-14">
@@ -575,8 +689,12 @@ export default function ProfilePage() {
                               <CalendarComponent className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <h4 className="font-medium text-white">Subscription Period</h4>
-                              <p className="text-sm text-gray-400">Manage your subscription dates</p>
+                              <h4 className="font-medium text-white">
+                                Subscription Period
+                              </h4>
+                              <p className="text-sm text-gray-400">
+                                Manage your subscription dates
+                              </p>
                             </div>
                           </div>
                           <div className="space-y-2 ml-14">
@@ -585,11 +703,15 @@ export default function ProfilePage() {
                               <span className="text-white">Nov 1, 2024</span>
                             </div>
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-400">Next Billing:</span>
+                              <span className="text-gray-400">
+                                Next Billing:
+                              </span>
                               <span className="text-white">Dec 1, 2024</span>
                             </div>
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-400">Billing Cycle:</span>
+                              <span className="text-gray-400">
+                                Billing Cycle:
+                              </span>
                               <span className="text-white">Monthly</span>
                             </div>
                           </div>
@@ -599,32 +721,58 @@ export default function ProfilePage() {
                     <TabsContent value="settings" className="space-y-4">
                       <div className="space-y-6">
                         <div>
-                          <h4 className="font-medium text-white mb-2">Notification Preferences</h4>
+                          <h4 className="font-medium text-white mb-2">
+                            Notification Preferences
+                          </h4>
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <Label htmlFor="billing-notifications" className="text-gray-300">Billing Notifications</Label>
-                              <Switch id="billing-notifications" defaultChecked />
+                              <Label
+                                htmlFor="billing-notifications"
+                                className="text-gray-300"
+                              >
+                                Billing Notifications
+                              </Label>
+                              <Switch
+                                id="billing-notifications"
+                                defaultChecked
+                              />
                             </div>
                             <div className="flex items-center justify-between">
-                              <Label htmlFor="content-updates" className="text-gray-300">Content Updates</Label>
+                              <Label
+                                htmlFor="content-updates"
+                                className="text-gray-300"
+                              >
+                                Content Updates
+                              </Label>
                               <Switch id="content-updates" defaultChecked />
                             </div>
                             <div className="flex items-center justify-between">
-                              <Label htmlFor="promotional-emails" className="text-gray-300">Promotional Emails</Label>
+                              <Label
+                                htmlFor="promotional-emails"
+                                className="text-gray-300"
+                              >
+                                Promotional Emails
+                              </Label>
                               <Switch id="promotional-emails" />
                             </div>
                           </div>
                         </div>
                         <div>
-                          <h4 className="font-medium text-white mb-2">Payment Method</h4>
+                          <h4 className="font-medium text-white mb-2">
+                            Payment Method
+                          </h4>
                           <RadioGroup defaultValue="card" className="space-y-2">
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="card" id="card" />
-                              <Label htmlFor="card" className="text-gray-300">Credit Card</Label>
+                              <Label htmlFor="card" className="text-gray-300">
+                                Credit Card
+                              </Label>
                             </div>
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="paypal" id="paypal" />
-                              <Label htmlFor="paypal" className="text-gray-300">PayPal</Label>
+                              <Label htmlFor="paypal" className="text-gray-300">
+                                PayPal
+                              </Label>
                             </div>
                           </RadioGroup>
                         </div>
@@ -643,7 +791,9 @@ export default function ProfilePage() {
                       </div>
                       <div>
                         <h3 className="font-medium text-white">Billing</h3>
-                        <p className="text-sm text-gray-400">Next payment: Dec 1, 2024</p>
+                        <p className="text-sm text-gray-400">
+                          Next payment: Dec 1, 2024
+                        </p>
                       </div>
                     </div>
                     <ChevronRight className="text-gray-400" />
@@ -651,7 +801,9 @@ export default function ProfilePage() {
                 </DialogTrigger>
                 <DialogContent className="bg-gray-800 border-gray-700 max-w-3xl">
                   <DialogHeader>
-                    <DialogTitle className="text-white text-2xl">Billing Information</DialogTitle>
+                    <DialogTitle className="text-white text-2xl">
+                      Billing Information
+                    </DialogTitle>
                   </DialogHeader>
                   <Tabs defaultValue="payment" className="mt-4">
                     <TabsList className="grid grid-cols-3 mb-6">
@@ -667,18 +819,28 @@ export default function ProfilePage() {
                               <CreditCard className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <h4 className="font-medium text-white">Current Payment Method</h4>
-                              <p className="text-sm text-gray-400">Visa ending in 4242</p>
+                              <h4 className="font-medium text-white">
+                                Current Payment Method
+                              </h4>
+                              <p className="text-sm text-gray-400">
+                                Visa ending in 4242
+                              </p>
                             </div>
                           </div>
                           <div className="bg-gray-700/50 p-4 rounded-lg ml-14">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="w-8 h-5 bg-blue-500 rounded"></div>
-                              <span className="text-white">•••• •••• •••• 4242</span>
+                              <span className="text-white">
+                                •••• •••• •••• 4242
+                              </span>
                             </div>
-                            <div className="text-sm text-gray-400">Expires 12/25</div>
+                            <div className="text-sm text-gray-400">
+                              Expires 12/25
+                            </div>
                           </div>
-                          <Button variant="outline" className="ml-14">Update Payment Method</Button>
+                          <Button variant="outline" className="ml-14">
+                            Update Payment Method
+                          </Button>
                         </div>
                         <div className="space-y-4">
                           <div className="flex items-center gap-3">
@@ -686,54 +848,73 @@ export default function ProfilePage() {
                               <CalendarComponent className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <h4 className="font-medium text-white">Billing Schedule</h4>
-                              <p className="text-sm text-gray-400">Manage your billing dates</p>
+                              <h4 className="font-medium text-white">
+                                Billing Schedule
+                              </h4>
+                              <p className="text-sm text-gray-400">
+                                Manage your billing dates
+                              </p>
                             </div>
                           </div>
                           <div className="space-y-2 ml-14">
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-400">Next Billing Date:</span>
+                              <span className="text-gray-400">
+                                Next Billing Date:
+                              </span>
                               <span className="text-white">Dec 1, 2024</span>
                             </div>
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-400">Billing Cycle:</span>
+                              <span className="text-gray-400">
+                                Billing Cycle:
+                              </span>
                               <span className="text-white">Monthly</span>
                             </div>
                             <div className="flex items-center gap-2 mt-4">
                               <Popover>
                                 <PopoverTrigger asChild>
-                                  <Button variant="outline" className={cn(
-                                    "w-full justify-start text-left font-normal",
-                                    !date && "text-gray-400"
-                                  )}>
+                                  <Button
+                                    variant="outline"
+                                    className={cn(
+                                      "w-full justify-start text-left font-normal",
+                                      !date && "text-gray-400"
+                                    )}
+                                  >
                                     <Calendar className="mr-2 h-4 w-4" />
-                                    {date ? format(date, "PPP") : <span>Change billing date</span>}
+                                    {date ? (
+                                      format(date, "PPP")
+                                    ) : (
+                                      <span>Change billing date</span>
+                                    )}
                                   </Button>
                                 </PopoverTrigger>
-                                <PopoverContent 
-                                  className="w-auto p-0" 
+                                <PopoverContent
+                                  className="w-auto p-0"
                                   align="start"
-                                  style={{ 
-                                    backgroundColor: '#1f2937',
-                                    border: '1px solid #374151',
-                                    borderRadius: '0.5rem',
-                                    marginTop: '0.5rem'
+                                  style={{
+                                    backgroundColor: "#1f2937",
+                                    border: "1px solid #374151",
+                                    borderRadius: "0.5rem",
+                                    marginTop: "0.5rem",
                                   }}
                                 >
                                   <CalendarComponent
                                     mode="single"
                                     selected={date}
-                                    onSelect={(newDate: Date | undefined) => setDate(newDate)}
+                                    onSelect={(newDate: Date | undefined) =>
+                                      setDate(newDate)
+                                    }
                                     initialFocus
                                     className="rounded-md border-0"
                                     classNames={{
                                       head_cell: "text-gray-400",
                                       cell: "text-gray-300",
-                                      button: "bg-gray-700 text-white hover:bg-gray-600",
+                                      button:
+                                        "bg-gray-700 text-white hover:bg-gray-600",
                                       nav_button: "text-gray-400",
                                       nav_button_previous: "ml-2",
                                       nav_button_next: "mr-2",
-                                      selected: "bg-brandOrange text-white hover:bg-brandOrange/90"
+                                      selected:
+                                        "bg-brandOrange text-white hover:bg-brandOrange/90",
                                     }}
                                   />
                                 </PopoverContent>
@@ -747,32 +928,44 @@ export default function ProfilePage() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
                           <div>
-                            <h4 className="font-medium text-white">Premium Plan</h4>
+                            <h4 className="font-medium text-white">
+                              Premium Plan
+                            </h4>
                             <p className="text-sm text-gray-400">Nov 1, 2024</p>
                           </div>
                           <div className="text-right">
                             <p className="font-medium text-white">$19.99</p>
-                            <Badge className="bg-green-500/20 text-green-400">Paid</Badge>
+                            <Badge className="bg-green-500/20 text-green-400">
+                              Paid
+                            </Badge>
                           </div>
                         </div>
                         <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
                           <div>
-                            <h4 className="font-medium text-white">Premium Plan</h4>
+                            <h4 className="font-medium text-white">
+                              Premium Plan
+                            </h4>
                             <p className="text-sm text-gray-400">Oct 1, 2024</p>
                           </div>
                           <div className="text-right">
                             <p className="font-medium text-white">$19.99</p>
-                            <Badge className="bg-green-500/20 text-green-400">Paid</Badge>
+                            <Badge className="bg-green-500/20 text-green-400">
+                              Paid
+                            </Badge>
                           </div>
                         </div>
                         <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
                           <div>
-                            <h4 className="font-medium text-white">Premium Plan</h4>
+                            <h4 className="font-medium text-white">
+                              Premium Plan
+                            </h4>
                             <p className="text-sm text-gray-400">Sep 1, 2024</p>
                           </div>
                           <div className="text-right">
                             <p className="font-medium text-white">$19.99</p>
-                            <Badge className="bg-green-500/20 text-green-400">Paid</Badge>
+                            <Badge className="bg-green-500/20 text-green-400">
+                              Paid
+                            </Badge>
                           </div>
                         </div>
                       </div>
@@ -781,21 +974,27 @@ export default function ProfilePage() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
                           <div>
-                            <h4 className="font-medium text-white">Invoice #INV-2024-11</h4>
+                            <h4 className="font-medium text-white">
+                              Invoice #INV-2024-11
+                            </h4>
                             <p className="text-sm text-gray-400">Nov 1, 2024</p>
                           </div>
                           <Button variant="outline">Download PDF</Button>
                         </div>
                         <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
                           <div>
-                            <h4 className="font-medium text-white">Invoice #INV-2024-10</h4>
+                            <h4 className="font-medium text-white">
+                              Invoice #INV-2024-10
+                            </h4>
                             <p className="text-sm text-gray-400">Oct 1, 2024</p>
                           </div>
                           <Button variant="outline">Download PDF</Button>
                         </div>
                         <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
                           <div>
-                            <h4 className="font-medium text-white">Invoice #INV-2024-09</h4>
+                            <h4 className="font-medium text-white">
+                              Invoice #INV-2024-09
+                            </h4>
                             <p className="text-sm text-gray-400">Sep 1, 2024</p>
                           </div>
                           <Button variant="outline">Download PDF</Button>
@@ -835,29 +1034,39 @@ export default function ProfilePage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent className="w-56 bg-gray-800 border-gray-700">
-                        <DropdownMenuLabel className="text-gray-300">Filter by</DropdownMenuLabel>
+                        <DropdownMenuLabel className="text-gray-300">
+                          Filter by
+                        </DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-gray-700" />
-                        <DropdownMenuItem 
-                          className={`text-gray-300 hover:bg-gray-700 cursor-pointer ${postFilter === 'all' ? 'text-brandOrange' : ''}`}
-                          onClick={() => setPostFilter('all')}
+                        <DropdownMenuItem
+                          className={`text-gray-300 hover:bg-gray-700 cursor-pointer ${
+                            postFilter === "all" ? "text-brandOrange" : ""
+                          }`}
+                          onClick={() => setPostFilter("all")}
                         >
                           All Posts
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className={`text-gray-300 hover:bg-gray-700 cursor-pointer ${postFilter === 'workouts' ? 'text-brandOrange' : ''}`}
-                          onClick={() => setPostFilter('workouts')}
+                        <DropdownMenuItem
+                          className={`text-gray-300 hover:bg-gray-700 cursor-pointer ${
+                            postFilter === "workouts" ? "text-brandOrange" : ""
+                          }`}
+                          onClick={() => setPostFilter("workouts")}
                         >
                           Workouts
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className={`text-gray-300 hover:bg-gray-700 cursor-pointer ${postFilter === 'nutrition' ? 'text-brandOrange' : ''}`}
-                          onClick={() => setPostFilter('nutrition')}
+                        <DropdownMenuItem
+                          className={`text-gray-300 hover:bg-gray-700 cursor-pointer ${
+                            postFilter === "nutrition" ? "text-brandOrange" : ""
+                          }`}
+                          onClick={() => setPostFilter("nutrition")}
                         >
                           Nutrition
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className={`text-gray-300 hover:bg-gray-700 cursor-pointer ${postFilter === 'progress' ? 'text-brandOrange' : ''}`}
-                          onClick={() => setPostFilter('progress')}
+                        <DropdownMenuItem
+                          className={`text-gray-300 hover:bg-gray-700 cursor-pointer ${
+                            postFilter === "progress" ? "text-brandOrange" : ""
+                          }`}
+                          onClick={() => setPostFilter("progress")}
                         >
                           Progress Updates
                         </DropdownMenuItem>
@@ -867,7 +1076,9 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex items-start gap-3 p-4 bg-gray-700/50 rounded-lg hover:bg-gray-700/70 transition-colors">
                   <Image
-                    src={currentUser?.profileImage || "/images/default-avatar.jpg"}
+                    src={
+                      currentUser?.profileImage || "/images/default-avatar.jpg"
+                    }
                     alt="Profile"
                     width={40}
                     height={40}
@@ -875,11 +1086,18 @@ export default function ProfilePage() {
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-medium text-white">{currentUser?.name}</h4>
+                      <h4 className="font-medium text-white">
+                        {currentUser?.name}
+                      </h4>
                       <span className="text-xs text-gray-400">2 hours ago</span>
-                      <Badge className="bg-blue-500/20 text-blue-400">Workout</Badge>
+                      <Badge className="bg-blue-500/20 text-blue-400">
+                        Workout
+                      </Badge>
                     </div>
-                    <p className="text-sm text-gray-300 mt-1">Just completed an intense HIIT workout! 💪 Feeling amazing!</p>
+                    <p className="text-sm text-gray-300 mt-1">
+                      Just completed an intense HIIT workout! 💪 Feeling
+                      amazing!
+                    </p>
                     <div className="mt-2 flex items-center gap-4">
                       <button className="text-sm text-gray-400 hover:text-brandOrange transition-colors flex items-center gap-1">
                         <Heart className="w-4 h-4" /> 24
@@ -895,7 +1113,9 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex items-start gap-3 p-4 bg-gray-700/50 rounded-lg hover:bg-gray-700/70 transition-colors">
                   <Image
-                    src={currentUser?.profileImage || "/images/default-avatar.jpg"}
+                    src={
+                      currentUser?.profileImage || "/images/default-avatar.jpg"
+                    }
                     alt="Profile"
                     width={40}
                     height={40}
@@ -903,11 +1123,17 @@ export default function ProfilePage() {
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-medium text-white">{currentUser?.name}</h4>
+                      <h4 className="font-medium text-white">
+                        {currentUser?.name}
+                      </h4>
                       <span className="text-xs text-gray-400">1 day ago</span>
-                      <Badge className="bg-green-500/20 text-green-400">Progress</Badge>
+                      <Badge className="bg-green-500/20 text-green-400">
+                        Progress
+                      </Badge>
                     </div>
-                    <p className="text-sm text-gray-300 mt-1">New personal record on deadlifts! 🏋️‍♂️ 225lbs x 5</p>
+                    <p className="text-sm text-gray-300 mt-1">
+                      New personal record on deadlifts! 🏋️‍♂️ 225lbs x 5
+                    </p>
                     <div className="mt-2 flex items-center gap-4">
                       <button className="text-sm text-gray-400 hover:text-brandOrange transition-colors flex items-center gap-1">
                         <Heart className="w-4 h-4" /> 42
@@ -928,7 +1154,9 @@ export default function ProfilePage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(1, prev - 1))
+                  }
                   disabled={currentPage === 1}
                 >
                   <ChevronLeft className="h-4 w-4 mr-2" />
@@ -940,7 +1168,7 @@ export default function ProfilePage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(prev => prev + 1)}
+                  onClick={() => setCurrentPage((prev) => prev + 1)}
                   disabled={currentPage === 10}
                 >
                   Next
@@ -971,7 +1199,11 @@ export default function ProfilePage() {
                 <h4 className="font-medium text-white">Sarah Fitness</h4>
                 <p className="text-sm text-gray-400">HIIT Specialist</p>
               </div>
-              <Button variant="outline" size="sm" className="text-gray-400 hover:text-white">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-gray-400 hover:text-white"
+              >
                 Unfollow
               </Button>
             </div>
@@ -987,7 +1219,11 @@ export default function ProfilePage() {
                 <h4 className="font-medium text-white">Yoga Master</h4>
                 <p className="text-sm text-gray-400">Yoga Instructor</p>
               </div>
-              <Button variant="outline" size="sm" className="text-gray-400 hover:text-white">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-gray-400 hover:text-white"
+              >
                 Unfollow
               </Button>
             </div>
@@ -998,7 +1234,7 @@ export default function ProfilePage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setFollowingPage(prev => Math.max(1, prev - 1))}
+              onClick={() => setFollowingPage((prev) => Math.max(1, prev - 1))}
               disabled={followingPage === 1}
             >
               <ChevronLeft className="h-4 w-4 mr-2" />
@@ -1010,14 +1246,14 @@ export default function ProfilePage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setFollowingPage(prev => prev + 1)}
+              onClick={() => setFollowingPage((prev) => prev + 1)}
               disabled={followingPage === 5}
             >
               Next
               <ChevronRight className="h-4 w-4 ml-2" />
             </Button>
           </div>
-      </div>
+        </div>
       </main>
     </div>
   );

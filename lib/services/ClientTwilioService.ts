@@ -50,19 +50,51 @@ export class ClientTwilioService {
 
     try {
       this.logger.info(`Fetching new token for stream ${streamId}`);
-      const response = await fetch(`/api/twilio/token?streamId=${streamId}`, {
-        method: "GET",
+      const response = await fetch(`/api/twilio/token`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          roomName: streamId,
+          identity: userId,
+        }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to get Twilio token");
+        let errorData;
+        try {
+          // Safely parse JSON, handle empty response
+          const text = await response.text();
+          errorData = text
+            ? JSON.parse(text)
+            : { error: `HTTP error ${response.status}` };
+        } catch (jsonError) {
+          // Handle JSON parse errors
+          this.logger.error(`Error parsing error response: ${jsonError}`);
+          throw new Error(
+            `Failed to get Twilio token: HTTP ${response.status}`
+          );
+        }
+        throw new Error(
+          errorData.error ||
+            `Failed to get Twilio token: HTTP ${response.status}`
+        );
       }
 
-      const data = await response.json();
+      // Safely parse response data, handle empty responses
+      let data;
+      try {
+        const text = await response.text();
+        data = text ? JSON.parse(text) : null;
+      } catch (jsonError) {
+        this.logger.error(`Error parsing token response: ${jsonError}`);
+        throw new Error("Invalid response format from token API");
+      }
+
+      if (!data || !data.token) {
+        throw new Error("No valid token returned from API");
+      }
 
       // Cache the token with an expiry (default: 24h minus buffer)
       this.tokenCache[cacheKey] = {

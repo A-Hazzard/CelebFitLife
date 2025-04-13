@@ -1,4 +1,4 @@
-import { adminDb } from "@/lib/config/firebaseAdmin";
+import { adminDb } from "@/lib/firebase/admin";
 import bcrypt from "bcryptjs";
 import { SessionManager } from "@/lib/session";
 import { z } from "zod";
@@ -19,12 +19,13 @@ const loginSchema = z.object({
 // Type for validated login data
 type LoginInput = z.infer<typeof loginSchema>;
 
-interface UserSessionData {
+// Convert interface to type
+type UserSessionData = {
   isStreamer: boolean;
   isAdmin: boolean;
   userId: string;
   email: string;
-}
+};
 
 // LoginService class to encapsulate login logic
 export class LoginService {

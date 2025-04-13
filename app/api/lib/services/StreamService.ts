@@ -2,23 +2,7 @@ import { adminDb, convertDocToObj } from "@/lib/firebase/admin"; // Correct path
 import { Stream, StreamCreateDTO, StreamUpdateDTO } from "../models/Stream"; // Correct path
 import { NotFoundError, InvalidDataError } from "../errors/apiErrors"; // Use API errors
 import { nanoid } from "nanoid";
-
-// Define more specific type for StreamUpdateData
-interface StreamUpdateData {
-  title?: string;
-  description?: string;
-  thumbnailUrl?: string;
-  hasStarted?: boolean;
-  hasEnded?: boolean;
-  startedAt?: string;
-  endedAt?: string;
-  scheduledAt?: string;
-  audioMuted?: boolean;
-  cameraOff?: boolean;
-  isCameraOff?: boolean; // Legacy field
-  isMuted?: boolean; // Legacy field
-  lastUpdated?: string;
-}
+import { StreamApiUpdateData } from "@/lib/types/streaming";
 
 /**
  * Service for managing streams in the database (API-specific)
@@ -160,7 +144,7 @@ export class StreamService {
     }
 
     // Ensure sensitive/immutable fields are not updated accidentally
-    const safeUpdateData = streamData as StreamUpdateData;
+    const safeUpdateData = streamData as StreamApiUpdateData;
     if (Object.keys(safeUpdateData).length === 0) {
       throw new InvalidDataError("No valid fields provided for update.");
     }

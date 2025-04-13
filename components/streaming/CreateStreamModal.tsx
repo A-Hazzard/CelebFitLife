@@ -29,11 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Image from "next/image";
-
-interface CreateStreamModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
+import { CreateStreamModalProps } from "@/lib/types/ui";
 
 export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
   const router = useRouter();
@@ -376,6 +372,7 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
             </Button>
             <Button
               type="submit"
+              variant="default"
               disabled={isSubmitting}
               className="bg-brandOrange hover:bg-brandOrange/90 text-white"
             >

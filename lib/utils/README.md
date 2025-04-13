@@ -162,4 +162,6 @@ When adding new utilities, consider:
 3. Is it properly typed and documented?
 4. Does it follow functional programming principles where appropriate?
 5. Is it thoroughly tested with edge cases?
-6. Does it handle errors gracefully? 
+6. Does it handle errors gracefully?
+
+**Note:** Firebase-related utilities (Admin SDK helpers) have been consolidated into `/lib/firebase/admin.ts`. 

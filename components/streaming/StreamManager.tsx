@@ -8,7 +8,6 @@ import React, {
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff, Video, VideoOff, Share2, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Stream } from "@/lib/types/streaming";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -23,16 +22,12 @@ import {
   serverTimestamp,
   onSnapshot,
 } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import { StreamDuration } from "@/components/streaming/StreamDuration";
 import { ClientTwilioService } from "@/lib/services/ClientTwilioService";
 import { connect, Room } from "twilio-video";
 import Loader from "@/components/ui/Loader";
-
-interface StreamManagerProps {
-  stream: Stream;
-  className?: string;
-}
+import { StreamManagerProps } from "@/lib/types/streaming";
 
 // Create an instance of the ClientTwilioService
 const clientTwilioService = new ClientTwilioService();
@@ -46,12 +41,10 @@ const generateUniqueIdentity = (prefix: string, streamId: string): string => {
 
 // Define types with proper error handling
 type StartStreamFunction = () => Promise<void>;
-type HandleRetryFunction = (retryCount: number) => Promise<void>;
 type StreamError = Error | unknown;
 
 // Declare function references first to break circular dependencies
 let startStream: StartStreamFunction;
-let handleRetry: HandleRetryFunction;
 
 // Convert to forwardRef
 const StreamManager = forwardRef<
@@ -171,19 +164,15 @@ const StreamManager = forwardRef<
     }
   }, [stream.hasStarted, stream.title, isConnecting]);
 
-  // Define the retry handler with proper type
-  handleRetry = async (retryCount: number) => {
-    if (!twilioRoomRef.current && connectionStatus !== "connected") {
-      console.log(`[StreamManager] Auto-retry attempt ${retryCount}`);
+  // Define the retry handler with proper usage
+  const handleRetry = async (retry: number) => {
+    if (retry <= maxRetries && connectionStatus !== "connected") {
+      console.log(`[StreamManager] Executing retry ${retry}/${maxRetries}`);
       try {
         await startStream();
-      } catch (error: StreamError) {
-        console.error("[StreamManager] Auto-retry failed:", error);
+      } catch (error) {
+        console.error("[StreamManager] Retry failed:", error);
       }
-    } else {
-      console.log(
-        "[StreamManager] Skipping auto-retry, already connected or unmounted"
-      );
     }
   };
 
@@ -210,6 +199,16 @@ const StreamManager = forwardRef<
       setIsConnecting(true);
       setConnectionStatus("connecting");
 
+      // Set up connection timeout
+      const connectionTimeout = setTimeout(() => {
+        if (connectionStatus !== "connected") {
+          console.error("[StreamManager] Connection attempt timed out");
+          setConnectionError("Connection timed out. Please try again.");
+          setIsConnecting(false);
+          setConnectionStatus("disconnected");
+        }
+      }, 15000); // 15 second timeout
+
       // If we already have a stream, use it instead of creating a new one
       if (!localStreamRef.current) {
         // Get the selected camera and mic from localStorage if available
@@ -224,12 +223,20 @@ const StreamManager = forwardRef<
         };
 
         if (savedSettings) {
-          const settings = JSON.parse(savedSettings);
-          if (settings.selectedCamera) {
-            videoConstraints.deviceId = { exact: settings.selectedCamera };
-          }
-          if (settings.selectedMic) {
-            audioConstraints.deviceId = { exact: settings.selectedMic };
+          try {
+            const settings = JSON.parse(savedSettings);
+            if (settings.selectedCamera) {
+              videoConstraints.deviceId = { exact: settings.selectedCamera };
+            }
+            if (settings.selectedMic) {
+              audioConstraints.deviceId = { exact: settings.selectedMic };
+            }
+          } catch (parseError) {
+            console.error(
+              "[StreamManager] Error parsing device settings:",
+              parseError
+            );
+            // Continue with default constraints
           }
         }
 
@@ -252,328 +259,207 @@ const StreamManager = forwardRef<
               // Try to play the video with error handling
               const playPromise = videoRef.current.play();
               if (playPromise !== undefined) {
-                await playPromise.catch((error) => {
-                  console.warn(
-                    "[StreamManager] Browser prevented autoplay:",
-                    error
-                  );
-                  // Even with autoplay blocked, we'll continue - this is just the preview
-                  // User will still be able to publish their stream
+                playPromise.catch((error) => {
+                  // Handle AbortError properly - may happen during navigation or when interrupted
+                  if (error.name === "AbortError") {
+                    console.log(
+                      "[StreamManager] Video play was interrupted, will retry when possible"
+                    );
+                    // Set up to retry play when the user interacts with the page
+                    const retryPlay = () => {
+                      if (videoRef.current) {
+                        videoRef.current
+                          .play()
+                          .then(() => {
+                            document.removeEventListener("click", retryPlay);
+                          })
+                          .catch((e) =>
+                            console.error(
+                              "[StreamManager] Retry play failed:",
+                              e
+                            )
+                          );
+                      }
+                    };
+                    document.addEventListener("click", retryPlay, {
+                      once: true,
+                    });
+                  } else {
+                    console.error(
+                      "[StreamManager] Error playing video:",
+                      error
+                    );
+                  }
                 });
               }
-            } catch (playError) {
-              console.warn(
-                "[StreamManager] Error playing video preview:",
-                playError
+            } catch (error) {
+              console.error(
+                "[StreamManager] Error with video playback:",
+                error
               );
-              // Continue anyway - this is just the preview
             }
           }
 
           localStreamRef.current = mediaStream;
-
-          // Reset retry count on successful connection
-          setRetryCount(0);
-          console.log(
-            "[StreamManager] Successfully accessed camera and microphone"
+        } catch (mediaError) {
+          console.error(
+            "[StreamManager] Error getting user media:",
+            mediaError
           );
-        } catch (mediaError: unknown) {
-          console.error("[StreamManager] Failed to get media:", mediaError);
-          let errorMessage = "Failed to access camera/microphone. ";
-
-          // Provide better error messages based on the error
-          if (mediaError instanceof Error) {
-            if (mediaError.name === "NotAllowedError") {
-              errorMessage +=
-                "Please grant camera and microphone permissions in your browser.";
-            } else if (mediaError.name === "NotFoundError") {
-              errorMessage +=
-                "No camera or microphone found. Please connect a device and try again.";
-            } else if (mediaError.name === "NotReadableError") {
-              errorMessage +=
-                "Your camera or microphone is already in use by another application.";
-            } else {
-              errorMessage +=
-                "Please check browser permissions and make sure your devices are connected.";
-            }
-          } else {
-            errorMessage +=
-              "Please check browser permissions and make sure your devices are connected.";
-          }
-
-          setConnectionError(errorMessage);
+          clearTimeout(connectionTimeout);
+          setConnectionError(
+            `Could not access camera or microphone: ${
+              (mediaError as Error).message
+            }`
+          );
           setIsConnecting(false);
           setConnectionStatus("disconnected");
-          throw mediaError;
+          return;
         }
       }
 
-      // Ensure we have a media stream
       if (!localStreamRef.current) {
-        throw new Error("Failed to get local media stream");
+        clearTimeout(connectionTimeout);
+        setConnectionError("Failed to initialize media stream");
+        setIsConnecting(false);
+        setConnectionStatus("disconnected");
+        return;
       }
 
-      setIsStreaming(true);
-      console.log("[StreamManager] Setting isStreaming to true");
-
-      // Initialize tracks with the current state
+      // Get tracks from the media stream
       const videoTracks = localStreamRef.current.getVideoTracks();
       const audioTracks = localStreamRef.current.getAudioTracks();
 
-      if (videoTracks.length > 0) {
-        videoTracks.forEach((track) => {
-          track.enabled = isVideoEnabled;
-        });
-      } else {
-        console.warn(
-          "[StreamManager] No video tracks found in the media stream"
-        );
+      if (videoTracks.length === 0) {
+        console.warn("[StreamManager] No video tracks found");
       }
 
-      if (audioTracks.length > 0) {
-        audioTracks.forEach((track) => {
-          track.enabled = isMicEnabled;
-        });
-      } else {
-        console.warn(
-          "[StreamManager] No audio tracks found in the media stream"
-        );
+      if (audioTracks.length === 0) {
+        console.warn("[StreamManager] No audio tracks found");
       }
 
-      console.log("[StreamManager] Starting stream with tracks:", {
-        video: videoTracks.length > 0,
-        audio: audioTracks.length > 0,
-        videoEnabled: isVideoEnabled,
-        audioEnabled: isMicEnabled,
-      });
-
-      // Update hasStarted in Firestore
+      // Connect to Twilio
       try {
-        // Ensure stream.id exists before using it
-        if (!stream.id) {
-          throw new Error("Stream ID is undefined");
-        }
+        // Generate a unique identity for this streamer
+        const identity = generateUniqueIdentity(
+          "streamer",
+          stream.id || "unknown"
+        );
 
-        // 1. Update Firestore document first
-        const streamDocRef = doc(db, "streams", stream.id);
-        await updateDoc(streamDocRef, {
-          hasStarted: true,
-          hasEnded: false,
-          startedAt: serverTimestamp(),
-          lastUpdated: serverTimestamp(),
-          // Set initial device states using consistent field names
-          audioMuted: !isMicEnabled, // Use audioMuted consistently
-          cameraOff: !isVideoEnabled, // Use cameraOff consistently
+        // Get token and connect
+        const token = await clientTwilioService.getToken(stream.slug, identity);
+
+        // Connect to Twilio room with robust error handling
+        const room = await connect(token, {
+          name: stream.slug,
+          tracks: [...videoTracks, ...audioTracks],
+          networkQuality: true,
+          dominantSpeaker: true,
+          maxAudioBitrate: 16000,
+          preferredVideoCodecs: [{ codec: "VP8", simulcast: true }],
         });
 
-        // 2. Connect to streaming service - only show one toast per connection attempt
-        if (retryCount === 0) {
-          toast.info("Setting up streaming room. Please wait...");
-        }
+        // Store reference and update status
+        twilioRoomRef.current = room;
+        setConnectionStatus("connected");
+        setIsConnecting(false);
 
-        // Generate a unique identity for the streamer
-        const streamerIdentity = generateUniqueIdentity("streamer", stream.id);
-
-        try {
-          // Get a token from Twilio API
-          const token = await clientTwilioService.getToken(
-            stream.id, // Room name
-            streamerIdentity // User identity
-          );
-
+        // Set up disconnection and reconnection handlers
+        room.on("disconnected", (_room, error) => {
           console.log(
-            "[StreamManager] Successfully received token, connecting to room..."
+            "[StreamManager] Disconnected from Twilio room:",
+            error || "No error"
           );
-
-          // Extract MediaStreamTracks to create LocalTracks which Twilio needs
-          const audioTrack = localStreamRef.current.getAudioTracks()[0];
-          const videoTrack = localStreamRef.current.getVideoTracks()[0];
-
-          if (!audioTrack || !videoTrack) {
-            console.error("[StreamManager] Missing audio or video track:", {
-              hasAudio: !!audioTrack,
-              hasVideo: !!videoTrack,
-            });
-            throw new Error("Failed to get required audio or video tracks");
-          }
-
-          // Make sure tracks are enabled based on UI state
-          audioTrack.enabled = isMicEnabled;
-          videoTrack.enabled = isVideoEnabled;
-
-          // Only show one connecting toast to avoid toast spam
-          if (retryCount === 0 && connectionStatus !== "connected") {
-            toast.info("Connecting to streaming service...");
-          }
-
-          // Connect to the Twilio room with the tracks
-          console.log(
-            `[StreamManager] Connecting with unique identity: ${streamerIdentity}`
-          );
-          const twilioRoom = await connect(token, {
-            name: stream.id,
-            tracks: [audioTrack, videoTrack], // Explicitly pass individual tracks
-            bandwidthProfile: {
-              video: {
-                mode: "collaboration",
-                dominantSpeakerPriority: "high",
-              },
-            },
-            networkQuality: {
-              local: 1,
-              remote: 1,
-            },
-          });
-
-          console.log(
-            `[StreamManager] Successfully connected to room: ${twilioRoom.name}`
-          );
-
-          // Store the Twilio room reference
-          twilioRoomRef.current = twilioRoom;
-          setConnectionStatus("connected");
-
-          // Only show success toast if this is the first successful connection or after error
-          if (retryCount === 0 || connectionError) {
-            toast.success("Connected! You are now live.");
-          }
-
-          // Set up event listeners for the room
-          twilioRoom.on("disconnected", (_room, error) => {
-            console.log(
-              `[StreamManager] Disconnected from Twilio room: ${
-                error ? error.message : "No error"
-              }`
-            );
-            twilioRoomRef.current = null;
-            setConnectionStatus("disconnected");
-
-            if (error) {
-              const errorMessage = `Disconnected: ${error.message}`;
-              console.error(
-                `[StreamManager] Twilio disconnection error: ${errorMessage}`
-              );
-              setConnectionError(errorMessage);
-              toast.error(`Stream disconnected: ${error.message}`);
-            } else {
-              console.log(
-                "[StreamManager] Normal disconnect from Twilio room (no error)"
-              );
-              toast.warning(
-                "Stream disconnected. Viewers may not be able to see your stream."
-              );
-            }
-          });
-
-          twilioRoom.on("participantConnected", (participant) => {
-            console.log(
-              `[StreamManager] Participant connected: ${participant.identity}`
-            );
-            toast.info(`Viewer joined: ${participant.identity.split("_")[0]}`);
-          });
-
-          twilioRoom.on("participantDisconnected", (participant) => {
-            console.log(
-              `[StreamManager] Participant disconnected: ${participant.identity}`
-            );
-          });
-
-          twilioRoom.on("reconnecting", (error) => {
-            console.log(
-              `[StreamManager] Reconnecting to Twilio room: ${error.message}`
-            );
-            setConnectionStatus("connecting");
-            toast.warning(
-              "Stream connection interrupted. Attempting to reconnect..."
-            );
-          });
-
-          twilioRoom.on("reconnected", () => {
-            console.log(`[StreamManager] Reconnected to Twilio room`);
-            setConnectionStatus("connected");
-            toast.success("Stream reconnected successfully!");
-          });
-
-          // Log info about the Twilio debug environment
-          console.log("[StreamManager] Twilio connection info:", {
-            twilioSessionId:
-              clientTwilioService.getDebugInfo?.()?.sessionId ||
-              "debug-unavailable",
-            roomName: twilioRoom.name,
-            localParticipantIdentity: twilioRoom.localParticipant.identity,
-            twilioRoomSid: twilioRoom.sid,
-          });
-        } catch (tokenError) {
-          // Specific error handling for token retrieval or connection issues
-          console.error(
-            "[StreamManager] Error with Twilio token or connection:",
-            tokenError
-          );
-
-          let errorMsg = "Unknown Twilio error";
-          if (tokenError instanceof Error) {
-            errorMsg = tokenError.message;
-            // Log additional details about the error
-            console.error("[StreamManager] Detailed error info:", {
-              name: tokenError.name,
-              message: tokenError.message,
-              stack: tokenError.stack,
-            });
-          }
-
           setConnectionStatus("disconnected");
-          setConnectionError(`Twilio error: ${errorMsg}`);
-          toast.error(
-            `Stream started but Twilio connection failed: ${errorMsg}`
+          twilioRoomRef.current = null;
+
+          // Attempt to reconnect if the disconnect wasn't intentional
+          if (error && isStreaming) {
+            console.log(
+              "[StreamManager] Attempting to reconnect after disconnect..."
+            );
+            setTimeout(() => {
+              if (isStreaming) {
+                startStream().catch((err) => {
+                  console.error(
+                    "[StreamManager] Failed to reconnect after disconnect:",
+                    err
+                  );
+                });
+              }
+            }, 3000);
+          }
+        });
+
+        room.on("reconnecting", (error) => {
+          console.log("[StreamManager] Reconnecting to Twilio room:", error);
+          setConnectionStatus("connecting");
+        });
+
+        room.on("reconnected", () => {
+          console.log(
+            "[StreamManager] Successfully reconnected to Twilio room"
           );
+          setConnectionStatus("connected");
+        });
 
-          // Don't re-throw, we want the stream to be considered started even if Twilio connection fails
+        // Clear the timeout since we're connected
+        clearTimeout(connectionTimeout);
+
+        // Update stream status in Firebase
+        if (stream.id && !stream.hasStarted) {
+          try {
+            const streamRef = doc(db, "streams", stream.id);
+            await updateDoc(streamRef, {
+              hasStarted: true,
+              startedAt: serverTimestamp(),
+              status: "live",
+            });
+            console.log("[StreamManager] Updated stream status to live");
+          } catch (dbError) {
+            console.error(
+              "[StreamManager] Error updating stream status:",
+              dbError
+            );
+            // Don't fail the whole connect process for a DB error
+          }
         }
 
-        // The stream was successfully started in Firestore, so we consider it successful
-        // even if Twilio connection failed
-        toast.success("Stream started successfully!");
-      } catch (dbError) {
-        console.error("[StreamManager] Error updating stream status:", dbError);
-        toast.error(
-          "Stream started locally but failed to update status in database."
+        setIsStreaming(true);
+      } catch (twilioError) {
+        console.error(
+          "[StreamManager] Error connecting to Twilio:",
+          twilioError
         );
+        clearTimeout(connectionTimeout);
+        setConnectionError(
+          `Connection error: ${(twilioError as Error).message}`
+        );
+        setIsConnecting(false);
+        setConnectionStatus("disconnected");
       }
-    } catch (error: StreamError) {
-      console.error("[StreamManager] Error starting stream:", error);
-      // Increment retry count
-      const newRetryCount = retryCount + 1;
-      setRetryCount(newRetryCount);
-      setConnectionStatus("disconnected");
 
-      // Only change to error state if we've reached max retries
-      if (newRetryCount >= maxRetries) {
-        setConnectionError(
-          `Failed to start stream after ${maxRetries} attempts. Please check your camera and microphone permissions.`
-        );
-        toast.error(
-          "Failed to start stream. Please check your camera and microphone permissions."
-        );
-      } else {
-        setConnectionError(
-          `Connection attempt ${newRetryCount} of ${maxRetries} failed. Attempting to reconnect...`
-        );
-
-        if (newRetryCount === 1) {
-          toast.info("Reconnecting automatically...");
-        }
-
-        const delay = Math.min(3000 * newRetryCount, 10000);
+      // Add retry logic if a connection error occurs
+      if (connectionStatus !== "connected" && retryCount < maxRetries) {
+        const newRetryCount = retryCount + 1;
+        setRetryCount(newRetryCount);
         console.log(
-          `[StreamManager] Scheduling auto-retry attempt ${newRetryCount} in ${delay}ms`
+          `[StreamManager] Connection failed, retry ${newRetryCount}/${maxRetries}`
         );
 
+        // Implement retry with exponential backoff
+        const delay = Math.min(2000 * Math.pow(2, newRetryCount - 1), 10000);
         setTimeout(() => {
-          handleRetry(newRetryCount);
+          if (isStreaming) {
+            handleRetry(newRetryCount);
+          }
         }, delay);
       }
-    } finally {
+    } catch (error) {
+      console.error("[StreamManager] Unexpected error in startStream:", error);
+      setConnectionError(`Unexpected error: ${(error as Error).message}`);
       setIsConnecting(false);
+      setConnectionStatus("disconnected");
     }
   };
 

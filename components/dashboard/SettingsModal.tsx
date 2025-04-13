@@ -32,11 +32,7 @@ import {
   Sliders,
   Cog,
 } from "lucide-react";
-
-interface SettingsModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
+import { SettingsModalProps } from "@/lib/types/ui";
 
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   return (
@@ -379,7 +375,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
           >
             Cancel
           </Button>
-          <Button>Save Changes</Button>
+          <Button variant="default">Save Changes</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -24,6 +24,25 @@ CelebFitLife is a live streaming platform that connects fitness influencers with
 
 ## Project Structure
 
+*   `/app`: Next.js 13 App Router structure.
+    *   `/(auth)`: Authentication routes (login, register).
+    *   `/(dashboard)`: User dashboard routes.
+    *   `/(streaming)`: Live streaming view routes.
+    *   `/api`: API routes.
+*   `/components`: Reusable UI components.
+*   `/lib`: Core logic, utilities, types, hooks, and configurations.
+    *   `/config`: Non-Firebase configurations (e.g., Twilio).
+    *   `/firebase`: Consolidated Firebase client (`client.ts`) and admin (`admin.ts`) SDK setup.
+    *   `/helpers`: Helper functions for specific features.
+    *   `/hooks`: Custom React hooks.
+    *   `/models`: Data models/interfaces.
+    *   `/services`: Service classes for interacting with external APIs (e.g., Twilio).
+    *   `/store`: Zustand state management stores.
+    *   `/types`: TypeScript type definitions.
+    *   `/utils`: General utility functions.
+*   `/public`: Static assets.
+*   `/styles`: Global styles.
+
 ```
 ├── app/                      # Next.js app router
 │   ├── (auth)/               # Authentication-specific pages with route group

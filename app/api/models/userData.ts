@@ -2,10 +2,20 @@
  * A plain TS type for storing user info.
  * This is easier to persist in Zustand without losing methods.
  */
-export interface UserData {
+export type UserData = {
   id?: string;
-  name?: string;
+  uid?: string;
   email?: string;
+  username?: string;
+  phone?: string;
+  country?: string;
+  city?: string;
+  age?: number;
+  isStreamer?: boolean; // Optional field
+  isAdmin?: boolean; // Optional field
+  createdAt?: string | Date; // Optional timestamp
+  updatedAt?: Date;
+  name?: string;
   specialty?: string;
   tags?: string[];
   bio?: string;
@@ -14,6 +24,8 @@ export interface UserData {
     instagram?: string;
     youtube?: string;
     twitter?: string;
+    tiktok?: string;
+    website?: string;
   };
   role?: {
     streamer: boolean;
@@ -31,15 +43,7 @@ export interface UserData {
       earnings: number;
     }>;
   };
-  createdAt?: Date;
-  updatedAt?: Date;
-  uid?: string;
-  username?: string;
   password?: string;
-  phone?: string;
-  country?: string;
-  city?: string;
-  age?: number;
   plan?:
     | {
         maxStreamers: number;
@@ -63,4 +67,4 @@ export interface UserData {
     streamerName: string;
   }>;
   myStreamers?: string[]; // Array of streamer IDs the user follows
-}
+};

@@ -4,30 +4,23 @@ import { useState, useEffect } from "react";
 import { useSignupStore } from "@/lib/store/useSignupStore";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { doc, setDoc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase/client";
 import { motion } from "framer-motion";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import { ArrowRight, ArrowLeft, Check, User, Loader2 } from "lucide-react";
 import Image from "next/image";
-
-// Define interfaces
-interface Streamer {
-  id: string;
-  name: string;
-  profileImage: string;
-  thumbnail: string;
-  quote: string;
-  category: string;
-  categoryName?: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-}
+import { Streamer, Category, SlickArrowProps } from "@/lib/types/streamer";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -43,14 +36,12 @@ const fadeUp = {
 };
 
 // Custom Slick Arrows
-interface SlickArrowProps {
-  className?: string;
-  style?: React.CSSProperties;
-  onClick?: () => void;
-  direction: 'prev' | 'next';
-}
-
-const SlickArrow: React.FC<SlickArrowProps> = ({ className, style, onClick, direction }) => (
+const SlickArrow: React.FC<SlickArrowProps> = ({
+  className,
+  style,
+  onClick,
+  direction,
+}) => (
   <div
     className={`${className} z-10 flex items-center justify-center w-10 h-10 rounded-full bg-gray-800 hover:bg-orange-500 border border-gray-700 cursor-pointer transition-all duration-300 absolute ${
       direction === "prev" ? "left-0" : "right-0"
@@ -79,8 +70,8 @@ export default function SelectStreamers() {
   // Get the maximum selectable streamers based on the selected plan
   const maxSelectable = (() => {
     const planMax = userData.planDetails?.maxStreamers;
-    if (planMax === '∞' || planMax === Infinity) return Infinity;
-    if (typeof planMax === 'string') return parseInt(planMax) || 1;
+    if (planMax === "∞" || planMax === Infinity) return Infinity;
+    if (typeof planMax === "string") return parseInt(planMax) || 1;
     return planMax || 1;
   })();
 
@@ -100,58 +91,66 @@ export default function SelectStreamers() {
         settings: {
           slidesToShow: 2,
           slidesToScroll: 1,
-        }
+        },
       },
       {
         breakpoint: 640,
         settings: {
           slidesToShow: 1,
           slidesToScroll: 1,
-        }
-      }
-    ]
+        },
+      },
+    ],
   };
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
-        
+
         // Fetch categories
         const categoriesSnapshot = await getDocs(collection(db, "categories"));
-        const categoriesData: Category[] = categoriesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().name
-        }));
+        const categoriesData: Category[] = categoriesSnapshot.docs.map(
+          (doc) => ({
+            id: doc.id,
+            name: doc.data().name,
+          })
+        );
         setCategories(categoriesData);
-        
+
         // Fetch streamers
         const streamersRef = collection(db, "users");
         const q = query(streamersRef, where("role.streamer", "==", true));
         const streamersSnapshot = await getDocs(q);
-        
+
         if (streamersSnapshot.empty) {
           console.log("No streamers found");
           setStreamers([]);
         } else {
           // Process streamers data
-          const streamersData: Streamer[] = streamersSnapshot.docs.map(doc => {
-            const data = doc.data();
-            
-            // Get the category name based on the category ID
-            const categoryName = categoriesData.find(cat => cat.id === data.category)?.name || 'Fitness';
-            
-            return {
-              id: doc.id,
-              name: data.username || 'Unnamed Streamer',
-              profileImage: data.profileImage || '',
-              thumbnail: data.thumbnail || 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?q=80&w=1000',
-              quote: data.bio || '',
-              category: data.category || '',
-              categoryName
-            };
-          });
-          
+          const streamersData: Streamer[] = streamersSnapshot.docs.map(
+            (doc) => {
+              const data = doc.data();
+
+              // Get the category name based on the category ID
+              const categoryName =
+                categoriesData.find((cat) => cat.id === data.category)?.name ||
+                "Fitness";
+
+              return {
+                id: doc.id,
+                name: data.username || "Unnamed Streamer",
+                profileImage: data.profileImage || "",
+                thumbnail:
+                  data.thumbnail ||
+                  "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?q=80&w=1000",
+                quote: data.bio || "",
+                category: data.category || "",
+                categoryName,
+              };
+            }
+          );
+
           setStreamers(streamersData);
         }
       } catch (err) {
@@ -167,11 +166,9 @@ export default function SelectStreamers() {
 
   const handleStreamerSelect = (streamerId: string) => {
     if (selectedStreamers.includes(streamerId)) {
-      setSelectedStreamers(prev => prev.filter(id => id !== streamerId));
-    } else if (
-      selectedStreamers.length < maxSelectable
-    ) {
-      setSelectedStreamers(prev => [...prev, streamerId]);
+      setSelectedStreamers((prev) => prev.filter((id) => id !== streamerId));
+    } else if (selectedStreamers.length < maxSelectable) {
+      setSelectedStreamers((prev) => [...prev, streamerId]);
     }
   };
 
@@ -179,47 +176,49 @@ export default function SelectStreamers() {
     try {
       setSubmitting(true);
       setError("");
-      
+
       // Check if there's at least one streamer selected
       if (selectedStreamers.length === 0) {
         setError("Please select at least one streamer.");
         setSubmitting(false);
         return;
       }
-      
+
       // Update the userData with selected streamers
-      completeSignup({ 
-        myStreamers: selectedStreamers 
+      completeSignup({
+        myStreamers: selectedStreamers,
       });
-      
+
       // Save all user data to Firestore using email as document ID
       if (userData.email) {
         // Prepare the final user data object
         const finalUserData = {
           ...userData,
           myStreamers: selectedStreamers,
-          plan: userData.plan || 'basic',
-          createdAt: new Date().toISOString()
+          plan: userData.plan || "basic",
+          createdAt: new Date().toISOString(),
         };
 
         // Remove redundant fields
         delete finalUserData.selectedStreamers;
         delete finalUserData.planId;
         delete finalUserData.planDetails;
-        
+
         // Check if email already exists
         const userDocRef = doc(db, "users", userData.email);
         const userDocSnap = await getDoc(userDocRef);
-        
+
         if (userDocSnap.exists()) {
-          setError("This email is already registered. Please use a different email.");
+          setError(
+            "This email is already registered. Please use a different email."
+          );
           setSubmitting(false);
           return;
         }
-        
+
         // Save to Firestore
         await setDoc(userDocRef, finalUserData);
-        
+
         // Registration successful, redirect to login page
         router.push("/login?registered=true");
       } else {
@@ -237,10 +236,13 @@ export default function SelectStreamers() {
     <div>
       <div className="mb-4">
         <p className="text-gray-400">
-          Select up to {maxSelectable === Infinity ? 'unlimited' : maxSelectable} streamer{maxSelectable !== 1 ? "s" : ""} to follow
+          Select up to{" "}
+          {maxSelectable === Infinity ? "unlimited" : maxSelectable} streamer
+          {maxSelectable !== 1 ? "s" : ""} to follow
         </p>
         <p className="text-sm text-orange-500 mt-2">
-          {selectedStreamers.length} streamer{selectedStreamers.length !== 1 ? "s" : ""} selected
+          {selectedStreamers.length} streamer
+          {selectedStreamers.length !== 1 ? "s" : ""} selected
         </p>
       </div>
 
@@ -271,17 +273,17 @@ export default function SelectStreamers() {
             <Slider {...sliderSettings}>
               {streamers.map((streamer) => (
                 <div key={streamer.id} className="px-2">
-                  <div 
+                  <div
                     onClick={() => handleStreamerSelect(streamer.id)}
                     className={`cursor-pointer rounded-xl overflow-hidden h-full transition-all ${
-                      selectedStreamers.includes(streamer.id) 
-                        ? "ring-2 ring-orange-500 shadow-lg shadow-orange-500/20" 
+                      selectedStreamers.includes(streamer.id)
+                        ? "ring-2 ring-orange-500 shadow-lg shadow-orange-500/20"
                         : "border border-gray-700"
                     }`}
                   >
                     <div className="relative h-40 overflow-hidden">
-                      <Image 
-                        src={streamer.thumbnail} 
+                      <Image
+                        src={streamer.thumbnail}
                         alt={streamer.name}
                         className="w-full h-full object-cover"
                         width={160}
@@ -301,15 +303,20 @@ export default function SelectStreamers() {
                     <div className="p-4 bg-gray-800">
                       <div className="flex items-center mb-2">
                         <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700 mr-2">
-                          <Image 
-                            src={streamer.profileImage || "https://images.unsplash.com/photo-1633332755192-727a05c4013d?q=80&w=200"} 
+                          <Image
+                            src={
+                              streamer.profileImage ||
+                              "https://images.unsplash.com/photo-1633332755192-727a05c4013d?q=80&w=200"
+                            }
                             alt={streamer.name}
                             className="w-full h-full object-cover"
                             width={32}
                             height={32}
                           />
                         </div>
-                        <h3 className="text-white font-medium">{streamer.name}</h3>
+                        <h3 className="text-white font-medium">
+                          {streamer.name}
+                        </h3>
                       </div>
                       {streamer.quote && (
                         <p className="text-gray-400 text-sm italic line-clamp-2">

@@ -52,3 +52,49 @@ export type ExploreStreamersModalProps = {
  * General dashboard utils
  */
 export type KeyValueRecord = Record<string, unknown>;
+
+// Dashboard Component Types
+export type UpcomingStream = {
+  id: string;
+  title: string;
+  scheduledAt: Date;
+  thumbnail?: string;
+};
+
+export type StreamerGuideModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+};
+
+export type SettingsModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+};
+
+export type DashboardNotification = {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+  type: "system" | "follower" | "stream" | "achievement";
+};
+
+export type MetricsData = {
+  month: string;
+  streams: number;
+  viewers: number;
+  earnings: number;
+  // These fields may be used in other metrics visualizations
+  date?: string;
+  value?: number;
+  category?: string;
+};
+
+export type DashboardAreaChartProps = {
+  data: MetricsData[];
+  title?: string;
+  description?: string;
+  height?: number;
+  className?: string;
+};

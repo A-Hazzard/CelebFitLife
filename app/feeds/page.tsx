@@ -48,43 +48,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-interface Post {
-  id: string;
-  user: {
-    name: string;
-    image: string;
-    username: string;
-    isStreamer: boolean;
-  };
-  content: string;
-  image?: string;
-  likes: number;
-  comments: number;
-  timestamp: string;
-  isLiked: boolean;
-  category: 'achievement' | 'workout' | 'motivation' | 'nutrition';
-  metrics?: {
-    duration?: string;
-    calories?: number;
-    exercises?: string[];
-  };
-}
-
-interface Comment {
-  id: string;
-  user: {
-    name: string;
-    image: string;
-  };
-  content: string;
-  timestamp: string;
-}
+import { Post, Comment } from "@/lib/types/feed";
 
 export default function FeedsPage() {
   const { currentUser } = useAuthStore();
   const [newPost, setNewPost] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<Post['category']>('workout');
+  const [selectedCategory, setSelectedCategory] =
+    useState<Post["category"]>("workout");
   const [showPostModal, setShowPostModal] = useState(false);
   const [workoutDuration, setWorkoutDuration] = useState("");
   const [calories, setCalories] = useState("");
@@ -94,7 +64,10 @@ export default function FeedsPage() {
   // Close notifications dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (notificationsDropdownRef.current && !notificationsDropdownRef.current.contains(event.target as Node)) {
+      if (
+        notificationsDropdownRef.current &&
+        !notificationsDropdownRef.current.contains(event.target as Node)
+      ) {
         setIsNotificationsOpen(false);
       }
     }
@@ -109,40 +82,45 @@ export default function FeedsPage() {
       id: "1",
       user: {
         name: "Sarah Fitness",
-        image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
+        image:
+          "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
         username: "@sarahfit",
         isStreamer: true,
       },
-      content: "Crushed a 45-minute HIIT session! 💪 Burned 500 calories and feeling unstoppable. Join my next live stream for more intense workouts!",
-      image: "https://images.unsplash.com/photo-1601422407692-ec4eeec1d9b3?w=800&auto=format&q=80",
+      content:
+        "Crushed a 45-minute HIIT session! 💪 Burned 500 calories and feeling unstoppable. Join my next live stream for more intense workouts!",
+      image:
+        "https://images.unsplash.com/photo-1601422407692-ec4eeec1d9b3?w=800&auto=format&q=80",
       likes: 128,
       comments: 32,
       timestamp: "2 hours ago",
       isLiked: false,
-      category: 'workout',
+      category: "workout",
       metrics: {
-        duration: '45 min',
+        duration: "45 min",
         calories: 500,
-        exercises: ['Burpees', 'Mountain Climbers', 'Jump Squats']
-      }
+        exercises: ["Burpees", "Mountain Climbers", "Jump Squats"],
+      },
     },
     {
       id: "2",
       user: {
         name: "Yoga Master",
-        image: "https://images.unsplash.com/photo-1607346256330-dee7af15f7c5?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
+        image:
+          "https://images.unsplash.com/photo-1607346256330-dee7af15f7c5?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
         username: "@yogamaster",
         isStreamer: true,
       },
-      content: "🎯 Monthly Goal Update: 20 meditation sessions completed! Remember, mental fitness is just as important as physical fitness.",
+      content:
+        "🎯 Monthly Goal Update: 20 meditation sessions completed! Remember, mental fitness is just as important as physical fitness.",
       likes: 95,
       comments: 18,
       timestamp: "4 hours ago",
       isLiked: true,
-      category: 'achievement',
+      category: "achievement",
       metrics: {
-        duration: '300 min',
-      }
+        duration: "300 min",
+      },
     },
   ]);
 
@@ -151,16 +129,19 @@ export default function FeedsPage() {
       id: "1",
       user: {
         name: "John Doe",
-        image: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
+        image:
+          "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
       },
-      content: "This is exactly what I needed! Can't wait for the next session.",
+      content:
+        "This is exactly what I needed! Can't wait for the next session.",
       timestamp: "1 hour ago",
     },
     {
       id: "2",
       user: {
         name: "Emma Wilson",
-        image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
+        image:
+          "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
       },
       content: "Your sessions are always so inspiring! 🙌",
       timestamp: "30 minutes ago",
@@ -173,22 +154,22 @@ export default function FeedsPage() {
       title: "Sarah Fitness is live!",
       message: "Join her HIIT workout session now",
       time: "2 min ago",
-      type: "live"
+      type: "live",
     },
     {
       id: 2,
       title: "New follower",
       message: "Mike Strength started following you",
       time: "1 hour ago",
-      type: "follow"
+      type: "follow",
     },
     {
       id: 3,
       title: "Yoga Master posted",
       message: "Check out their latest achievement",
       time: "3 hours ago",
-      type: "post"
-    }
+      type: "post",
+    },
   ]);
 
   const handlePostSubmit = () => {
@@ -198,7 +179,9 @@ export default function FeedsPage() {
       id: Date.now().toString(),
       user: {
         name: currentUser.name || "Anonymous",
-        image: currentUser.profileImage || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
+        image:
+          currentUser.profileImage ||
+          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
         username: currentUser.username || "@anonymous",
         isStreamer: currentUser.role?.streamer || false,
       },
@@ -208,10 +191,13 @@ export default function FeedsPage() {
       timestamp: "Just now",
       isLiked: false,
       category: selectedCategory,
-      metrics: selectedCategory === 'workout' ? {
-        duration: workoutDuration,
-        calories: parseInt(calories),
-      } : undefined,
+      metrics:
+        selectedCategory === "workout"
+          ? {
+              duration: workoutDuration,
+              calories: parseInt(calories),
+            }
+          : undefined,
     };
 
     setPosts([post, ...posts]);
@@ -222,27 +208,29 @@ export default function FeedsPage() {
   };
 
   const toggleLike = (postId: string) => {
-    setPosts(posts.map(post => {
-      if (post.id === postId) {
-        return {
-          ...post,
-          isLiked: !post.isLiked,
-          likes: post.isLiked ? post.likes - 1 : post.likes + 1,
-        };
-      }
-      return post;
-    }));
+    setPosts(
+      posts.map((post) => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            isLiked: !post.isLiked,
+            likes: post.isLiked ? post.likes - 1 : post.likes + 1,
+          };
+        }
+        return post;
+      })
+    );
   };
 
-  const getCategoryIcon = (category: Post['category']) => {
+  const getCategoryIcon = (category: Post["category"]) => {
     switch (category) {
-      case 'workout':
+      case "workout":
         return <Dumbbell className="w-5 h-5 text-purple-500" />;
-      case 'achievement':
+      case "achievement":
         return <Trophy className="w-5 h-5 text-yellow-500" />;
-      case 'motivation':
+      case "motivation":
         return <Target className="w-5 h-5 text-blue-500" />;
-      case 'nutrition':
+      case "nutrition":
         return <Timer className="w-5 h-5 text-green-500" />;
     }
   };
@@ -261,13 +249,13 @@ export default function FeedsPage() {
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-orange-500 w-5 h-5" />
           </div>
           <nav className="hidden md:flex items-center space-x-6">
-            <Link 
+            <Link
               href="/streaming"
               className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
             >
               Streaming
             </Link>
-            <Link 
+            <Link
               href="/feeds"
               className="text-sm font-medium text-orange-500 hover:text-orange-400 transition-colors"
             >
@@ -302,7 +290,9 @@ export default function FeedsPage() {
                     <div
                       key={notification.id}
                       className={`p-3 hover:bg-gray-700/50 border-l-2 ${
-                        notification.type === 'live' ? 'border-red-500' : 'border-blue-500'
+                        notification.type === "live"
+                          ? "border-red-500"
+                          : "border-blue-500"
                       }`}
                     >
                       <div className="flex justify-between items-start">
@@ -327,9 +317,14 @@ export default function FeedsPage() {
           {currentUser && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                <Button
+                  variant="ghost"
+                  className="relative h-10 w-10 rounded-full"
+                >
                   <Image
-                    src={currentUser?.profileImage || "/images/default-avatar.jpg"}
+                    src={
+                      currentUser?.profileImage || "/images/default-avatar.jpg"
+                    }
                     alt={currentUser?.name || "User"}
                     width={40}
                     height={40}
@@ -338,7 +333,9 @@ export default function FeedsPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56 bg-gray-800 border-gray-700">
-                <DropdownMenuLabel className="text-gray-300">My Account</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-gray-300">
+                  My Account
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-gray-700" />
                 <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 cursor-pointer">
                   <User className="mr-2 h-4 w-4" />
@@ -376,25 +373,28 @@ export default function FeedsPage() {
                 {[
                   {
                     name: "Sarah Fitness",
-                    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
+                    image:
+                      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
                     viewers: 1234,
                     isLive: true,
-                    category: "HIIT Workout"
+                    category: "HIIT Workout",
                   },
                   {
                     name: "Yoga Master",
-                    image: "https://images.unsplash.com/photo-1607346256330-dee7af15f7c5?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
+                    image:
+                      "https://images.unsplash.com/photo-1607346256330-dee7af15f7c5?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
                     viewers: 856,
                     isLive: true,
-                    category: "Yoga Flow"
+                    category: "Yoga Flow",
                   },
                   {
                     name: "Mike Strength",
-                    image: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
+                    image:
+                      "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
                     viewers: 2341,
                     isLive: false,
-                    category: "Weight Training"
-                  }
+                    category: "Weight Training",
+                  },
                 ].map((streamer, index) => (
                   <motion.div
                     key={index}
@@ -416,13 +416,19 @@ export default function FeedsPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-white truncate">{streamer.name}</h3>
+                      <h3 className="font-medium text-white truncate">
+                        {streamer.name}
+                      </h3>
                       <div className="flex items-center gap-2 text-sm">
-                        <span className="text-gray-400">{streamer.category}</span>
+                        <span className="text-gray-400">
+                          {streamer.category}
+                        </span>
                         {streamer.isLive && (
                           <>
                             <span className="text-red-500">•</span>
-                            <span className="text-red-500">{streamer.viewers} watching</span>
+                            <span className="text-red-500">
+                              {streamer.viewers} watching
+                            </span>
                           </>
                         )}
                       </div>
@@ -449,7 +455,8 @@ export default function FeedsPage() {
                   transition={{ delay: 0.3 }}
                   className="text-2xl font-bold text-white mb-2"
                 >
-                  &ldquo;Your body can stand almost anything. It&apos;s your mind you have to convince.&rdquo;
+                  &ldquo;Your body can stand almost anything. It&apos;s your
+                  mind you have to convince.&rdquo;
                 </motion.h2>
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -474,7 +481,8 @@ export default function FeedsPage() {
                 <DialogHeader>
                   <DialogTitle className="text-white">Create Post</DialogTitle>
                   <DialogDescription className="text-gray-400">
-                    Share your workout, achievement, or motivation with the community
+                    Share your workout, achievement, or motivation with the
+                    community
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
@@ -482,32 +490,44 @@ export default function FeedsPage() {
                     <Label className="text-white mb-2 block">Category</Label>
                     <RadioGroup
                       value={selectedCategory}
-                      onValueChange={(value) => setSelectedCategory(value as Post['category'])}
+                      onValueChange={(value) =>
+                        setSelectedCategory(value as Post["category"])
+                      }
                       className="flex space-x-4"
                     >
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="workout" id="workout" />
-                        <Label htmlFor="workout" className="text-white">Workout</Label>
+                        <Label htmlFor="workout" className="text-white">
+                          Workout
+                        </Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="achievement" id="achievement" />
-                        <Label htmlFor="achievement" className="text-white">Achievement</Label>
+                        <Label htmlFor="achievement" className="text-white">
+                          Achievement
+                        </Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="motivation" id="motivation" />
-                        <Label htmlFor="motivation" className="text-white">Motivation</Label>
+                        <Label htmlFor="motivation" className="text-white">
+                          Motivation
+                        </Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="nutrition" id="nutrition" />
-                        <Label htmlFor="nutrition" className="text-white">Nutrition</Label>
+                        <Label htmlFor="nutrition" className="text-white">
+                          Nutrition
+                        </Label>
                       </div>
                     </RadioGroup>
                   </div>
 
-                  {selectedCategory === 'workout' && (
+                  {selectedCategory === "workout" && (
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="duration" className="text-white">Duration</Label>
+                        <Label htmlFor="duration" className="text-white">
+                          Duration
+                        </Label>
                         <Input
                           id="duration"
                           placeholder="e.g., 45 min"
@@ -517,7 +537,9 @@ export default function FeedsPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="calories" className="text-white">Calories Burned</Label>
+                        <Label htmlFor="calories" className="text-white">
+                          Calories Burned
+                        </Label>
                         <Input
                           id="calories"
                           type="number"
@@ -531,7 +553,9 @@ export default function FeedsPage() {
                   )}
 
                   <div>
-                    <Label htmlFor="content" className="text-white">Your Message</Label>
+                    <Label htmlFor="content" className="text-white">
+                      Your Message
+                    </Label>
                     <Textarea
                       id="content"
                       placeholder="Share your fitness journey..."
@@ -543,7 +567,11 @@ export default function FeedsPage() {
                   </div>
 
                   <div className="flex justify-between items-center">
-                    <Button variant="outline" size="sm" className="text-gray-400">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-gray-400"
+                    >
                       <ImageIcon className="h-5 w-5 mr-1" />
                       Add Photo
                     </Button>
@@ -562,7 +590,10 @@ export default function FeedsPage() {
             {/* Posts Feed */}
             <div className="space-y-6">
               {posts.map((post) => (
-                <div key={post.id} className="bg-[#111827] rounded-xl p-4 border border-orange-500/20">
+                <div
+                  key={post.id}
+                  className="bg-[#111827] rounded-xl p-4 border border-orange-500/20"
+                >
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-3">
                       <Image
@@ -574,7 +605,9 @@ export default function FeedsPage() {
                       />
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-white">{post.user.name}</h3>
+                          <h3 className="font-semibold text-white">
+                            {post.user.name}
+                          </h3>
                           {post.user.isStreamer && (
                             <span className="bg-orange-500/20 text-orange-500 text-xs px-2 py-0.5 rounded-full">
                               Streamer
@@ -582,7 +615,8 @@ export default function FeedsPage() {
                           )}
                           <span className="flex items-center gap-1 bg-gray-800/50 px-2 py-0.5 rounded-full text-xs text-gray-300">
                             {getCategoryIcon(post.category)}
-                            {post.category.charAt(0).toUpperCase() + post.category.slice(1)}
+                            {post.category.charAt(0).toUpperCase() +
+                              post.category.slice(1)}
                           </span>
                         </div>
                         <p className="text-sm text-gray-400">
@@ -600,13 +634,17 @@ export default function FeedsPage() {
                       {post.metrics.duration && (
                         <div className="flex items-center gap-2">
                           <Timer className="w-4 h-4 text-orange-500" />
-                          <span className="text-sm text-gray-300">{post.metrics.duration}</span>
+                          <span className="text-sm text-gray-300">
+                            {post.metrics.duration}
+                          </span>
                         </div>
                       )}
                       {post.metrics.calories && (
                         <div className="flex items-center gap-2">
                           <Dumbbell className="w-4 h-4 text-orange-500" />
-                          <span className="text-sm text-gray-300">{post.metrics.calories} cal</span>
+                          <span className="text-sm text-gray-300">
+                            {post.metrics.calories} cal
+                          </span>
                         </div>
                       )}
                     </div>
@@ -630,17 +668,31 @@ export default function FeedsPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className={`text-sm ${post.isLiked ? 'text-orange-500' : 'text-gray-400'}`}
+                      className={`text-sm ${
+                        post.isLiked ? "text-orange-500" : "text-gray-400"
+                      }`}
                       onClick={() => toggleLike(post.id)}
                     >
-                      <Heart className={`h-5 w-5 mr-1 ${post.isLiked ? 'fill-current' : ''}`} />
+                      <Heart
+                        className={`h-5 w-5 mr-1 ${
+                          post.isLiked ? "fill-current" : ""
+                        }`}
+                      />
                       {post.likes}
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-sm text-gray-400">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-sm text-gray-400"
+                    >
                       <MessageCircle className="h-5 w-5 mr-1" />
                       {post.comments}
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-sm text-gray-400">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-sm text-gray-400"
+                    >
                       <Share2 className="h-5 w-5 mr-1" />
                       Share
                     </Button>
@@ -659,10 +711,16 @@ export default function FeedsPage() {
                         />
                         <div className="flex-1 bg-gray-800 rounded-xl p-3">
                           <div className="flex justify-between items-start">
-                            <h4 className="font-medium text-white">{comment.user.name}</h4>
-                            <span className="text-xs text-gray-400">{comment.timestamp}</span>
+                            <h4 className="font-medium text-white">
+                              {comment.user.name}
+                            </h4>
+                            <span className="text-xs text-gray-400">
+                              {comment.timestamp}
+                            </span>
                           </div>
-                          <p className="text-sm text-gray-300 mt-1">{comment.content}</p>
+                          <p className="text-sm text-gray-300 mt-1">
+                            {comment.content}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -711,7 +769,9 @@ export default function FeedsPage() {
                     key={index}
                     className="block"
                     style={{
-                      color: `rgba(255, 255, 255, ${1 - Math.abs(index - 3.5) * 0.15})`,
+                      color: `rgba(255, 255, 255, ${
+                        1 - Math.abs(index - 3.5) * 0.15
+                      })`,
                       lineHeight: "0.9",
                       marginBottom: "0.1rem",
                     }}
@@ -733,7 +793,7 @@ export default function FeedsPage() {
                     { topic: "#MorningYoga", posts: 856 },
                     { topic: "#FitnessGoals", posts: 2341 },
                     { topic: "#HealthyEating", posts: 567 },
-                    { topic: "#WorkoutMotivation", posts: 890 }
+                    { topic: "#WorkoutMotivation", posts: 890 },
                   ].map((item, index) => (
                     <motion.div
                       key={index}
@@ -743,7 +803,9 @@ export default function FeedsPage() {
                       className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
                     >
                       <span className="text-white">{item.topic}</span>
-                      <span className="text-sm text-gray-400">{item.posts} posts</span>
+                      <span className="text-sm text-gray-400">
+                        {item.posts} posts
+                      </span>
                     </motion.div>
                   ))}
                 </div>
@@ -771,7 +833,9 @@ export default function FeedsPage() {
                     transition={{ delay: 0.2 }}
                     className="bg-gray-800/50 rounded-lg p-3 text-center"
                   >
-                    <div className="text-2xl font-bold text-orange-500">156</div>
+                    <div className="text-2xl font-bold text-orange-500">
+                      156
+                    </div>
                     <div className="text-sm text-gray-400">Followers</div>
                   </motion.div>
                   <motion.div
@@ -789,7 +853,9 @@ export default function FeedsPage() {
                     transition={{ delay: 0.4 }}
                     className="bg-gray-800/50 rounded-lg p-3 text-center"
                   >
-                    <div className="text-2xl font-bold text-orange-500">1.2k</div>
+                    <div className="text-2xl font-bold text-orange-500">
+                      1.2k
+                    </div>
                     <div className="text-sm text-gray-400">Likes</div>
                   </motion.div>
                 </div>
@@ -800,4 +866,4 @@ export default function FeedsPage() {
       </div>
     </div>
   );
-} 
+}

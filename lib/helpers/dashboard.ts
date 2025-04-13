@@ -10,7 +10,7 @@ import {
   onSnapshot,
   QuerySnapshot,
 } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import { ActivityItem } from "@/lib/types/ui";
 import { StreamDoc } from "@/lib/types/streaming";
 

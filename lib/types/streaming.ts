@@ -6,7 +6,10 @@ import {
 import { User } from "./user";
 import { Timestamp } from "firebase/firestore";
 
-// Dashboard types
+/**
+ * Stream-related type definitions
+ */
+
 export type StreamingProfileData = {
   streamName: string;
   category: string;
@@ -19,7 +22,6 @@ export type StreamingProfileData = {
   };
 };
 
-// Streaming page types
 export type StreamStatus =
   | "draft"
   | "scheduled"
@@ -27,7 +29,7 @@ export type StreamStatus =
   | "ended"
   | "cancelled";
 
-export interface Stream {
+export type Stream = {
   id: string;
   title: string;
   description?: string;
@@ -61,12 +63,12 @@ export interface Stream {
   cameraOff?: boolean;
   category?: string;
   tags?: string[];
-}
+};
 
 /**
  * Streamer with associated streams from the API
  */
-export interface StreamerWithStreams {
+export type StreamerWithStreams = {
   id: string;
   name: string;
   username: string;
@@ -79,37 +81,47 @@ export interface StreamerWithStreams {
   // Fields that might be added by the categories lookup
   Category?: string;
   Tags?: string[];
-}
+};
 
 /**
  * Enriched streamer with category and tag information
  */
-export interface EnrichedStreamer extends StreamerWithStreams {
+export type EnrichedStreamer = StreamerWithStreams & {
   categoryName: string;
   tagNames: string[];
-}
+};
 
-export interface StreamWithDetails extends Stream {
+export type StreamWithDetails = Stream & {
   streamer?: User;
-}
+};
 
-export interface Streamer extends User {
+export type Streamer = User & {
   specialty: string;
   categories?: string[];
   streams?: Stream[];
   followers?: number;
   isLive?: boolean;
   currentStream?: Stream;
-}
+};
 
-export interface StreamUpdateData {
+export type StreamUpdateData = {
   title?: string;
   description?: string;
   thumbnailUrl?: string;
+  thumbnail?: string;
   isScheduled?: boolean;
   scheduledFor?: string | null;
+  scheduledAt?: string;
+  hasStarted?: boolean;
+  hasEnded?: boolean;
+  audioMuted?: boolean;
+  cameraOff?: boolean;
+  isCameraOff?: boolean;
+  isMuted?: boolean;
+  startedAt?: string;
+  endedAt?: string;
   status?: StreamStatus;
-}
+};
 
 // Type for Twilio network quality stats
 export type NetworkQualityStats = {
@@ -139,77 +151,77 @@ export type WithDetach = {
 /**
  * Chat message from a stream
  */
-export interface ChatMessage {
+export type ChatMessage = {
   id: string;
   userName: string;
   content: string;
   createdAt?: string;
-}
+};
 
 /**
- * Base error interface for streaming operations
+ * Base error type for streaming operations
  */
-export interface StreamingError {
+export type StreamingError = {
   name: string;
   message: string;
   stack?: string;
   code?: string | number;
-}
+};
 
 /**
  * Type for Twilio-specific errors
  */
-export interface TwilioStreamingError extends StreamingError {
+export type TwilioStreamingError = StreamingError & {
   code: number;
   twilioError: boolean;
-}
+};
 
 /**
  * Type for DOM-related errors that can occur during streaming
  */
-export interface DOMError extends StreamingError {
+export type DOMError = StreamingError & {
   domError: boolean;
   element?: {
     tagName?: string;
     id?: string;
     className?: string;
   };
-}
+};
 
 /**
  * Type for media device errors
  */
-export interface MediaDeviceError extends StreamingError {
+export type MediaDeviceError = StreamingError & {
   deviceId?: string;
   deviceType?: "audio" | "video";
   deviceError: boolean;
-}
+};
 
 /**
  * Type for track-related errors
  */
-export interface TrackError extends StreamingError {
+export type TrackError = StreamingError & {
   trackSid?: string;
   trackType?: "audio" | "video";
   trackError: boolean;
-}
+};
 
 /**
  * Type for network-related errors
  */
-export interface NetworkError extends StreamingError {
+export type NetworkError = StreamingError & {
   networkError: boolean;
   status?: number;
-}
+};
 
 /**
  * Type for Firestore-related errors
  */
-export interface FirestoreError extends StreamingError {
+export type FirestoreError = StreamingError & {
   firestoreError: boolean;
   path?: string;
   operation?: "read" | "write" | "update" | "delete";
-}
+};
 
 /**
  * Union type of all streaming-related errors
@@ -223,18 +235,35 @@ export type StreamingErrorType =
   | FirestoreError
   | StreamingError;
 
-/**
- * Function to safely convert an unknown error to a typed StreamingError
- */
 export function toStreamingError(error: unknown): StreamingErrorType {
+  // Implementation retained as is
+  if (!error) {
+    return {
+      name: "UnknownError",
+      message: "An unknown error occurred",
+    };
+  }
+
+  // Return as is if it's already a StreamingError
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    "message" in error
+  ) {
+    return error as StreamingErrorType;
+  }
+
+  // Convert Error object
   if (error instanceof Error) {
     return {
-      name: error.name,
+      name: error.name || "Error",
       message: error.message,
       stack: error.stack,
     };
   }
 
+  // Convert string
   if (typeof error === "string") {
     return {
       name: "StringError",
@@ -242,6 +271,7 @@ export function toStreamingError(error: unknown): StreamingErrorType {
     };
   }
 
+  // Convert any other type
   return {
     name: "UnknownError",
     message: String(error),
@@ -249,9 +279,9 @@ export function toStreamingError(error: unknown): StreamingErrorType {
 }
 
 /**
- * Stream document interface for Firestore
+ * Firestore document structure for a stream
  */
-export interface StreamDoc {
+export type StreamDoc = {
   id: string;
   title: string;
   description: string;
@@ -276,14 +306,83 @@ export interface StreamDoc {
   scheduledAt: Timestamp | null;
   startedAt?: string | Timestamp;
   endedAt?: string | Timestamp;
-}
+};
 
-/**
- * Interface for stream update operations
- */
-export interface StreamUpdateObject {
+export type StreamUpdateObject = {
   [key: string]: unknown; // Using unknown instead of any for better type safety
   updatedAt: Timestamp;
   slug?: string;
   scheduledAt?: Timestamp | null;
-}
+};
+
+export type StreamManagerProps = {
+  stream: Stream;
+  className?: string;
+};
+
+export type StreamChatProps = {
+  streamId: string;
+  isStreamer?: boolean;
+  className?: string;
+};
+
+export type DeviceOption = {
+  deviceId: string;
+  label: string;
+};
+
+export type DeviceTesterProps = {
+  onComplete: () => void;
+  className?: string;
+};
+
+export type CreateStreamModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+};
+
+export type AudioLevelMeterProps = {
+  audioTrack: MediaStreamTrack | null;
+  width?: number;
+  height?: number;
+  className?: string;
+};
+
+export type StreamCreateDTO = {
+  title: string;
+  description?: string;
+  thumbnailUrl?: string;
+  slug?: string;
+  category?: string;
+  tags?: string[];
+  language?: string;
+  scheduledAt?: Date;
+};
+
+export type StreamUpdateDTO = {
+  title?: string;
+  description?: string;
+  thumbnailUrl?: string;
+  hasStarted?: boolean;
+  hasEnded?: boolean;
+  status?: "scheduled" | "live" | "ended";
+  scheduledAt?: Date;
+  category?: string;
+  tags?: string[];
+  language?: string;
+};
+
+// For API services
+export type StreamApiUpdateData = {
+  title?: string;
+  description?: string;
+  thumbnail?: string;
+  hasStarted?: boolean;
+  hasEnded?: boolean;
+  scheduledAt?: Date | null;
+  audioMuted?: boolean;
+  cameraOff?: boolean;
+  [key: string]: unknown;
+};
+
+export type StreamEventsMap = Record<string, unknown>;

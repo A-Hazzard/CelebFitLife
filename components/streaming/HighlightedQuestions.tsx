@@ -12,7 +12,7 @@ import {
   updateDoc,
   deleteDoc,
 } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
 import { MessageSquare, ThumbsUp, Trash } from "lucide-react";
 import { toast } from "sonner";

@@ -1,11 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-
-interface StepProgressBarProps {
-  currentStep: number;
-  totalSteps: number;
-  stepNames?: string[];
-}
+import { StepProgressBarProps } from "@/lib/types/ui";
 
 export default function StepProgressBar({
   currentStep,
@@ -13,7 +8,7 @@ export default function StepProgressBar({
   stepNames = [],
 }: StepProgressBarProps) {
   const progress = (currentStep / totalSteps) * 100;
-  
+
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-2">
@@ -37,4 +32,4 @@ export default function StepProgressBar({
       </div>
     </div>
   );
-} 
+}

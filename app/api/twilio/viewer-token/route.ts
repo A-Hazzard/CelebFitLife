@@ -7,10 +7,10 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * POST handler for generating Twilio tokens specifically for viewers
- * This endpoint is used by the useTwilioViewerConnection hook
+ * Handler for generating Twilio tokens specifically for viewers
+ * This endpoint supports both GET and POST methods for better compatibility
  */
-export async function POST(req: Request) {
+async function handleTokenRequest(req: Request) {
   const requestStartTime = Date.now();
   const requestId = Math.random().toString(36).substring(2, 12);
 
@@ -20,25 +20,30 @@ export async function POST(req: Request) {
     const countryCode = req.headers.get("cf-ipcountry") || "unknown";
     console.log(`[API:${requestId}] Request from region: ${countryCode}`);
 
-    let body;
-    try {
-      body = await req.json();
-    } catch (error) {
-      console.error(`[API:${requestId}] Failed to parse request body:`, error);
-      return NextResponse.json(
-        {
-          error: "Invalid JSON body",
-        },
-        {
-          status: 400,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+    // Get roomName from either POST body or GET URL params
+    let roomName: string | null = null;
+
+    // Check if it's a POST with JSON body
+    if (req.method === "POST") {
+      try {
+        const body = await req.json();
+        roomName = body.roomName;
+      } catch (error) {
+        console.error(
+          `[API:${requestId}] Failed to parse POST request body:`,
+          error
+        );
+        // If JSON parsing fails, we'll check URL params next
+      }
     }
 
-    const { roomName } = body;
+    // If no roomName from POST body, try URL params (for GET requests or POST fallback)
+    if (!roomName) {
+      const url = new URL(req.url);
+      roomName = url.searchParams.get("roomName");
+    }
+
+    // Validate roomName
     if (!roomName) {
       console.error(`[API:${requestId}] Missing required roomName parameter`);
       return NextResponse.json(
@@ -75,6 +80,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         token,
+        success: true,
       },
       {
         headers: {
@@ -104,6 +110,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: errorMessage,
+        success: false,
       },
       {
         status,
@@ -113,4 +120,19 @@ export async function POST(req: Request) {
       }
     );
   }
+}
+
+/**
+ * POST handler for generating Twilio tokens for viewers
+ */
+export async function POST(req: Request) {
+  return handleTokenRequest(req);
+}
+
+/**
+ * GET handler for generating Twilio tokens for viewers
+ * Added for compatibility with clients that don't support POST
+ */
+export async function GET(req: Request) {
+  return handleTokenRequest(req);
 }

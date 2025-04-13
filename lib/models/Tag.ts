@@ -1,11 +1,11 @@
-export interface Tag {
+export type Tag = {
   id?: string;
   name: string;
   category: string;
   createdAt: string;
-}
+};
 
-export interface TagCreateDTO {
+export type TagCreateDTO = {
   name: string;
   category: string;
-}
+};

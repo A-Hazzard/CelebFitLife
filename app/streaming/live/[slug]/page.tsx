@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import { doc, getDoc, onSnapshot, Timestamp } from "firebase/firestore";
 import StreamChat from "@/components/streaming/StreamChat";
 import { useAuthStore } from "@/lib/store/useAuthStore";
@@ -177,7 +177,7 @@ export default function LiveViewPage() {
           return;
         }
 
-      console.log(
+        console.log(
           `Track subscribed: ${newTrack.name || "unnamed"}, kind: ${
             newTrack.kind
           }, enabled: ${newTrack.isEnabled}`
@@ -198,9 +198,9 @@ export default function LiveViewPage() {
               try {
                 console.log("Attaching video track to container");
                 const videoElement = newTrack.attach();
-        videoElement.style.width = "100%";
-        videoElement.style.height = "100%";
-          videoContainerRef.current.appendChild(videoElement);
+                videoElement.style.width = "100%";
+                videoElement.style.height = "100%";
+                videoContainerRef.current.appendChild(videoElement);
 
                 // Update remote track state
                 setRemoteVideoTrack(newTrack as RemoteVideoTrack);
@@ -209,7 +209,7 @@ export default function LiveViewPage() {
                   cameraOff: !newTrack.isEnabled,
                 }));
 
-            console.log(
+                console.log(
                   `Video track attached successfully, enabled: ${newTrack.isEnabled}`
                 );
               } catch (attachError) {
@@ -230,19 +230,19 @@ export default function LiveViewPage() {
               // Try to start audio playback
               audioElement
                 .play()
-            .then(() => {
-              console.log("[Track] Audio playback started successfully");
-            })
-            .catch((error) => {
-              console.error("[Track] Audio playback failed:", error);
-              // If autoplay fails, we need user interaction, show a button to the user
-              setIsAudioMuted(true);
-            });
+                .then(() => {
+                  console.log("[Track] Audio playback started successfully");
+                })
+                .catch((error) => {
+                  console.error("[Track] Audio playback failed:", error);
+                  // If autoplay fails, we need user interaction, show a button to the user
+                  setIsAudioMuted(true);
+                });
             } catch (attachError) {
               console.error("Error attaching audio track:", attachError);
-        }
+            }
 
-        // Update state to reflect we have an audio track
+            // Update state to reflect we have an audio track
             setRemoteAudioTrack(newTrack as RemoteAudioTrack);
           }
         }
@@ -1419,7 +1419,7 @@ export default function LiveViewPage() {
           {/* Chat panel */}
           <div className="flex-1 overflow-hidden">
             <StreamChat streamId={slug} className="h-full" />
-            </div>
+          </div>
         </div>
       </div>
     </div>

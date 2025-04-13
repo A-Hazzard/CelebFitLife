@@ -18,11 +18,7 @@ import {
   FileText,
   Award,
 } from "lucide-react";
-
-interface StreamerGuideModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
+import { StreamerGuideModalProps } from "@/lib/types/ui";
 
 export function StreamerGuideModal({
   open,
@@ -473,7 +469,9 @@ export function StreamerGuideModal({
         </Tabs>
 
         <DialogFooter className="mt-6">
-          <Button onClick={() => onOpenChange(false)}>Close Guide</Button>
+          <Button variant="default" onClick={() => onOpenChange(false)}>
+            Close Guide
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

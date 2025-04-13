@@ -1,10 +1,6 @@
 import { cn } from "@/lib/utils";
 import React from "react";
-
-interface SpinnerProps extends React.HTMLAttributes<HTMLDivElement> {
-  size?: "sm" | "md" | "lg";
-  color?: "primary" | "white";
-}
+import { SpinnerProps } from "@/lib/types/ui";
 
 export const Spinner = ({
   size = "md",

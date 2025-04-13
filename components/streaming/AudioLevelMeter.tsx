@@ -1,11 +1,5 @@
 import React, { useEffect, useState } from "react";
-
-interface AudioLevelMeterProps {
-  level: number; // 0-100
-  isActive: boolean;
-  type: "microphone" | "speaker";
-  className?: string;
-}
+import { AudioLevelMeterProps } from "@/lib/types/ui";
 
 const AudioLevelMeter: React.FC<AudioLevelMeterProps> = ({
   level,

@@ -1,4 +1,4 @@
-export interface UserData {
+export type UserData = {
   uid: string;
   email: string;
   username: string;
@@ -10,4 +10,4 @@ export interface UserData {
   isAdmin?: boolean; // Optional field
   createdAt?: string; // Optional, if you store creation timestamp as ISO string
   // Add other fields as necessary
-}
+};

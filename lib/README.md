@@ -1,40 +1,26 @@
-# CelebFitLife Client Library Structure
+# /lib Directory
 
-This directory contains the client-side libraries, utilities, and services used throughout the CelebFitLife application.
+This directory contains the core logic, utilities, types, hooks, and configuration files for the CelebFitLife application.
 
-## Directory Structure
+## Structure
 
-- **config/**: Configuration files and initialization
-  - `firebase.ts`: Firebase client-side configuration
-  
-- **helpers/**: Simple helper functions for common tasks
-  - `auth.ts`: Authentication helper functions
-  - `streaming.ts`: Streaming helper functions
-  
-- **hooks/**: React hooks for component logic
-  - Various custom hooks for forms, authentication, and streaming
+*   `/config`: Contains configuration files for external services like Twilio. **Note:** Firebase configuration has been moved and consolidated.
+*   `/firebase`: Contains the centralized Firebase client (`client.ts`) and admin (`admin.ts`) SDK initializations and related utility functions.
+*   `/helpers`: Contains helper functions specific to certain application features (e.g., authentication flows, streaming logic).
+*   `/hooks`: Contains custom React hooks used throughout the application.
+*   `/models`: Defines data structures and interfaces used across the application.
+*   `/services`: Includes service classes abstracting interactions with external APIs (e.g., Twilio).
+*   `/store`: Holds Zustand state management stores for global application state.
+*   `/types`: Contains shared TypeScript type definitions and interfaces.
+*   `/utils`: Provides general utility functions (e.g., validation, type checking, date formatting).
 
-- **models/**: Data models and interfaces
-  - Definition of data structures used throughout the application
-  
-- **services/**: Client-side services that handle business logic
-  - `AuthService.ts`: Handles authentication operations
-  - `ClientTwilioService.ts`: Handles Twilio video operations on the client
-  - `ChatService.ts`: Manages chat functionality
-  - `streamingService.ts`: Handles streaming operations
-  - `paymentService.ts`: Manages payment processing
-  
-- **store/**: State management
-  - Zustand/Redux stores for global state
+## Usage
 
-- **types/**: TypeScript type definitions
-  - `user.ts`: User-related type definitions
-  - `streaming.ts`: Streaming-related type definitions
-  
-- **utils/**: Utility functions
-  - `twilio.ts`: Utilities for Twilio video
-  - `streaming.ts`: Utilities for streaming
-  - `logger.ts`: Logging utilities
+Modules within `/lib` can be imported using the `@/lib/...` path alias.
+
+*   For client-side Firebase access (Auth, Firestore), import from `@/lib/firebase/client`.
+*   For server-side Firebase Admin SDK access (Admin Auth, Admin Firestore), import from `@/lib/firebase/admin`.
+*   Other utilities and types can be imported directly from their respective subdirectories (e.g., `@/lib/utils`, `@/lib/types`).
 
 ## Separation of Concerns
 

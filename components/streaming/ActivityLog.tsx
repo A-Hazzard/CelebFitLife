@@ -9,7 +9,7 @@ import {
   onSnapshot,
   orderBy,
 } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import { formatDistanceToNow } from "date-fns";
 import {
   HistoryIcon,

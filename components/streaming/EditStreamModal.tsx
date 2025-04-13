@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { EditStreamFormData } from "@/lib/types/ui";
 import { Stream } from "@/lib/models/Stream";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import {
   Select,
   SelectContent,

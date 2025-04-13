@@ -14,7 +14,7 @@ import {
   getDoc,
   Timestamp,
 } from "firebase/firestore";
-import { db } from "@/lib/config/firebase";
+import { db } from "@/lib/firebase/client";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";

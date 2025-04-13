@@ -2,7 +2,7 @@
  * Payment Types for the application
  */
 
-export interface PaymentDetails {
+export type PaymentDetails = {
   paymentMethodId?: string;
   paymentIntentId?: string;
   amount?: number;
@@ -15,7 +15,7 @@ export interface PaymentDetails {
     | "canceled";
   metadata?: Record<string, string>;
   customerId?: string;
-}
+};
 
 // Import service payment details type
 import { PaymentDetails as ServicePaymentDetails } from "@/lib/services/paymentService";

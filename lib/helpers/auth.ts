@@ -143,16 +143,16 @@ export async function handleLogin({
  */
 export async function registerUser(data: RegistrationData): Promise<void> {
   const { username, email, password, phone, country, city, age, role } = data;
-  
+
   // Ensure all required fields are present according to server schema
   if (!username || !email || !password) {
     throw new Error("Username, email, and password are required.");
   }
-  
+
   if (username.length < 3) {
     throw new Error("Username must be at least 3 characters");
   }
-  
+
   if (password.length < 6) {
     throw new Error("Password must be at least 6 characters");
   }
@@ -162,7 +162,7 @@ export async function registerUser(data: RegistrationData): Promise<void> {
     viewer: true,
     streamer: false,
     admin: false,
-    ...(role || {})
+    ...(role || {}),
   };
 
   // Prepare request data - only include fields expected by the server schema
@@ -175,9 +175,9 @@ export async function registerUser(data: RegistrationData): Promise<void> {
     country: country || undefined,
     city: city || undefined,
     role: userRole,
-    myStreamers: [] // Initialize empty myStreamers array
+    myStreamers: [], // Initialize empty myStreamers array
   };
-  
+
   console.log("[CLIENT] Sending registration data:", {
     username,
     email: email.substring(0, 3) + "...",
@@ -186,7 +186,7 @@ export async function registerUser(data: RegistrationData): Promise<void> {
     country,
     city,
     age,
-    role: userRole
+    role: userRole,
   });
 
   try {
@@ -199,7 +199,7 @@ export async function registerUser(data: RegistrationData): Promise<void> {
     // Read the response body as text first for debugging
     const responseText = await response.text();
     console.log("[CLIENT] Registration response text:", responseText);
-    
+
     // Try to parse as JSON if possible
     let resData;
     try {
@@ -268,7 +268,7 @@ export function getCurrentUser(): User | null {
  */
 export function isStreamer(): boolean {
   const user = getCurrentUser();
-  return !!user?.isStreamer;
+  return !!user?.role?.streamer;
 }
 
 /**
@@ -276,7 +276,7 @@ export function isStreamer(): boolean {
  */
 export function isAdmin(): boolean {
   const user = getCurrentUser();
-  return !!user?.isAdmin;
+  return !!user?.role?.admin || !!user?.isAdmin;
 }
 
 /**

@@ -1,10 +1,10 @@
-export interface Role {
+export type Role = {
   admin: boolean;
   streamer: boolean;
   viewer: boolean;
-}
+};
 
-export interface User {
+export type User = {
   id?: string;
   email: string;
   username: string;
@@ -16,9 +16,9 @@ export interface User {
   phone?: string;
   role: Role;
   isAdmin: boolean;
-}
+};
 
-export interface UserCreateDTO {
+export type UserCreateDTO = {
   email: string;
   username: string;
   password: string;
@@ -27,14 +27,14 @@ export interface UserCreateDTO {
   country?: string;
   phone?: string;
   role?: Partial<Role>;
-}
+};
 
-export interface UserLoginDTO {
+export type UserLoginDTO = {
   email: string;
   password: string;
-}
+};
 
-export interface UserResponseDTO {
+export type UserResponseDTO = {
   id: string;
   email: string;
   username: string;
@@ -46,4 +46,4 @@ export interface UserResponseDTO {
   role: Role;
   isAdmin: boolean;
   token?: string;
-}
+};

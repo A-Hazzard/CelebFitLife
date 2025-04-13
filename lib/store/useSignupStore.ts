@@ -1,13 +1,13 @@
 import { create } from "zustand";
 import { UserData } from "@/app/api/models/userData";
 
-interface SignupState {
+type SignupState = {
   step: number;
   userData: UserData;
   nextStep: (data: Partial<UserData>) => void;
   prevStep: () => void;
   completeSignup: (data: Partial<UserData>) => void;
-}
+};
 
 export const useSignupStore = create<SignupState>((set) => ({
   step: 0,
@@ -23,7 +23,7 @@ export const useSignupStore = create<SignupState>((set) => ({
     role: {
       viewer: true,
       streamer: false,
-      admin: false
+      admin: false,
     },
     plan: "",
     planDetails: {

@@ -334,60 +334,163 @@ export const useTwilioViewerConnection = (
       setVideoStatus("connecting");
       logger.info(`Connecting to room: ${slug}`);
 
+      // Helper function to connect with a token
+      const connectWithToken = async (token: string) => {
+        try {
+          // Connect to room
+          const newRoom = await connect(token, {
+            name: slug,
+            tracks: [],
+            dominantSpeaker: true,
+          });
+
+          logger.info(`Connected to room: ${newRoom.name}`);
+          setRoom(newRoom);
+
+          // Set up room event listeners
+          newRoom.on("participantConnected", handleParticipantConnected);
+          newRoom.on("participantDisconnected", handleParticipantDisconnected);
+          newRoom.on("disconnected", () => {
+            logger.info("Disconnected from room");
+            setVideoStatus("offline");
+            cleanupRoom();
+          });
+          newRoom.on("reconnecting", () => {
+            logger.info("Reconnecting to room...");
+            setVideoStatus("connecting");
+          });
+          newRoom.on("reconnected", () => {
+            logger.info("Reconnected to room");
+            setVideoStatus("active");
+          });
+
+          // Handle existing participants
+          if (newRoom.participants.size > 0) {
+            newRoom.participants.forEach(handleParticipantConnected);
+          } else {
+            logger.info("No participants in room yet");
+            setVideoStatus("waiting");
+          }
+
+          return newRoom;
+        } catch (error: unknown) {
+          // Use error for logging
+          logger.error(
+            "Error in connectWithToken:",
+            error instanceof Error ? error : String(error)
+          );
+          setVideoStatus("error");
+          throw error;
+        }
+      };
+
       // Fetch token from server
       const response = await fetch("/api/twilio/viewer-token", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        cache: "no-cache",
         body: JSON.stringify({ roomName: slug }),
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch token: ${response.statusText}`);
+        // Check for 405 Method Not Allowed specifically
+        if (response.status === 405) {
+          logger.error(
+            "Method not allowed when requesting token - trying GET method"
+          );
+          // Fallback to GET method with query parameters
+          const fallbackResponse = await fetch(
+            `/api/twilio/viewer-token?roomName=${encodeURIComponent(slug)}`,
+            {
+              method: "GET",
+              headers: {
+                Accept: "application/json",
+              },
+              cache: "no-cache",
+            }
+          );
+
+          if (!fallbackResponse.ok) {
+            try {
+              const errorData = await fallbackResponse.json();
+              throw new Error(
+                `Failed to fetch token with fallback: ${
+                  errorData.error || fallbackResponse.statusText
+                }`
+              );
+            } catch (error: unknown) {
+              // Use error for logging
+              logger.error(
+                "JSON parse error in fallback response:",
+                error instanceof Error ? error : String(error)
+              );
+              throw new Error(
+                `Failed to fetch token with fallback: ${fallbackResponse.statusText}`
+              );
+            }
+          }
+
+          try {
+            const text = await fallbackResponse.text();
+            const data = text ? JSON.parse(text) : null;
+            if (!data || !data.token) {
+              throw new Error("No token in fallback response");
+            }
+            return connectWithToken(data.token);
+          } catch (error: unknown) {
+            // Use the error
+            logger.error(
+              "Failed to parse fallback token response:",
+              error instanceof Error ? error : String(error)
+            );
+            throw new Error(
+              `Failed to parse fallback token response: ${String(error)}`
+            );
+          }
+        }
+
+        try {
+          const errorData = await response.json();
+          throw new Error(
+            `Failed to fetch token: ${errorData.error || response.statusText}`
+          );
+        } catch (error: unknown) {
+          // Use error for logging
+          logger.error(
+            "JSON parse error in response:",
+            error instanceof Error ? error : String(error)
+          );
+          throw new Error(`Failed to fetch token: ${response.statusText}`);
+        }
       }
 
-      const { token } = await response.json();
-
-      if (!token) {
-        throw new Error("No token received from server");
+      let tokenData;
+      try {
+        const text = await response.text();
+        tokenData = text ? JSON.parse(text) : null;
+        if (!tokenData || !tokenData.token) {
+          throw new Error("No valid token received from server");
+        }
+      } catch (error: unknown) {
+        // Use the error
+        logger.error(
+          "Error parsing token response:",
+          error instanceof Error ? error : String(error)
+        );
+        throw new Error(`Invalid token response format: ${String(error)}`);
       }
 
-      // Connect to room
-      const newRoom = await connect(token, {
-        name: slug,
-        tracks: [],
-        dominantSpeaker: true,
-      });
-
-      logger.info(`Connected to room: ${newRoom.name}`);
-      setRoom(newRoom);
-
-      // Set up room event listeners
-      newRoom.on("participantConnected", handleParticipantConnected);
-      newRoom.on("participantDisconnected", handleParticipantDisconnected);
-      newRoom.on("disconnected", () => {
-        logger.info("Disconnected from room");
-        setVideoStatus("offline");
-        cleanupRoom();
-      });
-      newRoom.on("reconnecting", () => {
-        logger.info("Reconnecting to room...");
-        setVideoStatus("connecting");
-      });
-      newRoom.on("reconnected", () => {
-        logger.info("Reconnected to room");
-        setVideoStatus("active");
-      });
-
-      // Handle existing participants
-      if (newRoom.participants.size > 0) {
-        newRoom.participants.forEach(handleParticipantConnected);
-      } else {
-        logger.info("No participants in room yet");
-        setVideoStatus("waiting");
-      }
-    } catch (error) {
-      logger.error("Error connecting to room:", error as Error);
-      setVideoStatus("offline");
+      return connectWithToken(tokenData.token);
+    } catch (error: unknown) {
+      logger.error(
+        "Error connecting to room:",
+        error instanceof Error ? error : String(error)
+      );
+      setVideoStatus("error");
+      throw error;
     }
   }, [
     slug,

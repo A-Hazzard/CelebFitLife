@@ -1,17 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-
-type AudioSourceType = "microphone" | "speaker";
-
-/**
- * Interface for compatibility with Twilio audio tracks.
- * This defines the minimum shape expected for audio tracks from Twilio SDK.
- * While this isn't directly used within this hook, it's maintained for
- * future integration with Twilio track handling.
- */
-export interface AudioTrack {
-  detach: () => HTMLMediaElement[];
-  // Add other properties as needed
-}
+import {
+  AudioSourceType,
+  AudioTrack,
+  AudioLevelMeterHookResult,
+} from "@/lib/types/audio";
 
 /**
  * Create a logger for debugging
@@ -40,7 +32,7 @@ export const useAudioLevelMeter = (
   sourceType: AudioSourceType,
   stream: MediaStream | null = null,
   audioElement: HTMLAudioElement | null = null
-) => {
+): AudioLevelMeterHookResult => {
   const [level, setLevel] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 

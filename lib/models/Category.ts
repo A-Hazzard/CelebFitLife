@@ -1,11 +1,11 @@
-export interface Category {
+export type Category = {
   id?: string;
   name: string;
   description: string;
   createdAt: string;
-}
+};
 
-export interface CategoryCreateDTO {
+export type CategoryCreateDTO = {
   name: string;
   description: string;
-}
+};
