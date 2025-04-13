@@ -14,25 +14,25 @@ import {
   RemoteParticipant,
   RemoteTrack,
   RemoteTrackPublication,
-  connect,
   TwilioError,
 } from "twilio-video";
-import { MicOff, Mic, VideoOff } from "lucide-react";
+import { MicOff, Mic } from "lucide-react";
 import { Countdown } from "@/components/streaming/Countdown";
-import { ClientTwilioService } from "@/lib/services/ClientTwilioService";
-import Loader from "@/components/ui/Loader";
 import { Button } from "@/components/ui/button";
-import { AlertCircle } from "lucide-react";
+import VideoContainer from "@/components/streaming/VideoContainer";
+import StreamStatusOverlay from "@/components/streaming/StreamStatusOverlay";
+import { connectToTwilioRoom } from "@/lib/helpers/twilioConnectionHelper";
 
 // Create a static instance of ClientTwilioService for the client side
-const clientTwilioService = new ClientTwilioService();
+// const clientTwilioService = new ClientTwilioService();
 
 // Generate a unique identity for viewers that includes a timestamp and random value
-const generateUniqueIdentity = (prefix: string, userId: string): string => {
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 10000);
-  return `${prefix}_${userId}_${timestamp}_${random}`;
-};
+// This is now in the twilioConnectionHelper.ts file
+// const generateUniqueIdentity = (prefix: string, userId: string): string => {
+//   const timestamp = Date.now();
+//   const random = Math.floor(Math.random() * 10000);
+//   return `${prefix}_${userId}_${timestamp}_${random}`;
+// };
 
 export default function LiveViewPage() {
   const pathname = usePathname();
@@ -510,7 +510,7 @@ export default function LiveViewPage() {
     [offlineTimerId]
   );
 
-  // Replace the initiateConnection function with a useCallback version
+  // Replace the initiateConnection function with a useCallback version that uses our helper
   const initiateConnection = useCallback(async () => {
     if (isConnectingRef.current) return;
 
@@ -539,34 +539,32 @@ export default function LiveViewPage() {
     setVideoStatus("connecting");
 
     try {
-      // Create identity for the viewer
-      const viewerName = currentUser?.username || currentUser?.email || `anon`;
-      const viewerId = currentUser?.id || Date.now().toString();
-      const identity = generateUniqueIdentity("viewer", viewerId);
+      if (!currentUser) {
+        throw new Error("No user is authenticated");
+      }
 
+      const userId = currentUser.id || Date.now().toString();
       console.log(
-        `[LiveView] Getting Twilio token for viewer: ${viewerName}, using identity: ${identity}, room: ${slug}`
+        `[LiveView] Connecting to Twilio room ${slug} for user ${userId}`
       );
 
-      // Get connection token
-      const token = await clientTwilioService.getToken(
-        slug, // Room name (correct order)
-        identity // User identity (correct order)
+      // Use our helper function to connect to Twilio
+      const result = await connectToTwilioRoom(
+        slug,
+        userId,
+        maxConnectionAttempts,
+        connectionAttempts
       );
 
-      console.log(
-        `[LiveView] Successfully received Twilio token, connecting to room...`
-      );
+      if (!result.success || !result.room) {
+        // Connection failed, handle error
+        console.error(`[LiveView] Connection failed: ${result.error}`);
+        setConnectionError(result.error || "Unknown connection error");
+        setVideoStatus("error");
+        return;
+      }
 
-      // Connect to room
-      const twilioRoom = await connect(token, {
-        name: slug,
-        audio: false,
-        video: false,
-        networkQuality: { local: 1, remote: 1 },
-        dominantSpeaker: true,
-      });
-
+      const twilioRoom = result.room;
       console.log(`[LiveView] Connected to room: ${twilioRoom.sid}`);
       setRoom(twilioRoom);
       setConnectionError(null);
@@ -874,16 +872,19 @@ export default function LiveViewPage() {
 
           // If we're showing offline or waiting but the stream is actually active
           // We should attempt to connect
-          if (videoStatus === "offline" || videoStatus === "waiting") {
+          if (
+            videoStatus === "offline" ||
+            videoStatus === "waiting" ||
+            videoStatus === "error"
+          ) {
             console.log(
-              "[Status] Stream is active but we're showing offline/waiting. Attempting to connect..."
+              "[Status] Stream is active but we're showing offline/waiting/error. Attempting to connect..."
             );
-            setVideoStatus("connecting");
 
-            // Ensure we retry connecting to the room
+            // CRITICAL FIX: Directly initiate connection here instead of just setting status
             if (!room && !isConnectingRef.current) {
               console.log("[Status] Initiating connection to Twilio room");
-              checkStreamAndRetry().catch((err: Error) => {
+              initiateConnection().catch((err: Error) => {
                 console.error(
                   "[Status] Failed to connect to Twilio room:",
                   err
@@ -893,10 +894,13 @@ export default function LiveViewPage() {
                   "Failed to connect to stream. Please try refreshing the page."
                 );
               });
+            } else {
+              // If we can't connect yet, at least update the status
+              setVideoStatus("connecting");
             }
           }
           // If we're not showing the offline status, just make sure the status is "active"
-          else if (videoStatus !== "connecting" && videoStatus !== "error") {
+          else if (videoStatus !== "connecting") {
             setVideoStatus("active");
           }
         } else {
@@ -906,6 +910,12 @@ export default function LiveViewPage() {
           setVideoStatus("waiting");
           setHasStarted(false);
         }
+      } else {
+        // Stream doesn't exist, set to offline
+        console.log(
+          "[Status] Stream document doesn't exist, setting to offline"
+        );
+        setVideoStatus("offline");
       }
     });
 
@@ -918,7 +928,7 @@ export default function LiveViewPage() {
     room,
     videoStatus,
     isConnectingRef,
-    checkStreamAndRetry,
+    initiateConnection,
     setVideoStatus,
     setHasStarted,
     setConnectionError,
@@ -1182,202 +1192,99 @@ export default function LiveViewPage() {
         {/* Main video stream area */}
         <div className="flex-1 relative">
           {/* Video container */}
-          <div
-            ref={videoContainerRef}
-            className="w-full h-full bg-gray-900 relative overflow-hidden"
-          >
-            {/* Stream status indicators */}
-            <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
-              {hasStarted && videoStatus === "active" ? (
-                <div className="flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-white text-sm">
-                  <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
-                  LIVE
-                </div>
-              ) : null}
+          <VideoContainer
+            containerRef={videoContainerRef}
+            room={room}
+            isActive={videoStatus === "active"}
+          />
 
-              {streamStartTime && hasStarted && (
-                <div className="bg-black bg-opacity-60 text-brandWhite px-3 py-1 rounded-full text-sm">
-                  {formatDuration(streamDuration)}
-                </div>
-              )}
+          {/* Stream status indicators */}
+          <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
+            {hasStarted && videoStatus === "active" ? (
+              <div className="flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-white text-sm">
+                <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+                LIVE
+              </div>
+            ) : null}
+
+            {streamStartTime && hasStarted && (
+              <div className="bg-black bg-opacity-60 text-brandWhite px-3 py-1 rounded-full text-sm">
+                {formatDuration(streamDuration)}
+              </div>
+            )}
+          </div>
+
+          {/* Streamer name and viewer count */}
+          <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+            <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-brandWhite text-sm flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500"></span>
+              <span>@Streamer</span>
             </div>
+            <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-brandWhite text-sm">
+              1.2K viewers
+            </div>
+          </div>
 
-            {/* Streamer name and viewer count */}
-            <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-              <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-brandWhite text-sm flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                <span>@Streamer</span>
-              </div>
-              <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-brandWhite text-sm">
-                1.2K viewers
+          {/* Stream Status Overlay */}
+          <StreamStatusOverlay
+            status={videoStatus}
+            error={connectionError}
+            isRetrying={isRetrying}
+            onRetry={checkStreamAndRetry}
+            connectionAttempts={connectionAttempts}
+            maxConnectionAttempts={maxConnectionAttempts}
+            thumbnail={thumbnail}
+            streamTitle={streamTitle}
+          />
+
+          {/* Scheduled stream countdown */}
+          {isScheduled && videoStatus === "waiting" && scheduledTime && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 z-10">
+              <div className="text-center max-w-md">
+                <h2 className="text-2xl font-bold mb-2">Stream Scheduled</h2>
+                <p className="text-gray-400 mb-4">
+                  This stream is scheduled to begin soon.
+                </p>
+
+                <div className="mb-6">
+                  <Countdown scheduledTime={scheduledTime.toString()} />
+                </div>
+
+                {thumbnail && (
+                  <div className="relative w-full h-48 rounded-lg overflow-hidden">
+                    <Image
+                      src={thumbnail}
+                      alt={streamTitle || "Stream thumbnail"}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                )}
               </div>
             </div>
+          )}
 
-            {/* Status overlays */}
-            {videoStatus === "waiting" && !isScheduled && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-80 z-10">
-                <div className="text-center">
-                  <Loader className="w-12 h-12 mb-4" />
-                  <h2 className="text-2xl font-bold mb-2">
-                    Waiting for Stream
-                  </h2>
-                  <p className="text-gray-400">
-                    The stream has not started yet.
-                  </p>
-                </div>
+          {/* Audio muted indicator */}
+          {hasStarted &&
+            videoStatus === "active" &&
+            streamerStatus.audioMuted && (
+              <div className="absolute bottom-4 left-4 bg-black bg-opacity-60 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                <MicOff size={16} className="text-brandOrange" />
+                <span>Streamer is muted</span>
               </div>
             )}
 
-            {videoStatus === "connecting" && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-80 z-10">
-                <div className="text-center">
-                  <Loader className="w-12 h-12 mb-4" />
-                  <h2 className="text-2xl font-bold mb-2">Connecting</h2>
-                  <p className="text-gray-400">
-                    Establishing connection to stream...
-                  </p>
-                  {connectionAttempts > 1 && (
-                    <p className="text-sm text-brandOrange mt-2">
-                      Attempt {connectionAttempts} of {maxConnectionAttempts}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {videoStatus === "offline" && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 z-10">
-                <div className="text-center max-w-md">
-                  <div className="w-16 h-16 rounded-full bg-gray-800 mb-6 mx-auto flex items-center justify-center">
-                    <VideoOff size={32} className="text-brandOrange" />
-                  </div>
-                  <h2 className="text-2xl font-bold mb-2">Stream Offline</h2>
-                  <p className="text-gray-400 mb-6">
-                    The stream is currently offline. Please check back later.
-                  </p>
-                  <Button
-                    onClick={checkStreamAndRetry}
-                    disabled={isRetrying}
-                    className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
-                  >
-                    {isRetrying ? (
-                      <>
-                        <Loader className="mr-2 h-4 w-4" />
-                        Retrying...
-                      </>
-                    ) : (
-                      "Check Again"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {videoStatus === "ended" && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 z-10">
-                <div className="text-center max-w-md">
-                  <div className="w-16 h-16 rounded-full bg-gray-800 mb-6 mx-auto flex items-center justify-center">
-                    <VideoOff size={32} className="text-brandOrange" />
-                  </div>
-                  <h2 className="text-2xl font-bold mb-2">Stream Ended</h2>
-                  <p className="text-gray-400 mb-4">
-                    Thank you for watching! This stream has ended.
-                  </p>
-                  {thumbnail && (
-                    <div className="relative w-full h-40 mb-4 rounded-lg overflow-hidden">
-                      <Image
-                        src={thumbnail}
-                        alt={streamTitle || "Stream thumbnail"}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {videoStatus === "error" && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 z-10">
-                <div className="text-center max-w-md">
-                  <div className="w-16 h-16 rounded-full bg-gray-800 mb-6 mx-auto flex items-center justify-center">
-                    <AlertCircle size={32} className="text-red-500" />
-                  </div>
-                  <h2 className="text-2xl font-bold mb-2 text-red-500">
-                    Connection Error
-                  </h2>
-                  <p className="text-gray-400 mb-6">
-                    {connectionError ||
-                      "Failed to connect to the stream. Please try again."}
-                  </p>
-                  <Button
-                    onClick={checkStreamAndRetry}
-                    disabled={
-                      isRetrying || connectionAttempts >= maxConnectionAttempts
-                    }
-                    className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
-                  >
-                    {isRetrying ? (
-                      <>
-                        <Loader className="mr-2 h-4 w-4" />
-                        Retrying...
-                      </>
-                    ) : (
-                      "Try Again"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {isScheduled && videoStatus === "waiting" && scheduledTime && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 z-10">
-                <div className="text-center max-w-md">
-                  <h2 className="text-2xl font-bold mb-2">Stream Scheduled</h2>
-                  <p className="text-gray-400 mb-4">
-                    This stream is scheduled to begin soon.
-                  </p>
-
-                  <div className="mb-6">
-                    <Countdown scheduledTime={scheduledTime.toString()} />
-                  </div>
-
-                  {thumbnail && (
-                    <div className="relative w-full h-48 rounded-lg overflow-hidden">
-                      <Image
-                        src={thumbnail}
-                        alt={streamTitle || "Stream thumbnail"}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Audio muted indicator */}
-            {hasStarted &&
-              videoStatus === "active" &&
-              streamerStatus.audioMuted && (
-                <div className="absolute bottom-4 left-4 bg-black bg-opacity-60 px-3 py-1 rounded-full text-sm flex items-center gap-2">
-                  <MicOff size={16} className="text-brandOrange" />
-                  <span>Streamer is muted</span>
-                </div>
-              )}
-
-            {/* Interactive controls */}
-            <div className="absolute bottom-4 right-4 flex gap-2 z-10">
-              <Button
-                onClick={toggleAudioMute}
-                variant="outline"
-                size="icon"
-                className="bg-black bg-opacity-60 border-0 hover:bg-black hover:bg-opacity-80"
-                title={isAudioMuted ? "Unmute" : "Mute"}
-              >
-                {isAudioMuted ? <MicOff size={18} /> : <Mic size={18} />}
-              </Button>
-            </div>
+          {/* Interactive controls */}
+          <div className="absolute bottom-4 right-4 flex gap-2 z-10">
+            <Button
+              onClick={toggleAudioMute}
+              variant="outline"
+              size="icon"
+              className="bg-black bg-opacity-60 border-0 hover:bg-black hover:bg-opacity-80"
+              title={isAudioMuted ? "Unmute" : "Mute"}
+            >
+              {isAudioMuted ? <MicOff size={18} /> : <Mic size={18} />}
+            </Button>
           </div>
         </div>
 

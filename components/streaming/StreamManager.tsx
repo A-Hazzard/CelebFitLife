@@ -224,12 +224,12 @@ const StreamManager = forwardRef<
 
         if (savedSettings) {
           try {
-            const settings = JSON.parse(savedSettings);
-            if (settings.selectedCamera) {
-              videoConstraints.deviceId = { exact: settings.selectedCamera };
-            }
-            if (settings.selectedMic) {
-              audioConstraints.deviceId = { exact: settings.selectedMic };
+          const settings = JSON.parse(savedSettings);
+          if (settings.selectedCamera) {
+            videoConstraints.deviceId = { exact: settings.selectedCamera };
+          }
+          if (settings.selectedMic) {
+            audioConstraints.deviceId = { exact: settings.selectedMic };
             }
           } catch (parseError) {
             console.error(
@@ -287,8 +287,8 @@ const StreamManager = forwardRef<
                   } else {
                     console.error(
                       "[StreamManager] Error playing video:",
-                      error
-                    );
+                    error
+                  );
                   }
                 });
               }
@@ -361,21 +361,21 @@ const StreamManager = forwardRef<
 
         // Store reference and update status
         twilioRoomRef.current = room;
-        setConnectionStatus("connected");
+          setConnectionStatus("connected");
         setIsConnecting(false);
 
         // Set up disconnection and reconnection handlers
         room.on("disconnected", (_room, error) => {
-          console.log(
+            console.log(
             "[StreamManager] Disconnected from Twilio room:",
             error || "No error"
-          );
-          setConnectionStatus("disconnected");
+            );
+            setConnectionStatus("disconnected");
           twilioRoomRef.current = null;
 
           // Attempt to reconnect if the disconnect wasn't intentional
           if (error && isStreaming) {
-            console.log(
+              console.log(
               "[StreamManager] Attempting to reconnect after disconnect..."
             );
             setTimeout(() => {
@@ -397,7 +397,7 @@ const StreamManager = forwardRef<
         });
 
         room.on("reconnected", () => {
-          console.log(
+            console.log(
             "[StreamManager] Successfully reconnected to Twilio room"
           );
           setConnectionStatus("connected");
@@ -417,7 +417,7 @@ const StreamManager = forwardRef<
             });
             console.log("[StreamManager] Updated stream status to live");
           } catch (dbError) {
-            console.error(
+          console.error(
               "[StreamManager] Error updating stream status:",
               dbError
             );
@@ -451,7 +451,7 @@ const StreamManager = forwardRef<
         const delay = Math.min(2000 * Math.pow(2, newRetryCount - 1), 10000);
         setTimeout(() => {
           if (isStreaming) {
-            handleRetry(newRetryCount);
+          handleRetry(newRetryCount);
           }
         }, delay);
       }

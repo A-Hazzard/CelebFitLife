@@ -1,7 +1,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 
-// Using HTMLAttributes directly instead of an empty interface
+// Using HTMLAttributes directly instead of an empty type
 const Loader = ({
   className,
   ...props
@@ -31,20 +31,3 @@ const Loader = ({
 };
 
 export default Loader;
-
-// Add keyframes for bounce animation in tailwind.config.ts if not already present
-// keyframes: {
-//   bounce: {
-//     '0%, 100%': {
-//       transform: 'translateY(-25%)',
-//       animationTimingFunction: 'cubic-bezier(0.8,0,1,1)',
-//     },
-//     '50%': {
-//       transform: 'none',
-//       animationTimingFunction: 'cubic-bezier(0,0,0.2,1)',
-//     },
-//   },
-// },
-// animation: {
-//   bounce: 'bounce 1s infinite',
-// },

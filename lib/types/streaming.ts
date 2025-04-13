@@ -2,6 +2,7 @@ import {
   RemoteTrack,
   RemoteTrackPublication,
   RemoteParticipant,
+  Room,
 } from "twilio-video";
 import { User } from "./user";
 import { Timestamp } from "firebase/firestore";
@@ -386,3 +387,11 @@ export type StreamApiUpdateData = {
 };
 
 export type StreamEventsMap = Record<string, unknown>;
+
+export type TwilioConnectionResult = {
+  success: boolean;
+  room?: Room;
+  error?: string;
+  errorCode?: string;
+  originalError?: unknown;
+};

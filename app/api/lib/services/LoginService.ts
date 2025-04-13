@@ -90,14 +90,20 @@ export class LoginService {
       throw new InvalidDataError("User ID is missing or invalid.");
     }
 
+    // Construct the response user object matching the API's UserData type
     return {
-      uid: userId,
+      uid: userId, // Keep uid as expected by the API's UserData type
       email: userData.email || "",
       username: userData.username || "",
       phone: userData.phone || "",
       country: userData.country || "",
       city: userData.city || "",
       age: userData.age || 0,
+      // Include isStreamer and isAdmin based on the role object
+      isStreamer: userData.role?.streamer || false,
+      isAdmin: userData.role?.admin || false,
+      createdAt: userData.createdAt || new Date().toISOString(),
+      // Removed the nested 'role' object and other fields not in the API's UserData type
     };
   }
 }

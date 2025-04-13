@@ -34,7 +34,6 @@ export type JwtPayload = {
     streamer: boolean;
     viewer: boolean;
   };
-  isAdmin: boolean;
   iat?: number;
   exp?: number;
 };

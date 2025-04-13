@@ -1,6 +1,16 @@
 "use client";
 
-import { Search, ChevronDown, ChevronUp, Bell, LogOut, Settings, User, MessageSquare, ChevronRight } from "lucide-react";
+import {
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Bell,
+  LogOut,
+  Settings,
+  User,
+  MessageSquare,
+  ChevronRight,
+} from "lucide-react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -22,6 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useRouter } from "next/navigation";
 
 export default function UserDashboard() {
   const [visibleDiscoverStreamers, setVisibleDiscoverStreamers] = useState(6);
@@ -55,6 +66,20 @@ export default function UserDashboard() {
 
   const { streamers, fetchAll } = useStreamerStore();
   const { currentUser } = useAuthStore();
+  const router = useRouter();
+
+  // Add authentication check
+  useEffect(() => {
+    // If user is not authenticated, redirect to login
+    if (currentUser === null) {
+      router.push("/login");
+    }
+    // If user is a streamer, they should be on the dashboard
+    else if (currentUser && currentUser.role?.streamer === true) {
+      console.log("[STREAMING] User is a streamer, redirecting to dashboard");
+      router.push("/dashboard");
+    }
+  }, [currentUser, router]);
 
   useEffect(() => {
     fetchAll();
@@ -95,6 +120,24 @@ export default function UserDashboard() {
     setVisibleDiscoverStreamers((prev) => prev + 3);
   };
 
+  // Add logout handler
+  const handleLogout = async () => {
+    try {
+      // Ensure currentUser exists before trying to log out
+      if (!currentUser) return;
+
+      // First clear the auth store
+      useAuthStore.getState().clearUser();
+
+      // Then import and use the logout utility that handles localStorage and redirect
+      import("@/lib/helpers/auth").then(({ logout }) => {
+        logout();
+      });
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
+
   // Filter streamers based on selected categories
   const filteredStreamers = streamers.filter(
     (streamer) =>
@@ -122,13 +165,13 @@ export default function UserDashboard() {
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-brandOrange w-5 h-5" />
           </div>
           <nav className="hidden md:flex items-center space-x-6">
-            <Link 
+            <Link
               href="/feeds"
               className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
             >
               Feeds
             </Link>
-            <Link 
+            <Link
               href="/streaming"
               className="text-sm font-medium text-orange-500 hover:text-orange-400 transition-colors"
             >
@@ -163,7 +206,9 @@ export default function UserDashboard() {
                     <div
                       key={notification.id}
                       className={`p-3 hover:bg-gray-700/50 border-l-2 ${
-                        notification.type === 'live' ? 'border-red-500' : 'border-blue-500'
+                        notification.type === "live"
+                          ? "border-red-500"
+                          : "border-blue-500"
                       }`}
                     >
                       <div className="flex justify-between items-start">
@@ -188,9 +233,14 @@ export default function UserDashboard() {
           {currentUser && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                <Button
+                  variant="ghost"
+                  className="relative h-10 w-10 rounded-full"
+                >
                   <Image
-                    src={currentUser?.profileImage || "/images/default-avatar.jpg"}
+                    src={
+                      currentUser?.profileImage || "/images/default-avatar.jpg"
+                    }
                     alt={currentUser?.name || "User"}
                     width={40}
                     height={40}
@@ -199,11 +249,15 @@ export default function UserDashboard() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56 bg-gray-800 border-gray-700">
-                <DropdownMenuLabel className="text-gray-300">My Account</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-gray-300">
+                  My Account
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-gray-700" />
                 <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 cursor-pointer">
                   <User className="mr-2 h-4 w-4" />
-                  <Link href="/profile" className="w-full">Profile</Link>
+                  <Link href="/profile" className="w-full">
+                    Profile
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 cursor-pointer">
                   <Settings className="mr-2 h-4 w-4" />
@@ -214,7 +268,10 @@ export default function UserDashboard() {
                   <span>Messages</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-gray-700" />
-                <DropdownMenuItem className="text-red-400 hover:bg-gray-700 cursor-pointer">
+                <DropdownMenuItem
+                  className="text-red-400 hover:bg-gray-700 cursor-pointer"
+                  onClick={handleLogout}
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>
                 </DropdownMenuItem>

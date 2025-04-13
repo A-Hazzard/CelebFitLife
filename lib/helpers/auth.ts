@@ -276,7 +276,8 @@ export function isStreamer(): boolean {
  */
 export function isAdmin(): boolean {
   const user = getCurrentUser();
-  return !!user?.role?.admin || !!user?.isAdmin;
+  // Only check the nested role property
+  return !!user?.role?.admin;
 }
 
 /**

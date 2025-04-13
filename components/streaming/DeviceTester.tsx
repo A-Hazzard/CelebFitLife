@@ -329,7 +329,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         errorMessage.includes("Permission denied") ||
         errorMessage.includes("permission")
       ) {
-        toast.error(
+      toast.error(
           "Microphone access denied. Please check your browser permissions."
         );
       } else if (
@@ -358,14 +358,14 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     async (deviceId?: string) => {
       try {
         // Clean up any previous analysis
-        cleanupMicAnalysis();
+    cleanupMicAnalysis();
 
         // Get the microphone stream
         const stream = await getMicStream(deviceId);
         if (!stream) {
           toast.error("Could not access microphone");
-          return;
-        }
+        return;
+      }
 
         micStreamRef.current = stream;
 
@@ -394,7 +394,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
           // Connect nodes
           sourceNode.connect(gainNode);
-          gainNode.connect(analyser);
+            gainNode.connect(analyser);
           // Don't connect to destination to prevent feedback
 
           console.log("Mic test: Audio nodes connected successfully");
@@ -519,17 +519,17 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
       speakerSourceNodeRef.current = sourceNode;
 
       // Connect the nodes
-      sourceNode.connect(analyser);
+        sourceNode.connect(analyser);
       analyser.connect(context.destination);
 
       console.log("Speaker test: Audio nodes connected successfully");
 
       // Create data array for analysis
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
       // Analysis function with improved level calculation
-      const analyse = () => {
-        if (!analyser) return;
+        const analyse = () => {
+          if (!analyser) return;
 
         try {
           analyser.getByteFrequencyData(dataArray);
@@ -604,7 +604,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
       playWithDelay();
 
       // Store cleanup function
-      speakerAnalysisCleanupRef.current = () => {
+        speakerAnalysisCleanupRef.current = () => {
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
@@ -617,8 +617,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     } catch (error) {
       console.error("Critical error in speaker analysis:", error);
       toast.error("Failed to set up speaker test");
-      cleanupSpeakerAnalysis();
-    }
+        cleanupSpeakerAnalysis();
+      }
   }, [getAudioContext, cleanupSpeakerAnalysis, isTesting, testType]);
 
   const stopTesting = useCallback(() => {
@@ -634,7 +634,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
     // Cleanup analysis resources
     cleanupMicAnalysis();
-    cleanupSpeakerAnalysis();
+      cleanupSpeakerAnalysis();
   }, [cleanupMicAnalysis, cleanupSpeakerAnalysis]);
 
   // Add this effect to stop tests when switching tabs
@@ -941,7 +941,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           isActive={isTesting && testType === "mic" && micEnabled}
           type="microphone"
         />
-      </div>
+              </div>
 
       <div className="flex gap-3">
         <Button
@@ -969,7 +969,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         >
           {micEnabled ? "Mute Mic" : "Unmute Mic"}
         </Button>
-      </div>
+            </div>
     </div>
   );
 
@@ -984,8 +984,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         />
         {speakerLevel > 30 && (
           <div className="absolute inset-0 border-2 border-blue-500 rounded-full animate-ping opacity-75"></div>
-        )}
-      </div>
+          )}
+        </div>
 
       <h3 className="text-lg font-bold mb-3">Speaker Test</h3>
 
@@ -1002,7 +1002,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         />
       </div>
 
-      <Button
+            <Button
         variant={isTesting && testType === "speaker" ? "default" : "outline"}
         onClick={() => {
           if (isTesting && testType === "speaker") {
@@ -1024,7 +1024,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         }`}
       >
         {isTesting && testType === "speaker" ? "Stop Test" : "Start Test"}
-      </Button>
+            </Button>
     </div>
   );
 
@@ -1076,7 +1076,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           <Mic size={18} />
           <span>Microphone</span>
         </button>
-        <button
+                    <button
           onClick={() => setActiveTab("speakers")}
           className={`py-3 px-4 font-medium flex items-center gap-2 ${
             activeTab === "speakers"
@@ -1086,7 +1086,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         >
           <Volume2 size={18} />
           <span>Speakers</span>
-        </button>
+                    </button>
       </div>
 
       {/* Content */}
@@ -1112,7 +1112,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                 )}
               </div>
               <div className="p-4 flex items-center justify-between">
-                <Button
+                  <Button
                   variant="outline"
                   onClick={toggleCameraEnabled}
                   className={`${
@@ -1122,12 +1122,12 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                   }`}
                 >
                   {cameraEnabled ? "Disable Camera" : "Enable Camera"}
-                </Button>
+                  </Button>
                 <div className="text-xs text-gray-400">
                   Preview only visible to you
                 </div>
               </div>
-            </div>
+          </div>
 
             <div className="space-y-6">
               <div className="bg-gray-900 rounded-lg p-6">
@@ -1137,38 +1137,38 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Select Camera
                     </label>
-                    <Popover
+            <Popover
                       open={popoverStates.camera}
                       onOpenChange={(open) =>
                         setPopoverStates((prev) => ({
                           ...prev,
                           camera: open,
                         }))
-                      }
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
+              }
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
                           role="combobox"
                           aria-expanded={popoverStates.camera}
                           className="w-full justify-between bg-gray-800 border-gray-700"
-                        >
+                >
                           {videoInputs.find(
                             (camera) => camera.deviceId === selectedCamera
                           )?.label || "Default camera"}
-                          <ChevronUp
+                  <ChevronUp
                             className={`ml-2 h-4 w-4 shrink-0 opacity-50 ${
                               popoverStates.camera ? "rotate-180" : ""
                             } transition-transform`}
-                          />
-                        </Button>
-                      </PopoverTrigger>
+                  />
+                </Button>
+              </PopoverTrigger>
                       <PopoverContent className="w-full p-0 bg-gray-800 border-gray-700">
                         <div className="max-h-80 overflow-auto">
                           {videoInputs.map((camera) => (
                             <div
                               key={camera.deviceId}
-                              className={popoverItem}
+                      className={popoverItem}
                               onClick={() => {
                                 handleDeviceChange("camera", camera.deviceId);
                                 setPopoverStates((prev) => ({
@@ -1192,13 +1192,13 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                                 }`}
                               >
                                 {camera.label}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                      </span>
                   </div>
+                          ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
                 </div>
               </div>
             </div>
@@ -1216,34 +1216,34 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Select Microphone
                   </label>
-                  <Popover
+            <Popover
                     open={popoverStates.mic}
                     onOpenChange={(open) =>
                       setPopoverStates((prev) => ({ ...prev, mic: open }))
-                    }
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
+              }
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
                         role="combobox"
                         aria-expanded={popoverStates.mic}
                         className="w-full justify-between bg-gray-800 border-gray-700"
-                      >
+                >
                         {audioInputs.find((mic) => mic.deviceId === selectedMic)
                           ?.label || "Default microphone"}
-                        <ChevronUp
+                  <ChevronUp
                           className={`ml-2 h-4 w-4 shrink-0 opacity-50 ${
                             popoverStates.mic ? "rotate-180" : ""
                           } transition-transform`}
-                        />
-                      </Button>
-                    </PopoverTrigger>
+                  />
+                </Button>
+              </PopoverTrigger>
                     <PopoverContent className="w-full p-0 bg-gray-800 border-gray-700">
                       <div className="max-h-80 overflow-auto">
                         {audioInputs.map((mic) => (
                           <div
                             key={mic.deviceId}
-                            className={popoverItem}
+                      className={popoverItem}
                             onClick={() => {
                               handleDeviceChange("mic", mic.deviceId);
                               setPopoverStates((prev) => ({
@@ -1276,16 +1276,16 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                               }`}
                             >
                               {mic.label}
-                            </span>
-                          </div>
+                      </span>
+                  </div>
                         ))}
                       </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-            </div>
+              </PopoverContent>
+            </Popover>
           </div>
+        </div>
+        </div>
+      </div>
         )}
 
         {activeTab === "speakers" && (
@@ -1306,8 +1306,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                     }
                   >
                     <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
+            <Button
+              variant="outline"
                         role="combobox"
                         aria-expanded={popoverStates.speaker}
                         className="w-full justify-between bg-gray-800 border-gray-700"
@@ -1328,7 +1328,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                           <div
                             key={speaker.deviceId}
                             className={popoverItem}
-                            onClick={() => {
+              onClick={() => {
                               handleDeviceChange("speaker", speaker.deviceId);
                               setPopoverStates((prev) => ({
                                 ...prev,
@@ -1337,13 +1337,13 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
                               // If testing, restart with new device
                               if (isTesting && testType === "speaker") {
-                                cleanupSpeakerAnalysis();
+                  cleanupSpeakerAnalysis();
                                 if (audioRef.current) {
-                                  audioRef.current.pause();
+                  audioRef.current.pause();
                                 }
                                 // Wait a moment for cleanup
                                 setTimeout(() => {
-                                  startSpeakerAnalysis();
+                      startSpeakerAnalysis();
                                 }, 100);
                               }
                             }}
@@ -1366,11 +1366,11 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                             </span>
                           </div>
                         ))}
-                      </div>
+            </div>
                     </PopoverContent>
                   </Popover>
-                </div>
-              </div>
+            </div>
+          </div>
             </div>
           </div>
         )}
@@ -1381,12 +1381,12 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         <div className="text-sm text-gray-400">
           Your device settings will be saved for future streams
         </div>
-        <Button
+            <Button
           onClick={handleComplete}
           className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
-        >
+            >
           Save & Continue
-        </Button>
+            </Button>
       </div>
     </div>
   );

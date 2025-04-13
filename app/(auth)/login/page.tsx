@@ -34,8 +34,23 @@ function LoginPageContent() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // Check if currentUser exists and has necessary properties
     if (currentUser) {
-      router.push("/dashboard");
+      // Check if user is a streamer - only redirect to dashboard if user is a streamer
+      const isStreamer = currentUser.role?.streamer === true;
+
+      if (isStreamer) {
+        console.log(
+          "[LOGIN-PAGE] User is a streamer, redirecting to dashboard"
+        );
+        router.push("/dashboard");
+      } else {
+        // If they're a regular user/viewer, redirect to streaming
+        console.log(
+          "[LOGIN-PAGE] User is not a streamer, redirecting to streaming"
+        );
+        router.push("/streaming");
+      }
     }
   }, [currentUser, router]);
 
@@ -54,10 +69,9 @@ function LoginPageContent() {
 
       if (result.success && result.user) {
         // Log user details to verify structure
-        console.log("[LOGIN-PAGE] User object:", {
-          id: result.user.id?.substring(0, 5) || "missing",
-          email: result.user.email?.substring(0, 3) || "missing",
-          hasRole: !!result.user.role,
+        console.log("[LOGIN-PAGE] User object from API:", {
+          id: result.user.id || "missing",
+          email: result.user.email || "missing",
           role: result.user.role || "missing",
         });
 
@@ -65,8 +79,8 @@ function LoginPageContent() {
         const userData = convertUserToUserData(result.user);
         setUser(userData);
 
-        // Safe navigation with fallbacks for missing role
-        const isStreamer = result.user.role?.streamer || false;
+        // Safe navigation with fallbacks for missing role - check explicitly for true
+        const isStreamer = result.user.role?.streamer === true;
 
         // Redirect based on role
         if (isStreamer) {

@@ -8,10 +8,10 @@ This directory contains the core logic, utilities, types, hooks, and configurati
 *   `/firebase`: Contains the centralized Firebase client (`client.ts`) and admin (`admin.ts`) SDK initializations and related utility functions.
 *   `/helpers`: Contains helper functions specific to certain application features (e.g., authentication flows, streaming logic).
 *   `/hooks`: Contains custom React hooks used throughout the application.
-*   `/models`: Defines data structures and interfaces used across the application.
+*   `/models`: Defines data structures and types used across the application.
 *   `/services`: Includes service classes abstracting interactions with external APIs (e.g., Twilio).
 *   `/store`: Holds Zustand state management stores for global application state.
-*   `/types`: Contains shared TypeScript type definitions and interfaces.
+*   `/types`: Contains shared TypeScript type definitions.
 *   `/utils`: Provides general utility functions (e.g., validation, type checking, date formatting).
 
 ## Usage

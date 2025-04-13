@@ -79,3 +79,4 @@ export type StreamChatHookResult = {
   retryConnection: () => void;
   scrollRef: React.RefObject<HTMLDivElement | null>;
 };
+ 

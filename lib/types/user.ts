@@ -22,7 +22,6 @@ export type User = {
   country?: string;
   phone?: string;
   role: Role;
-  isAdmin: boolean;
   profileImage?: string;
   name?: string;
   displayName?: string;
@@ -84,7 +83,6 @@ export type UserResponseDTO = {
   country?: string;
   phone?: string;
   role: Role;
-  isAdmin: boolean;
   token?: string;
 };
 

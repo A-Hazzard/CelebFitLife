@@ -101,7 +101,6 @@ export function generateToken(user: User): string {
       email: user.email,
       username: user.username || "user",
       role: user.role || { admin: false, streamer: false, viewer: true },
-      isAdmin: user.isAdmin || false,
     };
 
     // Cast JWT_SECRET to Secret type
@@ -167,7 +166,6 @@ export function createUserResponse(
       country: user.country,
       phone: user.phone,
       role: user.role || { admin: false, streamer: false, viewer: true },
-      isAdmin: user.isAdmin || false,
     };
 
     // Add token if requested
@@ -198,7 +196,6 @@ export function createUserResponse(
         username: user?.username || "fallback-user",
         createdAt: new Date().toISOString(),
         role: { admin: false, streamer: false, viewer: true },
-        isAdmin: false,
         token: includeToken ? "dev-mode-fallback-token" : undefined,
       };
     }

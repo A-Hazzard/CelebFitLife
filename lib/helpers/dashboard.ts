@@ -187,27 +187,24 @@ export const subscribeToUserActivities = (
 };
 
 /**
- * Fetches all streams for a user in a single call
- * This is useful for the dashboard to load everything at once
- * @param userId The user's ID
- * @returns Promise with object containing live, upcoming and past streams
+ * Fetches all streams (live, ended, and scheduled) for a specific user
+ * @param userId The user ID to fetch streams for
  */
-export const fetchAllUserStreams = async (
-  userId: string
-): Promise<{
-  live: StreamDoc[];
-  upcoming: StreamDoc[];
-  past: StreamDoc[];
-}> => {
-  if (!userId) {
-    throw new Error("User ID is required to fetch all user streams");
+export async function fetchAllUserStreams(userId: string) {
+  try {
+    if (!userId) {
+      throw new Error("User ID is required");
+    }
+
+    const [live, upcoming, past] = await Promise.all([
+      fetchLiveStreams(userId),
+      fetchUpcomingStreams(userId),
+      fetchPastStreams(userId),
+    ]);
+
+    return { live, upcoming, past };
+  } catch (error) {
+    console.error("Error fetching all user streams:", error);
+    throw error;
   }
-
-  const [live, upcoming, past] = await Promise.all([
-    fetchLiveStreams(userId),
-    fetchUpcomingStreams(userId),
-    fetchPastStreams(userId),
-  ]);
-
-  return { live, upcoming, past };
-};
+}

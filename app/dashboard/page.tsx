@@ -101,13 +101,37 @@ export default function DashboardPage() {
   // Get user's streams when component mounts
   useEffect(() => {
     async function fetchStreams() {
-      if (!currentUser?.uid) {
+      // Check if user is authenticated
+      if (!currentUser) {
+        router.push("/login");
+        return;
+      }
+
+      // Check if user is a streamer - if not, redirect to streaming page
+      const isStreamer = currentUser.role?.streamer === true;
+      if (!isStreamer) {
+        console.log(
+          "[DASHBOARD] User is not a streamer, redirecting to streaming"
+        );
+        router.push("/streaming");
+        return;
+      }
+
+      // Use nullish coalescing to safely get userId
+      const userId = currentUser.uid ?? currentUser.id;
+
+      // Explicitly check if userId is a valid string before proceeding
+      if (!userId) {
+        console.error(
+          "[DASHBOARD] Could not determine user ID (uid or id). Redirecting to login."
+        );
         router.push("/login");
         return;
       }
 
       try {
-        const { live, past } = await fetchAllUserStreams(currentUser.uid);
+        // Now userId is guaranteed to be a string
+        const { live, past } = await fetchAllUserStreams(userId);
         setLiveStreams(live);
         setPastStreams(past);
       } catch (error) {
@@ -117,7 +141,7 @@ export default function DashboardPage() {
 
     fetchStreams();
     fetchProfilePicture();
-  }, [currentUser?.uid, router]);
+  }, [currentUser, router]);
 
   // Fetch random profile picture from API
   const fetchProfilePicture = async () => {

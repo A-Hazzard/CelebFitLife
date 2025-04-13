@@ -51,7 +51,7 @@ export const ANALYTICS_METRICS_DATA = [
   },
 ];
 
-// Data for the area chart that follows the MetricsData interface
+// Data for the area chart that follows the MetricsData type
 export const DASHBOARD_METRICS_DATA = [
   { month: "Jan", streams: 4, viewers: 45, earnings: 200 },
   { month: "Feb", streams: 6, viewers: 85, earnings: 380 },
