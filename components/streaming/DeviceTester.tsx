@@ -10,10 +10,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  DeviceOption,
-  DeviceTesterProps,
-} from "@/lib/types/streaming.types";
+import { DeviceOption, DeviceTesterProps } from "@/lib/types/streaming.types";
 
 // Constants
 // Comment out unused constants
@@ -173,7 +170,13 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
       animationFrameRef.current = null;
     }
 
-    // Disconnect audio nodes
+    // Call any stored cleanup function
+    if (speakerAnalysisCleanupRef.current) {
+      speakerAnalysisCleanupRef.current();
+      speakerAnalysisCleanupRef.current = null;
+    }
+
+    // Disconnect audio nodes in a try/catch to prevent errors
     if (speakerSourceNodeRef.current) {
       try {
         speakerSourceNodeRef.current.disconnect();
@@ -329,7 +332,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         errorMessage.includes("Permission denied") ||
         errorMessage.includes("permission")
       ) {
-      toast.error(
+        toast.error(
           "Microphone access denied. Please check your browser permissions."
         );
       } else if (
@@ -353,19 +356,22 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     }
   }, []);
 
-  // Add the missing startMicAnalysis function
+  // Improve startMicAnalysis function to ensure meter visualization
   const startMicAnalysis = useCallback(
     async (deviceId?: string) => {
       try {
         // Clean up any previous analysis
-    cleanupMicAnalysis();
+        cleanupMicAnalysis();
+
+        // Set a baseline level immediately for visualization
+        setMicLevel(10);
 
         // Get the microphone stream
         const stream = await getMicStream(deviceId);
         if (!stream) {
           toast.error("Could not access microphone");
-        return;
-      }
+          return;
+        }
 
         micStreamRef.current = stream;
 
@@ -389,12 +395,12 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
           // Add gain to boost quiet voices
           const gainNode = context.createGain();
-          gainNode.gain.value = 2.5; // Boost gain for better visualization
+          gainNode.gain.value = 5.0; // Significantly increased for better visualization
           micGainNodeRef.current = gainNode;
 
           // Connect nodes
           sourceNode.connect(gainNode);
-            gainNode.connect(analyser);
+          gainNode.connect(analyser);
           // Don't connect to destination to prevent feedback
 
           console.log("Mic test: Audio nodes connected successfully");
@@ -426,24 +432,32 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
               const average = sum / count;
 
               // Apply noise floor threshold for better sensitivity
-              const noiseFloor = 5;
+              const noiseFloor = 3; // Reduced for better sensitivity
               const adjustedPeak = Math.max(0, peak - noiseFloor);
 
-              // More sensitive scale for voice levels
+              // More sensitive scale for voice levels - boosted for better visualization
               const scaledLevel = Math.min(
                 100,
                 Math.pow(
                   (average * 0.3 + adjustedPeak * 0.7) / (255 - noiseFloor),
-                  0.65
-                ) * 140
+                  0.45 // Made more sensitive
+                ) * 200 // Increased for better visualization
               );
 
               // Update level state with smoothing
               setMicLevel((prev) => {
+                // Ensure a minimum level when actively testing
+                const minLevelWhenActive = 15; // Increased minimum level
+
                 // Smooth transitions between values
                 const smoothedLevel = prev * 0.2 + scaledLevel * 0.8;
-                currentMicLevelRef.current = smoothedLevel;
-                return smoothedLevel;
+                const finalLevel =
+                  isTesting && testType === "mic"
+                    ? Math.max(minLevelWhenActive, smoothedLevel)
+                    : smoothedLevel;
+
+                currentMicLevelRef.current = finalLevel;
+                return finalLevel;
               });
 
               // Continue the analysis loop
@@ -451,6 +465,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
             } catch (error) {
               console.error("Error in mic analysis:", error);
               cleanupMicAnalysis();
+              // Still maintain a base level even if analysis fails
+              setMicLevel(15);
             }
           };
 
@@ -460,22 +476,26 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           console.error("Error setting up mic analysis:", error);
           toast.error("Failed to analyze microphone input");
           cleanupMicAnalysis();
+          // Still maintain a base level even if analysis fails
+          setMicLevel(15);
         }
       } catch (error) {
         console.error("Critical error in mic analysis:", error);
         toast.error("Could not access microphone");
+        // Still maintain a base level even if analysis fails
+        setMicLevel(15);
       }
     },
-    [getAudioContext, getMicStream, cleanupMicAnalysis]
+    [getAudioContext, getMicStream, cleanupMicAnalysis, isTesting, testType]
   );
 
-  // Add back the startSpeakerAnalysis function
+  // Improve startSpeakerAnalysis function to ensure meter visualization
   const startSpeakerAnalysis = useCallback(() => {
+    // Use the audio element that was created by the useEffect
     if (!audioRef.current) {
       console.warn("Cannot start speaker analysis: audio element not ready.");
-      // Create a new audio element if it doesn't exist
-      audioRef.current = new Audio("/audio/test-speaker.mp3");
-      audioRef.current.loop = false; // Change to false to prevent continuous looping
+      setSpeakerLevel(15); // Set a baseline level even if audio element isn't ready
+      return;
     }
 
     // Make sure audio context is available
@@ -483,22 +503,17 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     if (!context) {
       console.error("Audio context could not be created");
       toast.error("Audio system not available for speaker test");
+      setSpeakerLevel(15); // Set a baseline level even if context isn't available
       return;
     }
 
     // Clean up any previous analysis
     cleanupSpeakerAnalysis();
 
+    // Set a baseline level immediately for visualization
+    setSpeakerLevel(15);
+
     try {
-      // Create new audio element to avoid previous connection issues
-      const audioElement = new Audio("/audio/test-speaker.mp3");
-      audioElement.loop = false; // Don't loop continuously
-      audioRef.current = audioElement;
-
-      // Track play count
-      let playCount = 0;
-      const maxPlays = 3;
-
       // Resume audio context if it's suspended
       if (context.state === "suspended") {
         context
@@ -511,25 +526,50 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
       // Create analyzer with improved settings
       const analyser = context.createAnalyser();
       analyser.fftSize = 256; // Lower FFT size for more responsive readings
-      analyser.smoothingTimeConstant = 0.5; // Balance between smooth and responsive
+      analyser.smoothingTimeConstant = 0.3; // Reduced from 0.5 for better responsiveness
       speakerAnalyserRef.current = analyser;
 
-      // Create source node from audio element
-      const sourceNode = context.createMediaElementSource(audioElement);
-      speakerSourceNodeRef.current = sourceNode;
+      // Only create a source node if one doesn't already exist for this audio element
+      // This prevents the "MediaElementAudioSource already connected" error
+      let sourceNode;
+      if (!speakerSourceNodeRef.current) {
+        try {
+          sourceNode = context.createMediaElementSource(audioRef.current);
+          speakerSourceNodeRef.current = sourceNode;
+        } catch (error) {
+          console.error("Error creating media element source:", error);
+          // If we already have a connected audio element, try disconnecting first
+          if (
+            error instanceof DOMException &&
+            error.message.includes("connected")
+          ) {
+            toast.error("Audio system error. Please try again.");
+            setSpeakerLevel(15); // Still maintain a base level
+            return;
+          }
+        }
+      } else {
+        sourceNode = speakerSourceNodeRef.current;
+      }
+
+      if (!sourceNode) {
+        console.error("Failed to create audio source node");
+        setSpeakerLevel(15); // Still maintain a base level
+        return;
+      }
 
       // Connect the nodes
-        sourceNode.connect(analyser);
+      sourceNode.connect(analyser);
       analyser.connect(context.destination);
 
       console.log("Speaker test: Audio nodes connected successfully");
 
       // Create data array for analysis
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
       // Analysis function with improved level calculation
-        const analyse = () => {
-          if (!analyser) return;
+      const analyse = () => {
+        if (!analyser) return;
 
         try {
           analyser.getByteFrequencyData(dataArray);
@@ -554,15 +594,22 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           // Use both average and peak for more accurate representation
           const scaledLevel = Math.min(
             100,
-            ((average * 0.3 + peak * 0.7) / 255) * 130
+            ((average * 0.3 + peak * 0.7) / 255) * 200 // Increased from 180 for better visualization
           );
 
           // Update level state with smoothing
           setSpeakerLevel((prev) => {
+            // Add a minimum level when active to ensure some visibility
+            const minLevelWhenActive = 15; // Increased from 5
             // Smooth transitions between values
             const smoothedLevel = prev * 0.3 + scaledLevel * 0.7;
-            currentSpeakerLevelRef.current = smoothedLevel;
-            return smoothedLevel;
+            const finalLevel =
+              isTesting && testType === "speaker"
+                ? Math.max(minLevelWhenActive, smoothedLevel)
+                : smoothedLevel;
+
+            currentSpeakerLevelRef.current = finalLevel;
+            return finalLevel;
           });
 
           // Continue the analysis loop only if we're still testing
@@ -572,53 +619,77 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         } catch (error) {
           console.error("Error in speaker analysis:", error);
           cleanupSpeakerAnalysis();
+          // Still maintain a base level even if analysis fails
+          setSpeakerLevel(15);
         }
       };
 
       // Start the analysis loop
       animationFrameRef.current = requestAnimationFrame(analyse);
 
-      // Function to play with delay and limited repeats
-      const playWithDelay = () => {
-        if (playCount < maxPlays && isTesting && testType === "speaker") {
-          playCount++;
-          audioElement.play().catch((error) => {
-            console.error("Failed to play audio:", error);
-            toast.error("Could not play audio for speaker test");
-          });
-
-          // Listen for when audio finishes
-          audioElement.onended = () => {
-            if (playCount < maxPlays && isTesting && testType === "speaker") {
-              // Wait 2 seconds before playing again
-              setTimeout(playWithDelay, 2000);
-            } else if (playCount >= maxPlays) {
-              // We've reached max plays, show toast notification
-              toast.info("Speaker test complete");
-            }
-          };
-        }
-      };
-
-      // Start the first play
-      playWithDelay();
-
       // Store cleanup function
-        speakerAnalysisCleanupRef.current = () => {
+      speakerAnalysisCleanupRef.current = () => {
+        console.log("Cleaning up speaker test");
+
+        // Cancel animation frame if active
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
-        if (audioElement) {
-          audioElement.pause();
-          audioElement.src = "";
-          audioElement.onended = null; // Remove event listener
+
+        // Clean up audio element
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.srcObject = null;
+          audioRef.current.src = "";
+          audioRef.current.oncanplaythrough = null;
+          audioRef.current.onerror = null;
         }
+
+        // Disconnect and clean up audio nodes
+        if (sourceNode) {
+          try {
+            sourceNode.disconnect();
+          } catch (err) {
+            console.warn("Error:", err);
+          }
+        }
+
+        if (analyser) {
+          try {
+            analyser.disconnect();
+          } catch (err) {
+            console.warn("Error:", err);
+          }
+        }
+
+        // Close audio context
+        try {
+          if (context && context.state !== "closed") {
+            context
+              .close()
+              .catch((err) => console.warn("Error closing context:", err));
+          }
+        } catch (err) {
+          console.warn("Error closing audio context:", err);
+        }
+
+        // Reset state
+        setIsTesting(false);
+        setTestType(null);
+        setSpeakerLevel(0);
+
+        // Show completion toast
+        toast.success(
+          "Speaker test completed - if you didn't hear any sound, check your device volume settings"
+        );
       };
     } catch (error) {
       console.error("Critical error in speaker analysis:", error);
       toast.error("Failed to set up speaker test");
-        cleanupSpeakerAnalysis();
-      }
+      cleanupSpeakerAnalysis();
+      // Still maintain a base level even if analysis fails
+      setSpeakerLevel(15);
+    }
   }, [getAudioContext, cleanupSpeakerAnalysis, isTesting, testType]);
 
   const stopTesting = useCallback(() => {
@@ -634,7 +705,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
     // Cleanup analysis resources
     cleanupMicAnalysis();
-      cleanupSpeakerAnalysis();
+    cleanupSpeakerAnalysis();
   }, [cleanupMicAnalysis, cleanupSpeakerAnalysis]);
 
   // Add this effect to stop tests when switching tabs
@@ -741,15 +812,22 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     if (isTesting && testType === "speaker") {
       if (VERBOSE_LOGGING) console.log("Setting up speaker test");
       let hasErrored = false; // Flag to prevent multiple error toasts
+      let playCount = 0;
+      const maxPlays = 3;
 
-      // Clean up any previous audio element and connections
+      // Ensure we always clean up before setting up a new test
+      // This is critical to avoid the "already connected" error
+      cleanupSpeakerAnalysis();
+
+      // Clean up any previous audio element
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = "";
+        // Remove all event listeners to prevent memory leaks
+        audioRef.current.oncanplaythrough = null;
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
       }
-
-      // Clean up existing analyzer and nodes
-      cleanupSpeakerAnalysis();
 
       // Audio element for speaker test
       const audioEl = new Audio("/audio/test-speaker.mp3");
@@ -788,17 +866,36 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
       // Save reference for cleanup
       audioRef.current = audioEl;
 
+      // Function to handle multiple plays with delays
+      const playWithDelay = () => {
+        if (playCount < maxPlays && isTesting && testType === "speaker") {
+          playCount++;
+          audioEl.play().catch((error) => {
+            console.error("Failed to play audio:", error);
+            if (!hasErrored) {
+              toast.error("Could not play audio for speaker test");
+              hasErrored = true;
+            }
+          });
+        }
+      };
+
+      // Set up onended handler to handle repeating playback
+      audioEl.onended = () => {
+        if (playCount < maxPlays && isTesting && testType === "speaker") {
+          // Wait 2 seconds before playing again
+          setTimeout(playWithDelay, 2000);
+        } else if (playCount >= maxPlays) {
+          // We've reached max plays, show toast notification
+          toast.info("Speaker test complete");
+        }
+      };
+
       audioEl.oncanplaythrough = () => {
         if (VERBOSE_LOGGING)
-          console.log("Audio can play through, starting playback");
-        audioEl.play().catch((err) => {
-          console.error("Error playing audio:", err);
-          if (!hasErrored) {
-            toast.error("Failed to play test sound");
-            hasErrored = true;
-          }
-        });
+          console.log("Audio can play through, starting playback and analysis");
         startSpeakerAnalysis();
+        playWithDelay(); // Start the first play
       };
 
       audioEl.onerror = (err) => {
@@ -817,10 +914,22 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
       return () => {
         if (VERBOSE_LOGGING) console.log("Cleaning up speaker test");
+        // First make sure to cancel any animations
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+
+        // Then run the full cleanup
         cleanupSpeakerAnalysis();
+
+        // Finally, clean up the audio element
         if (audioRef.current) {
           audioRef.current.pause();
           audioRef.current.src = "";
+          audioRef.current.onended = null;
+          audioRef.current.oncanplaythrough = null;
+          audioRef.current.onerror = null;
           audioRef.current = null;
         }
       };
@@ -937,11 +1046,13 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
       <div className="w-full max-w-md mb-6">
         <AudioLevelMeter
-          level={micLevel}
-          isActive={isTesting && testType === "mic" && micEnabled}
+          level={
+            isTesting && testType === "mic" ? Math.max(micLevel, 5) : micLevel
+          }
+          isActive={isTesting && testType === "mic"}
           type="microphone"
         />
-              </div>
+      </div>
 
       <div className="flex gap-3">
         <Button
@@ -969,7 +1080,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         >
           {micEnabled ? "Mute Mic" : "Unmute Mic"}
         </Button>
-            </div>
+      </div>
     </div>
   );
 
@@ -984,8 +1095,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         />
         {speakerLevel > 30 && (
           <div className="absolute inset-0 border-2 border-blue-500 rounded-full animate-ping opacity-75"></div>
-          )}
-        </div>
+        )}
+      </div>
 
       <h3 className="text-lg font-bold mb-3">Speaker Test</h3>
 
@@ -996,13 +1107,17 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
       <div className="w-full max-w-md mb-6">
         <AudioLevelMeter
-          level={speakerLevel}
+          level={
+            isTesting && testType === "speaker"
+              ? Math.max(speakerLevel, 5)
+              : speakerLevel
+          }
           isActive={isTesting && testType === "speaker"}
           type="speaker"
         />
       </div>
 
-            <Button
+      <Button
         variant={isTesting && testType === "speaker" ? "default" : "outline"}
         onClick={() => {
           if (isTesting && testType === "speaker") {
@@ -1024,7 +1139,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         }`}
       >
         {isTesting && testType === "speaker" ? "Stop Test" : "Start Test"}
-            </Button>
+      </Button>
     </div>
   );
 
@@ -1032,6 +1147,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   const handleTestSpeaker = useCallback(() => {
     setIsTesting(true);
     setTestType("speaker");
+    // Set a minimum level to ensure visualization
+    setSpeakerLevel(5);
     // Note: The actual audio setup and analysis is now handled by the useEffect
     if (VERBOSE_LOGGING) console.log("Test speaker requested");
   }, []);
@@ -1045,6 +1162,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
     setIsTesting(true);
     setTestType("mic");
+    // Set a minimum level to ensure visualization
+    setMicLevel(5);
     // Note: The actual stream acquisition and analysis is now handled by the useEffect
     if (VERBOSE_LOGGING) console.log("Test mic requested");
   }, [micEnabled]);
@@ -1076,7 +1195,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           <Mic size={18} />
           <span>Microphone</span>
         </button>
-                    <button
+        <button
           onClick={() => setActiveTab("speakers")}
           className={`py-3 px-4 font-medium flex items-center gap-2 ${
             activeTab === "speakers"
@@ -1086,7 +1205,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         >
           <Volume2 size={18} />
           <span>Speakers</span>
-                    </button>
+        </button>
       </div>
 
       {/* Content */}
@@ -1112,7 +1231,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                 )}
               </div>
               <div className="p-4 flex items-center justify-between">
-                  <Button
+                <Button
                   variant="outline"
                   onClick={toggleCameraEnabled}
                   className={`${
@@ -1122,12 +1241,12 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                   }`}
                 >
                   {cameraEnabled ? "Disable Camera" : "Enable Camera"}
-                  </Button>
+                </Button>
                 <div className="text-xs text-gray-400">
                   Preview only visible to you
                 </div>
               </div>
-          </div>
+            </div>
 
             <div className="space-y-6">
               <div className="bg-gray-900 rounded-lg p-6">
@@ -1137,38 +1256,38 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Select Camera
                     </label>
-            <Popover
+                    <Popover
                       open={popoverStates.camera}
                       onOpenChange={(open) =>
                         setPopoverStates((prev) => ({
                           ...prev,
                           camera: open,
                         }))
-              }
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
+                      }
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
                           role="combobox"
                           aria-expanded={popoverStates.camera}
                           className="w-full justify-between bg-gray-800 border-gray-700"
-                >
+                        >
                           {videoInputs.find(
                             (camera) => camera.deviceId === selectedCamera
                           )?.label || "Default camera"}
-                  <ChevronUp
+                          <ChevronUp
                             className={`ml-2 h-4 w-4 shrink-0 opacity-50 ${
                               popoverStates.camera ? "rotate-180" : ""
                             } transition-transform`}
-                  />
-                </Button>
-              </PopoverTrigger>
+                          />
+                        </Button>
+                      </PopoverTrigger>
                       <PopoverContent className="w-full p-0 bg-gray-800 border-gray-700">
                         <div className="max-h-80 overflow-auto">
                           {videoInputs.map((camera) => (
                             <div
                               key={camera.deviceId}
-                      className={popoverItem}
+                              className={popoverItem}
                               onClick={() => {
                                 handleDeviceChange("camera", camera.deviceId);
                                 setPopoverStates((prev) => ({
@@ -1192,13 +1311,13 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                                 }`}
                               >
                                 {camera.label}
-                      </span>
-                  </div>
+                              </span>
+                            </div>
                           ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1216,34 +1335,34 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Select Microphone
                   </label>
-            <Popover
+                  <Popover
                     open={popoverStates.mic}
                     onOpenChange={(open) =>
                       setPopoverStates((prev) => ({ ...prev, mic: open }))
-              }
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
+                    }
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
                         role="combobox"
                         aria-expanded={popoverStates.mic}
                         className="w-full justify-between bg-gray-800 border-gray-700"
-                >
+                      >
                         {audioInputs.find((mic) => mic.deviceId === selectedMic)
                           ?.label || "Default microphone"}
-                  <ChevronUp
+                        <ChevronUp
                           className={`ml-2 h-4 w-4 shrink-0 opacity-50 ${
                             popoverStates.mic ? "rotate-180" : ""
                           } transition-transform`}
-                  />
-                </Button>
-              </PopoverTrigger>
+                        />
+                      </Button>
+                    </PopoverTrigger>
                     <PopoverContent className="w-full p-0 bg-gray-800 border-gray-700">
                       <div className="max-h-80 overflow-auto">
                         {audioInputs.map((mic) => (
                           <div
                             key={mic.deviceId}
-                      className={popoverItem}
+                            className={popoverItem}
                             onClick={() => {
                               handleDeviceChange("mic", mic.deviceId);
                               setPopoverStates((prev) => ({
@@ -1276,16 +1395,16 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                               }`}
                             >
                               {mic.label}
-                      </span>
-                  </div>
+                            </span>
+                          </div>
                         ))}
                       </div>
-              </PopoverContent>
-            </Popover>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-        </div>
-      </div>
         )}
 
         {activeTab === "speakers" && (
@@ -1306,8 +1425,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                     }
                   >
                     <PopoverTrigger asChild>
-            <Button
-              variant="outline"
+                      <Button
+                        variant="outline"
                         role="combobox"
                         aria-expanded={popoverStates.speaker}
                         className="w-full justify-between bg-gray-800 border-gray-700"
@@ -1328,7 +1447,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                           <div
                             key={speaker.deviceId}
                             className={popoverItem}
-              onClick={() => {
+                            onClick={() => {
                               handleDeviceChange("speaker", speaker.deviceId);
                               setPopoverStates((prev) => ({
                                 ...prev,
@@ -1337,13 +1456,13 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
                               // If testing, restart with new device
                               if (isTesting && testType === "speaker") {
-                  cleanupSpeakerAnalysis();
+                                cleanupSpeakerAnalysis();
                                 if (audioRef.current) {
-                  audioRef.current.pause();
+                                  audioRef.current.pause();
                                 }
                                 // Wait a moment for cleanup
                                 setTimeout(() => {
-                      startSpeakerAnalysis();
+                                  startSpeakerAnalysis();
                                 }, 100);
                               }
                             }}
@@ -1366,11 +1485,11 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                             </span>
                           </div>
                         ))}
-            </div>
+                      </div>
                     </PopoverContent>
                   </Popover>
-            </div>
-          </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1381,12 +1500,12 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         <div className="text-sm text-gray-400">
           Your device settings will be saved for future streams
         </div>
-            <Button
+        <Button
           onClick={handleComplete}
           className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
-            >
+        >
           Save & Continue
-            </Button>
+        </Button>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import React, {
   useRef,
   forwardRef,
   useImperativeHandle,
+  useCallback,
 } from "react";
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff, Video, VideoOff, Share2, RefreshCw } from "lucide-react";
@@ -43,12 +44,41 @@ const generateUniqueIdentity = (prefix: string, streamId: string): string => {
 type StartStreamFunction = () => Promise<void>;
 type StreamError = Error | unknown;
 
+// Debug Panel Component
+const DebugPanel = ({
+  isStreaming,
+  connectionStatus,
+  hasStarted,
+  connectionError,
+}: {
+  isStreaming: boolean;
+  connectionStatus: "disconnected" | "connecting" | "connected";
+  hasStarted?: boolean;
+  connectionError: string | null;
+}) => {
+  if (typeof window === "undefined" || process.env.NODE_ENV === "production") {
+    return null;
+  }
+
+  return (
+    <div className="bg-gray-800 p-2 mb-2 text-xs text-white rounded">
+      <div>
+        <strong>Debug Info:</strong>
+      </div>
+      <div>isStreaming: {String(isStreaming)}</div>
+      <div>connectionStatus: {connectionStatus}</div>
+      <div>hasStarted (from prop): {String(!!hasStarted)}</div>
+      <div>connectionError: {connectionError || "none"}</div>
+    </div>
+  );
+};
+
 // Declare function references first to break circular dependencies
 let startStream: StartStreamFunction;
 
 // Convert to forwardRef
 const StreamManager = forwardRef<
-  { startStream: () => Promise<void> },
+  { startStream: () => Promise<void>; disconnect: () => Promise<void> },
   StreamManagerProps
 >(({ stream, className = "" }, ref) => {
   const [isStreaming, setIsStreaming] = useState(stream.hasStarted === true);
@@ -73,6 +103,7 @@ const StreamManager = forwardRef<
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
     startStream,
+    disconnect,
   }));
 
   // Set share URL
@@ -145,24 +176,51 @@ const StreamManager = forwardRef<
   // Update state when stream prop changes
   useEffect(() => {
     console.log(
-      `[StreamManager] Stream prop changed, hasStarted=${stream.hasStarted}`
+      `[StreamManager] Stream prop changed, hasStarted=${stream.hasStarted}, hasEnded=${stream.hasEnded}`
     );
-    setIsStreaming(stream.hasStarted === true);
+
+    // Update local state to match stream properties
+    setIsStreaming(stream.hasStarted === true && stream.hasEnded !== true);
     setTitle(stream.title || "");
 
-    // If hasStarted changed to true and we're not connected to Twilio, try to connect
-    if (stream.hasStarted && !isConnecting) {
+    // Only attempt to connect if the stream is active (hasStarted=true AND hasEnded=false)
+    if (
+      stream.hasStarted === true &&
+      stream.hasEnded !== true &&
+      !isConnecting &&
+      connectionStatus !== "connected"
+    ) {
       console.log(
-        "[StreamManager] Stream hasStarted changed to true, attempting to connect to Twilio"
+        "[StreamManager] Stream is active (hasStarted=true, hasEnded=false), attempting to connect to Twilio"
       );
-      startStream().catch((err: StreamError) => {
-        console.error(
-          "[StreamManager] Failed to auto-connect after hasStarted changed:",
-          err
-        );
-      });
+
+      // Use a small delay to ensure Firestore updates have propagated
+      setTimeout(() => {
+        startStream().catch((err: StreamError) => {
+          console.error(
+            "[StreamManager] Failed to auto-connect after hasStarted changed:",
+            err
+          );
+        });
+      }, 500);
+    } else if (stream.hasEnded === true) {
+      console.log("[StreamManager] Stream has ended, disconnecting if needed");
+
+      // Ensure we disconnect if the stream has ended
+      if (twilioRoomRef.current) {
+        twilioRoomRef.current.disconnect();
+        twilioRoomRef.current = null;
+      }
+
+      setConnectionStatus("disconnected");
     }
-  }, [stream.hasStarted, stream.title, isConnecting]);
+  }, [
+    stream.hasStarted,
+    stream.hasEnded,
+    stream.title,
+    isConnecting,
+    connectionStatus,
+  ]);
 
   // Define the retry handler with proper usage
   const handleRetry = async (retry: number) => {
@@ -192,6 +250,31 @@ const StreamManager = forwardRef<
         "[StreamManager] Already connected to streaming service, ignoring connection request"
       );
       return;
+    }
+
+    // If the stream was previously ended, we need to reset the state
+    if (stream.hasEnded === true) {
+      console.log(
+        "[StreamManager] Stream was previously ended, updating state before connecting"
+      );
+      try {
+        // Update the stream status in Firebase
+        if (stream.id) {
+          const streamRef = doc(db, "streams", stream.id);
+          await updateDoc(streamRef, {
+            hasStarted: true,
+            hasEnded: false,
+            startedAt: serverTimestamp(),
+            status: "live",
+          });
+          console.log(
+            "[StreamManager] Reset stream state from ended to active"
+          );
+        }
+      } catch (error) {
+        console.error("[StreamManager] Failed to reset stream state:", error);
+        // Continue with connection attempt despite error
+      }
     }
 
     try {
@@ -413,13 +496,36 @@ const StreamManager = forwardRef<
             const streamRef = doc(db, "streams", stream.id);
             await updateDoc(streamRef, {
               hasStarted: true,
+              hasEnded: false, // Explicitly set hasEnded to false
               startedAt: serverTimestamp(),
               status: "live",
             });
-            console.log("[StreamManager] Updated stream status to live");
+            console.log(
+              "[StreamManager] Updated stream status to live in Firestore"
+            );
           } catch (dbError) {
             console.error(
               "[StreamManager] Error updating stream status:",
+              dbError
+            );
+            // Don't fail the whole connect process for a DB error
+          }
+        } else if (stream.id && stream.hasEnded) {
+          // If the stream was previously ended but is now being restarted
+          try {
+            const streamRef = doc(db, "streams", stream.id);
+            await updateDoc(streamRef, {
+              hasStarted: true,
+              hasEnded: false, // Explicitly set hasEnded to false
+              startedAt: serverTimestamp(),
+              status: "live",
+            });
+            console.log(
+              "[StreamManager] Updated previously ended stream to live in Firestore"
+            );
+          } catch (dbError) {
+            console.error(
+              "[StreamManager] Error updating previously ended stream:",
               dbError
             );
             // Don't fail the whole connect process for a DB error
@@ -466,16 +572,17 @@ const StreamManager = forwardRef<
 
   // Fix the auto-connect mechanism to prevent infinite loops
   useEffect(() => {
-    // If stream has already started, we should automatically connect to Twilio
+    // If stream has already started and not ended, we should automatically connect to Twilio
     const autoConnect = async () => {
       if (
-        stream.hasStarted &&
+        stream.hasStarted === true &&
+        stream.hasEnded !== true &&
         !isConnecting &&
         !connectionError &&
         connectionStatus !== "connected"
       ) {
         console.log(
-          "[StreamManager] Auto-connecting to stream since it's already active"
+          "[StreamManager] Auto-connecting to stream since it's active and not connected"
         );
         try {
           setIsConnecting(true);
@@ -492,7 +599,13 @@ const StreamManager = forwardRef<
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [stream.hasStarted, isConnecting, connectionError, connectionStatus]);
+  }, [
+    stream.hasStarted,
+    stream.hasEnded,
+    isConnecting,
+    connectionError,
+    connectionStatus,
+  ]);
 
   // Fix re-connection logic to be cleaner
   const reconnect = async () => {
@@ -791,22 +904,52 @@ const StreamManager = forwardRef<
     }
   };
 
+  // Define the disconnect function
+  const disconnect = useCallback(async () => {
+    console.log("[StreamManager] Disconnect called");
+
+    if (twilioRoomRef.current) {
+      try {
+        console.log(
+          "[StreamManager] Disconnecting from Twilio room:",
+          twilioRoomRef.current.name
+        );
+        twilioRoomRef.current.disconnect();
+        twilioRoomRef.current = null;
+        setConnectionStatus("disconnected");
+      } catch (error) {
+        console.error("[StreamManager] Error disconnecting from room:", error);
+      }
+    } else {
+      console.log("[StreamManager] No active room to disconnect");
+    }
+
+    // Clean up local stream if exists
+    if (localStreamRef.current) {
+      try {
+        localStreamRef.current.getTracks().forEach((track) => {
+          track.stop();
+        });
+        localStreamRef.current = null;
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+        }
+      } catch (error) {
+        console.error("[StreamManager] Error cleaning up local stream:", error);
+      }
+    }
+
+    setIsStreaming(false);
+  }, []);
+
   return (
     <div className={`flex flex-col ${className}`}>
-      {/* Debug Panel - Remove this in production */}
-      {process.env.NODE_ENV !== "production" && (
-        <div className="bg-gray-800 p-2 mb-2 text-xs text-white rounded">
-          <div>
-            <strong>Debug Info:</strong>
-          </div>
-          <div>isStreaming: {isStreaming ? "true" : "false"}</div>
-          <div>connectionStatus: {connectionStatus}</div>
-          <div>
-            hasStarted (from prop): {stream.hasStarted ? "true" : "false"}
-          </div>
-          <div>connectionError: {connectionError || "none"}</div>
-        </div>
-      )}
+      <DebugPanel
+        isStreaming={isStreaming}
+        connectionStatus={connectionStatus}
+        hasStarted={stream?.hasStarted}
+        connectionError={connectionError}
+      />
 
       {/* Video Preview */}
       <div className="aspect-video bg-gray-900 rounded-lg relative overflow-hidden mb-4">
@@ -896,214 +1039,98 @@ const StreamManager = forwardRef<
         {isStreaming && (
           <div className="absolute top-4 right-4 flex items-center gap-2">
             <div
-              className={`flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-sm ${
+              className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${
                 connectionStatus === "connected"
-                  ? "text-green-500"
-                  : connectionStatus === "connecting"
-                  ? "text-yellow-500"
-                  : "text-red-500"
+                  ? "bg-green-600/20 text-green-400"
+                  : "bg-yellow-600/20 text-yellow-400"
               }`}
             >
               <span
                 className={`h-2 w-2 rounded-full ${
                   connectionStatus === "connected"
-                    ? "bg-green-500"
-                    : connectionStatus === "connecting"
-                    ? "bg-yellow-500 animate-pulse"
-                    : "bg-red-500"
+                    ? "bg-green-400"
+                    : "bg-yellow-400 animate-pulse"
                 }`}
               ></span>
-              <span>
-                {connectionStatus === "connected"
-                  ? "Stream Connected"
-                  : connectionStatus === "connecting"
-                  ? "Connecting..."
-                  : "Disconnected"}
-              </span>
+              {connectionStatus === "connected" ? "Connected" : "Connecting..."}
             </div>
-
-            {/* Only show Audio/Video Status Indicators when connected */}
-            {connectionStatus === "connected" && (
-              <>
-                {!isMicEnabled && (
-                  <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
-                    <MicOff size={16} />
-                    <span>Muted</span>
-                  </div>
-                )}
-                {!isVideoEnabled && (
-                  <div className="flex items-center gap-1 bg-black bg-opacity-70 px-3 py-1 rounded-full text-white text-sm">
-                    <VideoOff size={16} />
-                    <span>Camera Off</span>
-                  </div>
-                )}
-              </>
-            )}
           </div>
         )}
-
-        {/* Add Twilio Warning Overlay when stream is active but Twilio is disconnected */}
-        {isStreaming &&
-          connectionStatus === "disconnected" &&
-          !connectionError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 p-4">
-              <div className="text-amber-500 text-center max-w-md">
-                <p className="text-lg font-bold mb-2">Connection Issue</p>
-                <p className="mb-4">
-                  Your stream is active but viewers cannot connect because the
-                  streaming service is disconnected.
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={reconnect}
-                  disabled={isConnecting}
-                  className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
-                >
-                  {isConnecting ? (
-                    <>
-                      <Loader className="mr-2" />
-                      Reconnecting...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw size={16} className="mr-2" />
-                      Reconnect Now
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          )}
       </div>
 
-      {/* Stream Controls */}
-      <div className="bg-gray-900 p-4 rounded-lg shadow-md mb-4 border border-gray-800">
-        <div className="flex justify-between mb-6">
-          <h2 className="text-lg font-semibold text-brandWhite">
-            Stream Controls
-          </h2>
-
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={shareStream}
-              title="Share stream"
-              className="border-gray-700 text-brandBlack bg-brandGray hover:bg-gray-300"
-            >
-              <Share2 size={18} />
-            </Button>
-
-            {isStreaming ? (
-              <Button
-                variant="destructive"
-                onClick={() => setShowEndConfirmation(true)}
-              >
-                End Stream
-              </Button>
-            ) : (
-              <Button
-                className="bg-brandOrange hover:bg-brandOrange/90 text-brandBlack"
-                onClick={startStream}
-                disabled={isConnecting}
-              >
-                {isConnecting ? (
-                  <>
-                    <Loader className="mr-2" />
-                    <RefreshCw size={18} className="mr-2 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  "Start Streaming"
-                )}
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {isStreaming && (
-          <div className="flex gap-4 mb-6 justify-center">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={toggleMic}
-              className={`flex flex-col items-center gap-2 p-6 ${
-                isMicEnabled
-                  ? "bg-gray-800 text-brandWhite border-gray-700"
-                  : "bg-gray-800 text-brandOrange border-brandOrange/30"
-              }`}
-            >
-              {isMicEnabled ? <Mic size={24} /> : <MicOff size={24} />}
-              <span className="text-xs">
-                {isMicEnabled ? "Mic On" : "Mic Off"}
-              </span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={toggleVideo}
-              className={`flex flex-col items-center gap-2 p-6 ${
-                isVideoEnabled
-                  ? "bg-gray-800 text-brandWhite border-gray-700"
-                  : "bg-gray-800 text-brandOrange border-brandOrange/30"
-              }`}
-            >
-              {isVideoEnabled ? <Video size={24} /> : <VideoOff size={24} />}
-              <span className="text-xs">
-                {isVideoEnabled ? "Camera On" : "Camera Off"}
-              </span>
-            </Button>
-          </div>
-        )}
-
-        {/* Stream Info Form */}
-        <div className="space-y-3">
-          <div>
-            <label
-              htmlFor="title"
-              className="block text-sm font-medium text-gray-300 mb-1"
-            >
-              Stream Title
-            </label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter stream title"
-              className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
-            />
-          </div>
+      {/* Controls */}
+      <div className="flex flex-col gap-4">
+        <div className="flex gap-4">
+          <Button
+            variant="outline"
+            size="icon"
+            className={`${!isMicEnabled ? "bg-red-950 text-white" : ""}`}
+            onClick={toggleMic}
+          >
+            {isMicEnabled ? <Mic size={20} /> : <MicOff size={20} />}
+          </Button>
 
           <Button
             variant="outline"
-            onClick={updateStreamInfo}
-            className="w-full bg-gray-800 border-gray-700 text-brandWhite hover:bg-gray-700"
+            size="icon"
+            className={`${!isVideoEnabled ? "bg-red-950 text-white" : ""}`}
+            onClick={toggleVideo}
           >
-            Update Stream Info
+            {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
           </Button>
+
+          <Input
+            className="flex-1"
+            placeholder="Stream Title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={updateStreamInfo}
+          />
+        </div>
+
+        <div className="flex gap-4">
+          <Button
+            className={`flex-1 ${
+              isStreaming
+                ? "bg-red-600 hover:bg-red-700"
+                : "bg-brandOrange hover:bg-brandOrange/90"
+            }`}
+            onClick={isStreaming ? endStream : startStream}
+          >
+            {isStreaming ? "End Stream" : "Start Stream"}
+          </Button>
+
+          {isStreaming && (
+            <Button
+              variant="outline"
+              className="flex gap-2"
+              onClick={shareStream}
+            >
+              <Share2 size={16} />
+              Share
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* End Stream Confirmation Modal */}
+      {/* Share Dialog */}
       <Dialog open={showEndConfirmation} onOpenChange={setShowEndConfirmation}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-brandOrange">End Stream?</DialogTitle>
+            <DialogTitle>End streaming session?</DialogTitle>
           </DialogHeader>
-          <p className="mb-6">
-            Are you sure you want to end this stream? This action cannot be
-            undone.
+          <p className="py-4">
+            Are you sure you want to end this streaming session? Your viewers
+            will no longer be able to watch.
           </p>
-          <DialogFooter className="flex gap-2 justify-end">
+          <DialogFooter className="flex gap-2">
             <Button
               variant="outline"
               onClick={() => setShowEndConfirmation(false)}
-              className="border-gray-600 text-white hover:bg-gray-700"
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={endStream}>
+            <Button className="bg-red-600 hover:bg-red-700" onClick={endStream}>
               End Stream
             </Button>
           </DialogFooter>
@@ -1113,7 +1140,8 @@ const StreamManager = forwardRef<
   );
 });
 
-// Add display name
+// Add display name to the component to fix the linter error
 StreamManager.displayName = "StreamManager";
 
+// Export the StreamManager component
 export default StreamManager;

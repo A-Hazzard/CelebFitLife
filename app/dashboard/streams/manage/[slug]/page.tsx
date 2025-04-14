@@ -703,9 +703,10 @@ export default function ManageStreamPage() {
     userId: string;
   } | null>(null);
 
-  const streamManagerRef = useRef<{ startStream: () => Promise<void> } | null>(
-    null
-  );
+  const streamManagerRef = useRef<{
+    startStream: () => Promise<void>;
+    disconnect: () => Promise<void>;
+  } | null>(null);
 
   // Use currentUser to avoid lint error
   useEffect(() => {
@@ -774,22 +775,33 @@ export default function ManageStreamPage() {
     try {
       if (!stream?.id) return;
 
+      console.log(
+        "[StreamManager] Starting stream, updating Firestore document"
+      );
       const streamDocRef = doc(db, "streams", stream.id);
+
+      // Update stream document with explicit hasEnded: false
       await updateDoc(streamDocRef, {
         hasStarted: true,
         hasEnded: false,
         startedAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
+        status: "live", // Ensure status is explicitly set to "live"
         audioMuted: false,
         cameraOff: false,
       });
 
       // Call the internal startStream method of StreamManager
       if (typeof streamManagerRef.current?.startStream === "function") {
+        console.log(
+          "[StreamManager] Calling StreamManager.startStream() method"
+        );
         await streamManagerRef.current.startStream();
       }
 
-      setStream((prev) => (prev ? { ...prev, hasStarted: true } : null));
+      setStream((prev) =>
+        prev ? { ...prev, hasStarted: true, hasEnded: false } : null
+      );
       toast.success("Stream started successfully!");
       setConnectionError(null);
     } catch (error) {
@@ -807,14 +819,38 @@ export default function ManageStreamPage() {
     try {
       if (!stream?.id) return;
 
+      console.log("[StreamManager] Ending stream, updating Firestore document");
       const streamDocRef = doc(db, "streams", stream.id);
       await updateDoc(streamDocRef, {
         hasEnded: true,
+        hasStarted: false, // Reset hasStarted to ensure it's not in an ambiguous state
         endedAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
+        status: "ended", // Explicitly set status to ended
       });
 
-      setStream((prev) => (prev ? { ...prev, hasEnded: true } : null));
+      // Disconnect from Twilio if connected
+      if (
+        streamManagerRef.current &&
+        typeof streamManagerRef.current.disconnect === "function"
+      ) {
+        console.log(
+          "[StreamManager] Calling StreamManager.disconnect() method"
+        );
+        await streamManagerRef.current.disconnect();
+      }
+
+      setStream((prev) =>
+        prev
+          ? {
+              ...prev,
+              hasEnded: true,
+              hasStarted: false,
+              status: "ended",
+            }
+          : null
+      );
+
       toast.success("Stream ended successfully!");
     } catch (error) {
       console.error("Error ending stream:", error);

@@ -262,7 +262,7 @@ export default function LiveViewPage() {
     // Don't retry if we've hit the max attempts
     if (connectionAttempts >= maxConnectionAttempts) {
       console.log(
-        `Maximum connection attempts (${maxConnectionAttempts}) reached. Not retrying.`
+        `[LiveView] Maximum connection attempts (${maxConnectionAttempts}) reached. Not retrying.`
       );
       setConnectionError(
         `Unable to connect after ${maxConnectionAttempts} attempts. The stream may be offline or unavailable.`
@@ -278,6 +278,7 @@ export default function LiveViewPage() {
       const streamDoc = await getDoc(streamRef);
 
       if (!streamDoc.exists()) {
+        console.log(`[LiveView] Stream document for slug "${slug}" not found`);
         setVideoStatus("offline");
         setConnectionError("Stream not found");
         setIsRetrying(false);
@@ -285,28 +286,40 @@ export default function LiveViewPage() {
       }
 
       const streamData = streamDoc.data();
+      console.log(
+        `[LiveView] Stream status check: hasStarted=${streamData.hasStarted}, hasEnded=${streamData.hasEnded}, status=${streamData.status}`
+      );
 
-      // Handle different stream states
-      if (streamData.hasEnded) {
+      // CRITICAL FIX: Handle different stream states with explicit boolean checks
+      if (streamData.hasEnded === true) {
+        console.log(`[LiveView] Stream has ended (hasEnded=true)`);
         setVideoStatus("ended");
+        setHasEnded(true);
         setIsRetrying(false);
         return false;
-      } else if (!streamData.hasStarted) {
-        setVideoStatus("waiting");
-        setIsRetrying(false);
-        return false;
+      } else if (streamData.hasStarted === true) {
+        // Stream is active! Even if status isn't explicitly "live", hasStarted=true is enough
+        console.log(`[LiveView] Stream is active (hasStarted=true)`);
+        setHasStarted(true);
+        setHasEnded(false);
+        return true;
       } else if (streamData.status === "live") {
-        // Stream is active, we'll try to connect
+        // Fallback for older streams that might use status="live" without hasStarted=true
+        console.log(
+          `[LiveView] Stream has status="live" but hasStarted is not true`
+        );
+        setHasStarted(true);
+        setHasEnded(false);
         return true;
       } else {
-        // Fallback for unknown status
-        setVideoStatus("offline");
-        setConnectionError("Stream is currently offline");
+        // Likely in waiting state
+        console.log(`[LiveView] Stream is in waiting state (not started yet)`);
+        setVideoStatus("waiting");
         setIsRetrying(false);
         return false;
       }
     } catch (error) {
-      console.error("Error checking stream status:", error);
+      console.error("[LiveView] Error checking stream status:", error);
       setConnectionError("Unable to check stream status. Please try again.");
       setIsRetrying(false);
       return false;
@@ -594,14 +607,15 @@ export default function LiveViewPage() {
       return undefined;
     }
 
-    console.log("[Status] Setting up stream status listener for:", slug);
+    console.log("[LiveView] Setting up stream status listener for:", slug);
     const streamDocRef = doc(db, "streams", slug);
     const unsubscribe = onSnapshot(streamDocRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        console.log("[Status] Stream status update:", {
+        console.log("[LiveView] Stream status update:", {
           hasStarted: data.hasStarted,
           hasEnded: data.hasEnded,
+          status: data.status,
           audioMuted: data.audioMuted || false,
           cameraOff: data.cameraOff || false,
           startedAt: data.startedAt || null,
@@ -645,10 +659,10 @@ export default function LiveViewPage() {
           setScheduledTime(data.scheduledAt);
         }
 
-        // CRITICAL FIX: Update video status based on stream state
+        // CRITICAL FIX: Update video status based on stream state with explicit boolean checks
         // Only show as ended when hasEnded is explicitly true
         if (data.hasEnded === true) {
-          console.log("[Status] Stream has ended, disconnecting from room");
+          console.log("[LiveView] Stream has ended, disconnecting from room");
           setVideoStatus("ended");
           setHasEnded(true);
           if (twilioRoom.current) {
@@ -659,36 +673,49 @@ export default function LiveViewPage() {
         // Explicitly check for hasStarted === true to fix incorrect status display
         else if (data.hasStarted === true) {
           console.log(
-            "[Status] Stream hasStarted=true, setting state and connecting if needed"
+            "[LiveView] Stream hasStarted=true, setting state and connecting if needed"
           );
 
           // Set hasStarted first so the useEffect will trigger connection
           setHasStarted(true);
+          setHasEnded(false); // Explicitly set hasEnded to false for clarity
 
-          // If we're showing offline or waiting but the stream is actually active
-          // We should attempt to connect
+          // If we're showing offline or waiting but the stream is actually active,
+          // we should attempt to connect
           if (
             videoStatus === "offline" ||
             videoStatus === "waiting" ||
             videoStatus === "error"
           ) {
             console.log(
-              "[Status] Stream is active but we're showing offline/waiting/error. Attempting to connect..."
+              "[LiveView] Stream is active but we're showing offline/waiting/error. Attempting to connect..."
             );
 
             // CRITICAL FIX: Directly initiate connection here instead of just setting status
             if (!twilioRoom.current && !isConnectingRef.current) {
-              console.log("[Status] Initiating connection to Twilio room");
-              initiateConnection().catch((err: Error) => {
-                console.error(
-                  "[Status] Failed to connect to Twilio room:",
-                  err
-                );
-                setVideoStatus("error");
-                setConnectionError(
-                  "Failed to connect to stream. Please try refreshing the page."
-                );
-              });
+              console.log("[LiveView] Initiating connection to Twilio room");
+              isConnectingRef.current = true; // Prevent multiple connection attempts
+
+              initiateConnection()
+                .then((success) => {
+                  console.log(
+                    `[LiveView] Connection attempt result: ${
+                      success ? "connected" : "failed"
+                    }`
+                  );
+                  isConnectingRef.current = false;
+                })
+                .catch((err: Error) => {
+                  console.error(
+                    "[LiveView] Failed to connect to Twilio room:",
+                    err
+                  );
+                  setVideoStatus("error");
+                  setConnectionError(
+                    "Failed to connect to stream. Please try refreshing the page."
+                  );
+                  isConnectingRef.current = false;
+                });
             } else {
               // If we can't connect yet, at least update the status
               setVideoStatus("connecting");
@@ -698,9 +725,30 @@ export default function LiveViewPage() {
           else if (videoStatus !== "connecting") {
             setVideoStatus("active");
           }
+        } else if (data.status === "live") {
+          // Fallback for streams that might have status="live" without hasStarted=true
+          console.log(
+            "[LiveView] Stream has status='live' but hasStarted is not true"
+          );
+          setHasStarted(true);
+          setHasEnded(false);
+
+          if (
+            videoStatus !== "active" &&
+            videoStatus !== "connecting" &&
+            !twilioRoom.current
+          ) {
+            setVideoStatus("connecting");
+            initiateConnection().catch((err) => {
+              console.error(
+                "[LiveView] Failed to connect to stream with status='live':",
+                err
+              );
+            });
+          }
         } else {
           console.log(
-            "[Status] Stream is waiting to start (hasStarted is not true)"
+            "[LiveView] Stream is waiting to start (hasStarted is not true)"
           );
           setVideoStatus("waiting");
           setHasStarted(false);
@@ -708,14 +756,14 @@ export default function LiveViewPage() {
       } else {
         // Stream doesn't exist, set to offline
         console.log(
-          "[Status] Stream document doesn't exist, setting to offline"
+          "[LiveView] Stream document doesn't exist, setting to offline"
         );
         setVideoStatus("offline");
       }
     });
 
     return () => {
-      console.log("[Status] Cleaning up stream status listener");
+      console.log("[LiveView] Cleaning up stream status listener");
       unsubscribe();
     };
   }, [
@@ -966,6 +1014,70 @@ export default function LiveViewPage() {
 
     return undefined;
   }, [remoteVideoTrack, remoteAudioTrack]);
+
+  // Add a polling mechanism to periodically check stream status
+  useEffect(() => {
+    // Skip if we already have a connection or are in a final state
+    if (
+      videoStatus === "active" ||
+      videoStatus === "ended" ||
+      twilioRoom.current ||
+      hasEnded
+    ) {
+      return;
+    }
+
+    console.log("[LiveView] Setting up periodic stream status check");
+
+    // Check every 5 seconds for stream status updates
+    const checkInterval = setInterval(async () => {
+      try {
+        // Only proceed if we're not already connected or in a final state
+        if (
+          (videoStatus === "waiting" ||
+            videoStatus === "connecting" ||
+            videoStatus === "offline" ||
+            videoStatus === "error") &&
+          !twilioRoom.current &&
+          !hasEnded
+        ) {
+          console.log("[LiveView] Performing periodic stream status check");
+
+          // Check Firestore for latest status
+          const streamRef = doc(db, "streams", slug);
+          const streamDoc = await getDoc(streamRef);
+
+          if (streamDoc.exists()) {
+            const data = streamDoc.data();
+            console.log("[LiveView] Periodic check found stream data:", {
+              hasStarted: data.hasStarted,
+              hasEnded: data.hasEnded,
+              status: data.status,
+            });
+
+            // If stream is active but we're not connected, attempt connection
+            if (data.hasStarted === true && data.hasEnded !== true) {
+              console.log(
+                "[LiveView] Stream is active but we're not connected - attempting connection"
+              );
+
+              // Only attempt connection if not already connecting
+              if (!isConnectingRef.current) {
+                handleRetryAttempt();
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[LiveView] Error in periodic status check:", error);
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => {
+      console.log("[LiveView] Clearing periodic stream status check");
+      clearInterval(checkInterval);
+    };
+  }, [slug, videoStatus, twilioRoom, hasEnded, handleRetryAttempt]);
 
   if (!hasHydrated || !currentUser) return null;
 
