@@ -1,118 +1,107 @@
-import React, { useState, useEffect } from "react";
-import { AudioLevelMeterProps } from "@/lib/types/ui";
+import React, { useEffect, useState, useMemo } from "react";
+import { AudioLevelMeterProps as BaseProps } from "@/lib/types/ui";
+
+interface AudioLevelMeterProps extends BaseProps {
+  pulse?: boolean;
+}
 
 const AudioLevelMeter: React.FC<AudioLevelMeterProps> = ({
   level,
   isActive = false,
-  // We're keeping type for API consistency with other audio components
-  type = "microphone",
+  // Removed: type = "microphone",
+  // Removed: pulse = false,
 }) => {
-  // Add a key to force re-rendering when values change significantly
   const [meterKey, setMeterKey] = useState<number>(0);
-
-  // Add state for pulse effect
-  const [shouldPulse, setShouldPulse] = useState<boolean>(false);
-
-  // Create a pulse effect when level is high
-  useEffect(() => {
-    if (level > 30) {
-      setShouldPulse(true);
-      // Reset after animation
-      const timer = setTimeout(() => setShouldPulse(false), 500);
-      return () => clearTimeout(timer);
-    }
-    return undefined; // Return undefined for paths where we don't have cleanup
-  }, [level]);
+  const [isPulsing, setIsPulsing] = useState<boolean>(false);
 
   // Force re-render when isActive changes
   useEffect(() => {
     setMeterKey((prev) => prev + 1);
   }, [isActive]);
 
-  // Force re-render when level changes significantly
+  // Handle pulsing effect when level exceeds threshold
   useEffect(() => {
-    // Only re-render when level changes significantly to avoid excessive updates
-    const threshold = 20;
-    const currentKey = Math.floor(level / threshold);
-    if (currentKey !== Math.floor(meterKey)) {
-      setMeterKey(currentKey);
+    if (level > 30 && isActive) {
+      setIsPulsing(true);
+      const timeout = setTimeout(() => setIsPulsing(false), 300);
+      return () => clearTimeout(timeout);
     }
-  }, [level, meterKey]);
+    return undefined;
+  }, [level, isActive]);
 
-  // Total number of segments for the meter
-  const totalSegments = 16;
-
-  // Determine how many segments should be active based on level
-  const getActiveSegments = () => {
-    // Calculate active segments without excessive randomness
-    const baseSegments = Math.max(1, Math.ceil((level / 100) * totalSegments));
-
-    // Use a small amount of randomness only when actively testing
-    const randomFactor = isActive ? Math.random() * 0.1 : 0; // Reduced from 0.15 to 0.1
-    const finalSegments = Math.min(
-      totalSegments,
-      Math.max(1, Math.floor(baseSegments * (1 + randomFactor)))
-    );
-
-    return finalSegments;
-  };
-
-  const activeSegments = getActiveSegments();
-
-  // Create an array of segments
-  const segments = Array.from({ length: totalSegments }, (_, index) => {
-    // Each segment has a position (0 to 1) that determines its color
-    const position = index / totalSegments;
-
-    // Determine if this segment should be active
-    const isActiveSegment = index < activeSegments;
-
-    // Determine segment color based on position - Match the design in screenshot
-    let segmentColor = "bg-gray-800"; // Default inactive color
-
-    if (isActiveSegment) {
-      if (position < 0.625) {
-        // First 10/16 segments - green (matches screenshot)
-        segmentColor = "bg-green-500";
-      } else if (position < 0.75) {
-        // Next 2/16 segments - yellow (matches screenshot)
-        segmentColor = "bg-yellow-500";
-      } else {
-        // Last 4/16 segments - red (matches screenshot)
-        segmentColor = "bg-red-500";
+  // Force re-render on significant level changes
+  useEffect(() => {
+    if (isActive) {
+      // Only force re-render if level changes significantly
+      const levelChange = Math.abs(level - prevLevelRef.current);
+      if (levelChange > 5) {
+        setMeterKey((prev) => prev + 1);
+        prevLevelRef.current = level;
       }
     }
+  }, [level, isActive]);
 
-    // Make all segments the same height to match the design
-    return (
-      <div
-        key={`${index}-${isActiveSegment}-${meterKey}`}
-        className={`h-3 rounded-sm transition-colors duration-100 ${segmentColor}`}
-        style={{
-          width: "100%", // All segments have the same width
-          opacity: isActiveSegment ? 1 : 0.25, // Higher contrast between active/inactive
-          transform:
-            shouldPulse && isActiveSegment ? "scaleY(1.1)" : "scaleY(1)",
-          transition:
-            "transform 100ms ease-out, opacity 100ms ease-out, background-color 100ms ease-out",
-        }}
-      />
-    );
-  });
+  // Ref to track previous level for change detection
+  const prevLevelRef = React.useRef<number>(0);
 
-  // Render a simplified meter that looks like the design in the screenshot
+  // Create the segments array - this will determine which segments are active
+  const segments = useMemo(() => {
+    const result = [];
+    const totalSegments = 20;
+    for (let i = 0; i < totalSegments; i++) {
+      const isSegmentActive = isActive && (i === 0 || (i + 1) * 5 <= level);
+      result.push({
+        id: i,
+        active: isSegmentActive,
+      });
+    }
+    if (isActive) {
+      const activeCount = result.filter((segment) => segment.active).length;
+      console.log(
+        `AudioLevelMeter: level=${level}, activeSegments=${activeCount}`
+      );
+    }
+    return result;
+  }, [level, isActive]);
+
   return (
-    <div className="relative">
-      <div className="flex items-center justify-between gap-1">{segments}</div>
-      <div className="text-xs text-gray-400 flex justify-between mt-1">
-        <span>Low</span>
-        {type === "microphone" ? (
-          <span className="font-mono">{Math.round(level)}</span>
-        ) : (
-          <span className="font-mono">{Math.round(level)}</span>
+    <div className="flex flex-col items-center space-y-1 w-20">
+      <div className="relative h-60 w-6 bg-gray-200 dark:bg-gray-800 rounded overflow-hidden flex flex-col-reverse">
+        {segments.map((segment) => (
+          <div
+            key={`segment-${segment.id}-${meterKey}`}
+            className={`w-full h-3 ${
+              segment.active
+                ? segment.id < 13
+                  ? "bg-emerald-400 dark:bg-emerald-500"
+                  : segment.id < 17
+                  ? "bg-amber-400 dark:bg-amber-500"
+                  : "bg-red-500 dark:bg-red-600"
+                : "bg-gray-300 dark:bg-gray-700"
+            } transition-all duration-100 ease-out`}
+            style={{
+              height: `${segment.id === 0 ? "4px" : "3px"}`,
+              marginBottom: "2px",
+              opacity: segment.active ? 1 : 0.4,
+            }}
+          />
+        ))}
+        {isPulsing && level > 30 && (
+          <div
+            className={`absolute w-4 h-4 rounded-full left-1 transition-all duration-300 ease-out animate-pulse ${
+              level < 65
+                ? "bg-emerald-400"
+                : level < 85
+                ? "bg-amber-400"
+                : "bg-red-500"
+            }`}
+            style={{ bottom: `${Math.min(90, level * 0.9)}%` }}
+          />
         )}
-        <span>High</span>
       </div>
+      <span className="text-xs font-medium">
+        {isActive ? Math.round(level) : 0}
+      </span>
     </div>
   );
 };

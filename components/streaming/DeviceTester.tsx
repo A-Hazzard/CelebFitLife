@@ -109,7 +109,6 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   const [speakerLevel, setSpeakerLevel] = useState(0);
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const currentMicLevelRef = useRef<number>(0); // Add ref to track current mic level
   const currentSpeakerLevelRef = useRef<number>(0); // Add ref to track current speaker level
 
   // Popover states
@@ -132,6 +131,30 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
   // Add ref for speaker analysis cleanup function
   const speakerAnalysisCleanupRef = useRef<(() => void) | null>(null);
+
+  // 1. Add state for mic pulse
+  const [micPulse, setMicPulse] = useState(false);
+  const micMovingAvgRef = useRef(0);
+
+  // 1. Add state for speaker pulse
+  const [speakerPulse, setSpeakerPulse] = useState(false);
+  const speakerMovingAvgRef = useRef(0);
+
+  // Add state for speaker test
+  const [isSpeakerTestActive, setIsSpeakerTestActive] = useState(false);
+
+  // Add refs for the speaker test
+  const speakerAudioContextRef = useRef<AudioContext | null>(null);
+  const speakerAudioElRef = useRef<HTMLAudioElement | null>(null);
+  const speakerAnalysisFrameRef = useRef<number | null>(null);
+  const speakerTestTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const speakerOscillatorRefs = useRef<OscillatorNode[]>([]);
+  const speakerGainRefs = useRef<GainNode[]>([]);
+
+  // 1. Add useEffect to watch isTesting and testType
+  useEffect(() => {
+    toast.info(`State changed: isTesting=${isTesting}, testType=${testType}`);
+  }, [isTesting, testType]);
 
   // --- Utility Functions ---
   const cleanupMicAnalysis = useCallback(() => {
@@ -180,9 +203,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     if (speakerSourceNodeRef.current) {
       try {
         speakerSourceNodeRef.current.disconnect();
-      } catch (e) {
-        if (VERBOSE_LOGGING)
-          console.warn("Error disconnecting speaker source node:", e);
+      } catch (error) {
+        console.error("Error disconnecting speaker source node:", error);
       }
       speakerSourceNodeRef.current = null;
     }
@@ -190,9 +212,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     if (speakerAnalyserRef.current) {
       try {
         speakerAnalyserRef.current.disconnect();
-      } catch (e) {
-        if (VERBOSE_LOGGING)
-          console.warn("Error disconnecting speaker analyser node:", e);
+      } catch (error) {
+        console.error("Error disconnecting speaker analyser:", error);
       }
       speakerAnalyserRef.current = null;
     }
@@ -205,9 +226,9 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   const closeAudioContext = useCallback(() => {
     if (audioContext && audioContext.state !== "closed") {
       if (VERBOSE_LOGGING) console.log("Closing AudioContext...");
-      audioContext
-        .close()
-        .catch((err) => console.warn("Error closing audio context:", err));
+      audioContext.close().catch((error) => {
+        console.error("Error closing AudioContext:", error);
+      });
       setAudioContext(null);
     }
   }, [audioContext]);
@@ -236,9 +257,9 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     }
     // Resume context if suspended
     if (currentContext.state === "suspended") {
-      currentContext
-        .resume()
-        .catch((err) => console.warn("Error resuming AudioContext:", err));
+      currentContext.resume().catch((error) => {
+        console.error("Error resuming AudioContext:", error);
+      });
     }
     return currentContext;
   }, [audioContext]);
@@ -356,181 +377,134 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     }
   }, []);
 
-  // Improve startMicAnalysis function to ensure meter visualization
+  // 2. Update toggleMicEnabled to control MediaStream tracks and analysis
+  const toggleMicEnabled = () => {
+    const newState = !micEnabled;
+    setMicEnabled(newState);
+    if (micStreamRef.current) {
+      micStreamRef.current.getAudioTracks().forEach((track) => {
+        track.enabled = newState;
+      });
+    }
+    if (!newState && isTesting && testType === "mic") {
+      cleanupMicAnalysis();
+    } else if (newState && isTesting && testType === "mic") {
+      startMicAnalysis(selectedMic);
+    }
+  };
+
+  // 3. Refactor mic analysis for compression and pulse
   const startMicAnalysis = useCallback(
     async (deviceId?: string) => {
       try {
-        // Clean up any previous analysis
         cleanupMicAnalysis();
-
-        // Set a baseline level immediately for visualization
         setMicLevel(10);
-
-        // Get the microphone stream
+        setMicPulse(false);
         const stream = await getMicStream(deviceId);
         if (!stream) {
           toast.error("Could not access microphone");
           return;
         }
-
         micStreamRef.current = stream;
-
-        // Get audio context
         const context = getAudioContext();
         if (!context) {
           toast.error("Audio system not available for microphone test");
           return;
         }
-
         try {
-          // Create the audio nodes with improved settings
           const analyser = context.createAnalyser();
-          analyser.fftSize = 1024; // Enough for detailed analysis
-          analyser.smoothingTimeConstant = 0.2; // More responsive
+          analyser.fftSize = 1024;
+          analyser.smoothingTimeConstant = 0.2;
           micAnalyserRef.current = analyser;
-
-          // Create source from mic stream
           const sourceNode = context.createMediaStreamSource(stream);
           micSourceNodeRef.current = sourceNode;
-
-          // Add gain to boost quiet voices
           const gainNode = context.createGain();
-          gainNode.gain.value = 5.0; // Significantly increased for better visualization
+          gainNode.gain.value = 3.0;
           micGainNodeRef.current = gainNode;
-
-          // Connect nodes
           sourceNode.connect(gainNode);
           gainNode.connect(analyser);
-          // Don't connect to destination to prevent feedback
-
-          console.log("Mic test: Audio nodes connected successfully");
-
-          // Create data array for analysis
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-          // Analysis function with improved level calculation
+          let movingAvg = 0;
           const runAnalysis = () => {
             if (!micAnalyserRef.current) return;
-
             try {
               micAnalyserRef.current.getByteFrequencyData(dataArray);
-
-              // Calculate level with improved algorithm
               let sum = 0;
               let peak = 0;
-
-              // Focus on voice frequencies (300Hz-3kHz range)
               const voiceStart = Math.floor(dataArray.length * 0.05);
               const voiceEnd = Math.floor(dataArray.length * 0.3);
-
               for (let i = voiceStart; i < voiceEnd; i++) {
                 sum += dataArray[i];
                 peak = Math.max(peak, dataArray[i]);
               }
-
               const count = voiceEnd - voiceStart;
               const average = sum / count;
-
-              // Apply noise floor threshold for better sensitivity
-              const noiseFloor = 3; // Reduced for better sensitivity
+              // Soft-knee compression: log curve
+              const noiseFloor = 3;
               const adjustedPeak = Math.max(0, peak - noiseFloor);
-
-              // More sensitive scale for voice levels - boosted for better visualization
-              const scaledLevel = Math.min(
-                100,
-                Math.pow(
-                  (average * 0.3 + adjustedPeak * 0.7) / (255 - noiseFloor),
-                  0.45 // Made more sensitive
-                ) * 200 // Increased for better visualization
-              );
-
-              // Update level state with smoothing
-              setMicLevel((prev) => {
-                // Ensure a minimum level when actively testing
-                const minLevelWhenActive = 15; // Increased minimum level
-
-                // Smooth transitions between values
-                const smoothedLevel = prev * 0.2 + scaledLevel * 0.8;
-                const finalLevel =
-                  isTesting && testType === "mic"
-                    ? Math.max(minLevelWhenActive, smoothedLevel)
-                    : smoothedLevel;
-
-                currentMicLevelRef.current = finalLevel;
-                return finalLevel;
-              });
-
-              // Continue the analysis loop
+              let compressed = Math.log1p(average * 0.3 + adjustedPeak * 0.7);
+              compressed = Math.min(1, compressed / Math.log1p(255));
+              // Moving average for smoothness
+              movingAvg = movingAvg * 0.8 + compressed * 0.2;
+              micMovingAvgRef.current = movingAvg;
+              // Scale to 0-100
+              const scaledLevel = Math.round(movingAvg * 100);
+              setMicLevel(scaledLevel);
+              // Pulse if above 60% of recent average
+              if (
+                scaledLevel > Math.max(30, micMovingAvgRef.current * 100 * 0.6)
+              ) {
+                setMicPulse(true);
+                setTimeout(() => setMicPulse(false), 300);
+              }
               animationFrameRef.current = requestAnimationFrame(runAnalysis);
             } catch (error) {
               console.error("Error in mic analysis:", error);
               cleanupMicAnalysis();
-              // Still maintain a base level even if analysis fails
               setMicLevel(15);
             }
           };
-
-          // Start the analysis loop
           animationFrameRef.current = requestAnimationFrame(runAnalysis);
         } catch (error) {
           console.error("Error setting up mic analysis:", error);
           toast.error("Failed to analyze microphone input");
           cleanupMicAnalysis();
-          // Still maintain a base level even if analysis fails
           setMicLevel(15);
         }
       } catch (error) {
         console.error("Critical error in mic analysis:", error);
         toast.error("Could not access microphone");
-        // Still maintain a base level even if analysis fails
         setMicLevel(15);
       }
     },
-    [getAudioContext, getMicStream, cleanupMicAnalysis, isTesting, testType]
+    [getAudioContext, getMicStream, cleanupMicAnalysis]
   );
 
-  // Improve startSpeakerAnalysis function to ensure meter visualization
+  // 2. Refactor startSpeakerAnalysis for robust visualization and pulse
   const startSpeakerAnalysis = useCallback(() => {
-    // Use the audio element that was created by the useEffect
+    toast.info("Speaker test: startSpeakerAnalysis called");
     if (!audioRef.current) {
-      console.warn("Cannot start speaker analysis: audio element not ready.");
-      setSpeakerLevel(15); // Set a baseline level even if audio element isn't ready
+      setSpeakerLevel(15);
       return;
     }
-
-    // Make sure audio context is available
     const context = getAudioContext();
     if (!context) {
-      console.error("Audio context could not be created");
       toast.error("Audio system not available for speaker test");
-      setSpeakerLevel(15); // Set a baseline level even if context isn't available
+      setSpeakerLevel(15);
       return;
     }
-
-    // Clean up any previous analysis
     cleanupSpeakerAnalysis();
-
-    // Set a baseline level immediately for visualization
     setSpeakerLevel(15);
-
+    setSpeakerPulse(false);
     try {
-      // Resume audio context if it's suspended
       if (context.state === "suspended") {
-        context
-          .resume()
-          .catch((err) =>
-            console.error("Failed to resume audio context:", err)
-          );
+        context.resume().catch((error) => {
+          console.error("Error resuming AudioContext:", error);
+        });
       }
-
-      // Create analyzer with improved settings
       const analyser = context.createAnalyser();
-      analyser.fftSize = 256; // Lower FFT size for more responsive readings
-      analyser.smoothingTimeConstant = 0.3; // Reduced from 0.5 for better responsiveness
-      speakerAnalyserRef.current = analyser;
-
-      // Only create a source node if one doesn't already exist for this audio element
-      // This prevents the "MediaElementAudioSource already connected" error
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.3;
       let sourceNode;
       if (!speakerSourceNodeRef.current) {
         try {
@@ -538,105 +512,60 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           speakerSourceNodeRef.current = sourceNode;
         } catch (error) {
           console.error("Error creating media element source:", error);
-          // If we already have a connected audio element, try disconnecting first
-          if (
-            error instanceof DOMException &&
-            error.message.includes("connected")
-          ) {
-            toast.error("Audio system error. Please try again.");
-            setSpeakerLevel(15); // Still maintain a base level
-            return;
-          }
         }
+        speakerSourceNodeRef.current = null;
       } else {
         sourceNode = speakerSourceNodeRef.current;
       }
-
       if (!sourceNode) {
-        console.error("Failed to create audio source node");
-        setSpeakerLevel(15); // Still maintain a base level
+        setSpeakerLevel(15);
         return;
       }
-
-      // Connect the nodes
       sourceNode.connect(analyser);
       analyser.connect(context.destination);
-
-      console.log("Speaker test: Audio nodes connected successfully");
-
-      // Create data array for analysis
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-      // Analysis function with improved level calculation
+      let movingAvg = 0;
       const analyse = () => {
         if (!analyser) return;
-
         try {
           analyser.getByteFrequencyData(dataArray);
-
-          // Calculate level with improved algorithm
           let sum = 0;
           let peak = 0;
-
-          // Focus on mid-range frequencies which are most common in test audio
           const midStart = Math.floor(dataArray.length * 0.1);
           const midEnd = Math.floor(dataArray.length * 0.7);
-
           for (let i = midStart; i < midEnd; i++) {
             sum += dataArray[i];
             peak = Math.max(peak, dataArray[i]);
           }
-
           const count = midEnd - midStart;
           const average = sum / count;
-
-          // Apply a better scaling algorithm
-          // Use both average and peak for more accurate representation
-          const scaledLevel = Math.min(
-            100,
-            ((average * 0.3 + peak * 0.7) / 255) * 200 // Increased from 180 for better visualization
-          );
-
-          // Update level state with smoothing
-          setSpeakerLevel((prev) => {
-            // Add a minimum level when active to ensure some visibility
-            const minLevelWhenActive = 15; // Increased from 5
-            // Smooth transitions between values
-            const smoothedLevel = prev * 0.3 + scaledLevel * 0.7;
-            const finalLevel =
-              isTesting && testType === "speaker"
-                ? Math.max(minLevelWhenActive, smoothedLevel)
-                : smoothedLevel;
-
-            currentSpeakerLevelRef.current = finalLevel;
-            return finalLevel;
-          });
-
-          // Continue the analysis loop only if we're still testing
+          // Soft-knee compression: log curve
+          const noiseFloor = 3;
+          const adjustedPeak = Math.max(0, peak - noiseFloor);
+          let compressed = Math.log1p(average * 0.3 + adjustedPeak * 0.7);
+          compressed = Math.min(1, compressed / Math.log1p(255));
+          movingAvg = movingAvg * 0.8 + compressed * 0.2;
+          speakerMovingAvgRef.current = movingAvg;
+          const scaledLevel = Math.round(movingAvg * 100);
+          setSpeakerLevel(scaledLevel);
+          if (
+            scaledLevel > Math.max(30, speakerMovingAvgRef.current * 100 * 0.6)
+          ) {
+            setSpeakerPulse(true);
+            setTimeout(() => setSpeakerPulse(false), 300);
+          }
           if (isTesting && testType === "speaker") {
             animationFrameRef.current = requestAnimationFrame(analyse);
           }
         } catch (error) {
           console.error("Error in speaker analysis:", error);
-          cleanupSpeakerAnalysis();
-          // Still maintain a base level even if analysis fails
-          setSpeakerLevel(15);
         }
       };
-
-      // Start the analysis loop
       animationFrameRef.current = requestAnimationFrame(analyse);
-
-      // Store cleanup function
       speakerAnalysisCleanupRef.current = () => {
-        console.log("Cleaning up speaker test");
-
-        // Cancel animation frame if active
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
-
-        // Clean up audio element
         if (audioRef.current) {
           audioRef.current.pause();
           audioRef.current.srcObject = null;
@@ -644,51 +573,33 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           audioRef.current.oncanplaythrough = null;
           audioRef.current.onerror = null;
         }
-
-        // Disconnect and clean up audio nodes
         if (sourceNode) {
           try {
             sourceNode.disconnect();
-          } catch (err) {
-            console.warn("Error:", err);
+          } catch (error) {
+            console.error("Error disconnecting speaker source node:", error);
           }
         }
-
         if (analyser) {
           try {
             analyser.disconnect();
-          } catch (err) {
-            console.warn("Error:", err);
+          } catch (error) {
+            console.error("Error disconnecting speaker analyser:", error);
           }
         }
-
-        // Close audio context
         try {
           if (context && context.state !== "closed") {
-            context
-              .close()
-              .catch((err) => console.warn("Error closing context:", err));
+            context.close();
           }
-        } catch (err) {
-          console.warn("Error closing audio context:", err);
+        } catch (error) {
+          console.error("Error closing AudioContext:", error);
         }
-
-        // Reset state
         setIsTesting(false);
         setTestType(null);
         setSpeakerLevel(0);
-
-        // Show completion toast
-        toast.success(
-          "Speaker test completed - if you didn't hear any sound, check your device volume settings"
-        );
       };
     } catch (error) {
-      console.error("Critical error in speaker analysis:", error);
-      toast.error("Failed to set up speaker test");
-      cleanupSpeakerAnalysis();
-      // Still maintain a base level even if analysis fails
-      setSpeakerLevel(15);
+      console.error("Error in speaker analysis:", error);
     }
   }, [getAudioContext, cleanupSpeakerAnalysis, isTesting, testType]);
 
@@ -737,8 +648,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
               "Unable to start microphone test. Please check your permissions."
             );
           }
-        } catch (err) {
-          console.error("Error during mic setup:", err);
+        } catch (error) {
+          console.error("Error during mic setup:", error);
           toast.error("Error setting up microphone test.");
         }
       };
@@ -806,7 +717,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     };
   }, [selectedCamera, cameraEnabled, getDeviceName]);
 
-  // Update the speaker test useEffect with correct audio path and error handling
+  // Update the speaker test useEffect to handle setSinkId, autoplay, and call startSpeakerAnalysis
   useEffect(() => {
     // Handle speaker testing
     if (isTesting && testType === "speaker") {
@@ -848,18 +759,14 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
                 if (VERBOSE_LOGGING)
                   console.log(`Audio output device set to ${selectedSpeaker}`);
               })
-              .catch((err) => {
-                console.error("Error setting audio output device:", err);
-                if (!hasErrored) {
-                  toast.error("Failed to set audio output device");
-                  hasErrored = true;
-                }
+              .catch((error) => {
+                console.error("Error setting sink ID:", error);
               });
           } else if (VERBOSE_LOGGING) {
             console.warn("setSinkId not supported in this browser");
           }
-        } catch (err) {
-          console.error("Error setting audio sink:", err);
+        } catch (error) {
+          console.error("Error setting sink ID:", error);
         }
       }
 
@@ -871,11 +778,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         if (playCount < maxPlays && isTesting && testType === "speaker") {
           playCount++;
           audioEl.play().catch((error) => {
-            console.error("Failed to play audio:", error);
-            if (!hasErrored) {
-              toast.error("Could not play audio for speaker test");
-              hasErrored = true;
-            }
+            console.error("Error playing audio:", error);
           });
         }
       };
@@ -898,14 +801,8 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         playWithDelay(); // Start the first play
       };
 
-      audioEl.onerror = (err) => {
-        console.error("Audio element error:", err);
-        console.error("Audio element error details:", {
-          error: audioEl.error,
-          networkState: audioEl.networkState,
-          readyState: audioEl.readyState,
-          src: audioEl.src,
-        });
+      audioEl.onerror = () => {
+        console.error("Audio element error:");
         if (!hasErrored) {
           toast.error("Failed to load test sound");
           hasErrored = true;
@@ -1010,17 +907,6 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     setPopoverStates((prev) => ({ ...prev, [deviceType]: false })); // Close popover
   };
 
-  // Update toggleMicEnabled to stop the microphone test when muted
-  const toggleMicEnabled = () => {
-    const newState = !micEnabled;
-    setMicEnabled(newState);
-
-    // If we're muting while testing, stop the test
-    if (!newState && isTesting && testType === "mic") {
-      stopTesting();
-    }
-  };
-
   const toggleCameraEnabled = () => setCameraEnabled((prev) => !prev);
 
   // Update the test sections UI to make it more user-friendly
@@ -1051,6 +937,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           }
           isActive={isTesting && testType === "mic"}
           type="microphone"
+          pulse={micPulse}
         />
       </div>
 
@@ -1059,14 +946,22 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           variant={isTesting && testType === "mic" ? "default" : "outline"}
           onClick={() => {
             if (isTesting && testType === "mic") {
+              toast.info("Mic test: Stop Test button pressed (button branch)");
               setIsTesting(false);
               setTestType(null);
               cleanupMicAnalysis();
+              toast.info("Mic test stopped (button branch)");
             } else {
+              toast.info("Mic test: Start Test button pressed (button branch)");
               handleTestMic();
             }
           }}
           className="min-w-24"
+          aria-label={
+            isTesting && testType === "mic"
+              ? "Stop Microphone Test"
+              : "Start Microphone Test"
+          }
         >
           {isTesting && testType === "mic" ? "Stop Test" : "Start Test"}
         </Button>
@@ -1102,71 +997,257 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
       <div className="text-sm text-gray-400 mb-6 text-center max-w-md">
         Click &quot;Start Test&quot; to play a sound. You should hear audio and
-        see the bars move. The sound will play 3 times with pauses.
+        see the bars move.
       </div>
 
       <div className="w-full max-w-md mb-6">
         <AudioLevelMeter
-          level={
-            isTesting && testType === "speaker"
-              ? Math.max(speakerLevel, 5)
-              : speakerLevel
-          }
-          isActive={isTesting && testType === "speaker"}
-          type="speaker"
+          level={speakerLevel}
+          isActive={isSpeakerTestActive}
+          pulse={speakerPulse}
         />
       </div>
 
       <Button
-        variant={isTesting && testType === "speaker" ? "default" : "outline"}
-        onClick={() => {
-          if (isTesting && testType === "speaker") {
-            setIsTesting(false);
-            setTestType(null);
-            cleanupSpeakerAnalysis();
-            if (audioRef.current) {
-              audioRef.current.pause();
-              audioRef.current.onended = null;
-            }
-          } else {
-            handleTestSpeaker();
-          }
-        }}
+        variant={isSpeakerTestActive ? "default" : "outline"}
+        onClick={testSpeaker}
         className={`min-w-24 ${
-          isTesting && testType === "speaker"
-            ? "bg-white hover:bg-gray-200 text-black"
-            : ""
+          isSpeakerTestActive ? "bg-white hover:bg-gray-200 text-black" : ""
         }`}
+        aria-label={
+          isSpeakerTestActive ? "Stop Speaker Test" : "Start Speaker Test"
+        }
       >
-        {isTesting && testType === "speaker" ? "Stop Test" : "Start Test"}
+        {isSpeakerTestActive ? "Stop Test" : "Start Test"}
       </Button>
     </div>
   );
 
   // --- Test Initiation ---
-  const handleTestSpeaker = useCallback(() => {
-    setIsTesting(true);
-    setTestType("speaker");
-    // Set a minimum level to ensure visualization
-    setSpeakerLevel(5);
-    // Note: The actual audio setup and analysis is now handled by the useEffect
-    if (VERBOSE_LOGGING) console.log("Test speaker requested");
-  }, []);
-
   const handleTestMic = useCallback(() => {
-    // Don't start the test if microphone is muted
     if (!micEnabled) {
       toast.error("Please unmute your microphone before testing");
       return;
     }
-
+    toast.info("Mic test: Start Test button pressed");
     setIsTesting(true);
     setTestType("mic");
-    // Set a minimum level to ensure visualization
     setMicLevel(5);
-    // Note: The actual stream acquisition and analysis is now handled by the useEffect
     if (VERBOSE_LOGGING) console.log("Test mic requested");
   }, [micEnabled]);
+
+  // Cleanup function for speaker test
+  const speakerTestCleanup = useCallback(() => {
+    setIsSpeakerTestActive(false);
+
+    // Cancel animation frame if active
+    if (speakerAnalysisFrameRef.current) {
+      cancelAnimationFrame(speakerAnalysisFrameRef.current);
+      speakerAnalysisFrameRef.current = null;
+    }
+
+    // Clear timeout if active
+    if (speakerTestTimeoutRef.current) {
+      clearTimeout(speakerTestTimeoutRef.current);
+      speakerTestTimeoutRef.current = null;
+    }
+
+    // Stop all oscillators
+    if (
+      speakerOscillatorRefs.current &&
+      speakerOscillatorRefs.current.length > 0
+    ) {
+      speakerOscillatorRefs.current.forEach((osc) => {
+        try {
+          osc.stop();
+          osc.disconnect();
+        } catch (error) {
+          console.error("Error stopping oscillator:", error);
+        }
+      });
+      speakerOscillatorRefs.current = [];
+    }
+
+    // Disconnect gain nodes
+    if (speakerGainRefs.current && speakerGainRefs.current.length > 0) {
+      speakerGainRefs.current.forEach((gain) => {
+        try {
+          gain.disconnect();
+        } catch (error) {
+          console.error("Error disconnecting gain node:", error);
+        }
+      });
+      speakerGainRefs.current = [];
+    }
+
+    // Close audio context
+    if (speakerAudioContextRef.current) {
+      try {
+        speakerAudioContextRef.current.close();
+      } catch (error) {
+        console.error("Error closing AudioContext:", error);
+      }
+      speakerAudioContextRef.current = null;
+    }
+
+    // Clean up audio element
+    if (speakerAudioElRef.current) {
+      speakerAudioElRef.current.pause();
+      speakerAudioElRef.current.src = "";
+      speakerAudioElRef.current = null;
+    }
+
+    // Reset source node
+    if (speakerSourceNodeRef.current) {
+      try {
+        speakerSourceNodeRef.current.disconnect();
+      } catch (error) {
+        console.error("Error disconnecting speaker source node:", error);
+      }
+      speakerSourceNodeRef.current = null;
+    }
+
+    // Reset speaker level
+    setSpeakerLevel(0);
+  }, []);
+
+  // Speaker test function
+  const testSpeaker = useCallback(() => {
+    if (isSpeakerTestActive) {
+      // Already running, so stop the test
+      speakerTestCleanup();
+      return;
+    }
+
+    // Show toast notification at the start
+    toast.info(
+      "Speaker test starting - please ensure your volume is turned up"
+    );
+
+    setIsSpeakerTestActive(true);
+
+    try {
+      // Create an audio context for the test
+      const audioCtx = new (window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext)();
+      speakerAudioContextRef.current = audioCtx;
+
+      // Create an audio element for routing to the selected output device
+      const routingAudioEl = new Audio();
+      routingAudioEl.autoplay = true;
+      speakerAudioElRef.current = routingAudioEl;
+
+      // Check if the selected device is supported
+      let outputConnected = false;
+      if (selectedSpeaker && "setSinkId" in HTMLAudioElement.prototype) {
+        try {
+          routingAudioEl
+            .setSinkId(selectedSpeaker)
+            .then(() => {
+              console.log("Audio output successfully set to:", selectedSpeaker);
+              outputConnected = true;
+            })
+            .catch((error) => {
+              console.error("Error setting sink ID:", error);
+            });
+        } catch (error) {
+          console.error("Error setting sink ID:", error);
+        }
+      }
+
+      // Create analyzer for visualization
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.3;
+
+      // Create oscillators for test sound
+      const osc1 = audioCtx.createOscillator();
+      osc1.type = "square"; // Square wave is more audible
+      osc1.frequency.value = 440; // A4 note
+
+      const osc2 = audioCtx.createOscillator();
+      osc2.type = "sine";
+      osc2.frequency.value = 587.33; // D5 note - creates an interval with A4
+
+      // Create gain nodes for volume control
+      const gain1 = audioCtx.createGain();
+      gain1.gain.value = 0.3; // Higher gain for better audibility
+
+      const gain2 = audioCtx.createGain();
+      gain2.gain.value = 0.25;
+
+      // Connect nodes
+      osc1.connect(gain1);
+      osc2.connect(gain2);
+
+      gain1.connect(analyser);
+      gain2.connect(analyser);
+
+      // If we successfully set the sink ID, route through the audio element
+      if (outputConnected && "setSinkId" in HTMLAudioElement.prototype) {
+        const sourceNode = audioCtx.createMediaElementSource(routingAudioEl);
+        sourceNode.connect(audioCtx.destination);
+        speakerSourceNodeRef.current = sourceNode;
+      } else {
+        // Otherwise connect directly to the destination
+        analyser.connect(audioCtx.destination);
+      }
+
+      // Store references for cleanup
+      speakerOscillatorRefs.current = [osc1, osc2];
+      speakerGainRefs.current = [gain1, gain2];
+
+      // Start oscillators
+      osc1.start();
+      osc2.start();
+
+      // Start analysis loop
+      const analyzeLoop = () => {
+        if (!isSpeakerTestActive) return;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(dataArray);
+
+        // Calculate level - amplify for better visualization
+        const sum = dataArray.reduce((acc, val) => acc + val, 0);
+        const avg = sum / dataArray.length;
+        const speakerLevel = Math.min(100, avg * 2); // Amplify for better visibility
+
+        setSpeakerLevel(speakerLevel);
+
+        // Set pulse when level exceeds threshold
+        if (speakerLevel > 30) {
+          setSpeakerPulse(true);
+          setTimeout(() => setSpeakerPulse(false), 300);
+        }
+
+        speakerAnalysisFrameRef.current = requestAnimationFrame(analyzeLoop);
+      };
+
+      speakerAnalysisFrameRef.current = requestAnimationFrame(analyzeLoop);
+
+      // Set a timeout to cleanup after 5 seconds
+      speakerTestTimeoutRef.current = setTimeout(() => {
+        // Fade out the oscillators gracefully
+        const currentTime = audioCtx.currentTime;
+        gain1.gain.linearRampToValueAtTime(0, currentTime + 0.5);
+        gain2.gain.linearRampToValueAtTime(0, currentTime + 0.5);
+
+        // Cleanup after fade out
+        setTimeout(() => {
+          speakerTestCleanup();
+          toast.success(
+            "Speaker test completed - if you didn't hear any sound, check your device volume settings"
+          );
+        }, 600);
+      }, 5000); // Extended to 5 seconds for better user experience
+    } catch (error) {
+      console.error("Error in speaker test:", error);
+      toast.error("Failed to run speaker test");
+      speakerTestCleanup();
+    }
+  }, [isSpeakerTestActive, selectedSpeaker, speakerTestCleanup]);
 
   // --- Render ---
   return (

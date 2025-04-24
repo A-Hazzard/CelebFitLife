@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import {
@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/select";
 import Image from "next/image";
 import { CreateStreamModalProps } from "@/lib/types/ui";
+import { debounce } from "@/lib/utils/index";
+import { validateImageUrl } from "@/lib/utils/validation";
 
 export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
   const router = useRouter();
@@ -37,6 +39,8 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [thumbnail, setThumbnail] = useState("");
+  const [thumbnailValid, setThumbnailValid] = useState(true);
+  const [thumbnailTouched, setThumbnailTouched] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [selectedTime, setSelectedTime] = useState(getDefaultScheduleTime(10));
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,12 +48,34 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
   const [tagInput, setTagInput] = useState("");
   const [category, setCategory] = useState("Fitness");
   const [formError, setFormError] = useState<string | null>(null);
+  const debouncedValidateRef = useRef<ReturnType<typeof debounce> | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       resetForm();
     }
   }, [isOpen]);
+
+  // Debounced validation for thumbnail URL (persistent debounce)
+  useEffect(() => {
+    if (!thumbnailTouched) return;
+    if (!debouncedValidateRef.current) {
+      // Wrap setThumbnailValid in debounce, and attach cancel method
+      const debounced = debounce((...args: unknown[]) => {
+        const value = typeof args[0] === "string" ? args[0] : "";
+        setThumbnailValid(!value || validateImageUrl(value));
+      }, 2000);
+      debouncedValidateRef.current = debounced;
+    }
+    // Call the debounced function with the latest thumbnail value
+    debouncedValidateRef.current(thumbnail);
+    return () => {
+      const debounced = debouncedValidateRef.current as ((
+        ...args: unknown[]
+      ) => void) & { cancel?: () => void };
+      debounced.cancel?.();
+    };
+  }, [thumbnail, thumbnailTouched]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,14 +348,27 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
               id="thumbnail"
               placeholder="Optional thumbnail URL"
               value={thumbnail}
-              onChange={(e) => setThumbnail(e.target.value)}
+              onChange={(e) => {
+                setThumbnail(e.target.value);
+                setThumbnailTouched(true);
+              }}
               className="bg-gray-800 border-gray-700 text-white focus:border-purple-500"
             />
-            {thumbnail && (
+            {!thumbnailValid && thumbnailTouched && (
+              <div className="text-red-400 text-xs mt-1">
+                Invalid image URL. Please enter a valid image link (http/https,
+                ends with .jpg, .png, etc.).
+              </div>
+            )}
+            {thumbnail && thumbnailValid && (
               <div className="relative w-full aspect-video rounded-md overflow-hidden mt-2 border border-gray-700">
-                <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
+                <div
+                  className="absolute inset-0 bg-gray-800 flex items-center justify-center hidden"
+                  id="thumbnail-fallback"
+                >
                   <span className="text-sm text-gray-400">
-                    Loading thumbnail...
+                    Couldn&apos;t load image from URL. Make sure it&apos;s a
+                    valid image URL.
                   </span>
                 </div>
                 <Image
@@ -338,13 +377,14 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
                   fill
                   className="object-cover"
                   onError={(e) => {
-                    // Hide the image on error and show a fallback message
                     e.currentTarget.style.display = "none";
-                    e.currentTarget.parentElement
-                      ?.querySelector("div")
-                      ?.classList.remove("hidden");
+                    const fallback =
+                      e.currentTarget.parentElement?.querySelector(
+                        "#thumbnail-fallback"
+                      );
+                    if (fallback) fallback.classList.remove("hidden");
                     toast.error(
-                      "Couldn't load image from URL. Make sure it's a valid image URL."
+                      "Couldn&apos;t load image from URL. Make sure it&apos;s a valid image URL."
                     );
                   }}
                 />

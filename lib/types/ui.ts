@@ -230,7 +230,7 @@ export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
 export type AudioLevelMeterProps = {
   level: number; // 0-100
   isActive: boolean;
-  type: "microphone" | "speaker";
+  type?: "microphone" | "speaker";
   className?: string;
 };
 
