@@ -11,32 +11,14 @@ import ActivityLog from "@/components/dashboard/ActivityLog";
 import StreamStats from "@/components/dashboard/StreamStats";
 import { fetchAllUserStreams } from "@/lib/helpers/dashboard";
 import { StreamDoc } from "@/lib/types/streaming.types";
-import {
-  Activity,
-  Bell,
-  ChevronRight,
-  Edit,
-  LogOut,
-  MessageSquare,
-  Plus,
-  Settings,
-  User,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import Link from "next/link";
+import { Activity, ChevronRight, Edit, Plus, Settings } from "lucide-react";
 import { useOnClickOutside } from "@/lib/hooks/useOnClickOutside";
 import { SettingsModal } from "@/components/dashboard/SettingsModal";
 import { StreamerGuideModal } from "@/components/dashboard/StreamerGuideModal";
 import { ExploreStreamersModal } from "@/components/dashboard/ExploreStreamersModal";
 import UpcomingStreamsCalendar from "@/components/dashboard/UpcomingStreamsCalendar";
+import Header from "@/components/layout/Header";
+import { getStreamThumbnail } from "@/components/layout/Header";
 
 export default function DashboardPage() {
   // Add states for dropdowns
@@ -45,7 +27,6 @@ export default function DashboardPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isStreamerGuideOpen, setIsStreamerGuideOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isExploreStreamersOpen, setIsExploreStreamersOpen] = useState(false);
 
   // Refs for dropdown handling
@@ -54,7 +35,7 @@ export default function DashboardPage() {
 
   // Add close functions
   const closeAllDropdowns = () => {
-    setIsNotificationsOpen(false);
+    // Remove unused function
   };
 
   // Add click outside handlers
@@ -153,30 +134,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Add this function after fetchProfilePicture
-  const getStreamThumbnail = (stream: StreamDoc) => {
-    if (stream.thumbnail) return stream.thumbnail;
-
-    // Use static Unsplash images instead of dynamic API calls
-    const thumbnailImages = {
-      fitness:
-        "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&h=400&auto=format&q=80",
-      yoga: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&h=400&auto=format&q=80",
-      nutrition:
-        "https://images.unsplash.com/photo-1490818387583-1baba5e638af?w=600&h=400&auto=format&q=80",
-      mindfulness:
-        "https://images.unsplash.com/photo-1545205597-3d9d02c29597?w=600&h=400&auto=format&q=80",
-      default:
-        "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&h=400&auto=format&q=80",
-    };
-
-    const category = stream.category?.toLowerCase() || "default";
-    return (
-      thumbnailImages[category as keyof typeof thumbnailImages] ||
-      thumbnailImages.default
-    );
-  };
-
   const handleCreateStream = () => {
     setIsCreateModalOpen(true);
   };
@@ -218,88 +175,6 @@ export default function DashboardPage() {
     },
   ];
 
-  // Clean up currentUser check
-  const isUserAdmin = currentUser?.role?.admin || false;
-
-  // Use the proper logout function from lib/helpers/auth
-  const handleLogout = async () => {
-    try {
-      // Ensure currentUser exists before trying to log out
-      if (!currentUser) return;
-
-      // First clear the auth store
-      authStore.clearUser();
-
-      // Then import and use the logout utility that handles localStorage and redirect
-      import("@/lib/helpers/auth").then(({ logout }) => {
-        logout();
-      });
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
-  };
-
-  // Updated dropdown menu with additional links
-  const profileDropdownContent = (
-    <div className="w-56 mt-1 bg-gray-800 border-gray-700 rounded-md overflow-hidden">
-      <DropdownMenuLabel>
-        <div className="flex flex-col">
-          <span className="font-medium">{currentUser?.username || "User"}</span>
-          <span className="text-xs text-gray-400 mt-1 break-words">
-            {currentUser?.email || ""}
-          </span>
-        </div>
-      </DropdownMenuLabel>
-      <DropdownMenuSeparator />
-      <DropdownMenuGroup>
-        <DropdownMenuItem>
-          <Link href="/profile" className="w-full">
-            <div className="text-gray-200 hover:bg-gray-700 hover:text-white cursor-pointer rounded-md p-2 w-full flex items-center">
-              <User className="mr-2 h-4 w-4" />
-              <span>Profile</span>
-            </div>
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <div className="text-gray-200 hover:bg-gray-700 hover:text-white cursor-pointer rounded-md p-2 w-full flex items-center">
-            <Settings className="mr-2 h-4 w-4 text-brandOrange" />
-            <span className="text-white">Settings</span>
-          </div>
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <div className="text-gray-200 hover:bg-gray-700 hover:text-white cursor-pointer rounded-md p-2 w-full flex items-center">
-            <MessageSquare className="mr-2 h-4 w-4" />
-            <span>Messages</span>
-          </div>
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <div className="text-gray-200 hover:bg-gray-700 hover:text-white cursor-pointer rounded-md p-2 w-full flex items-center">
-            <Activity className="mr-2 h-4 w-4" />
-            <span>Analytics</span>
-          </div>
-        </DropdownMenuItem>
-        {isUserAdmin && (
-          <DropdownMenuItem>
-            <div className="text-indigo-300 hover:bg-brandOrange/40 hover:text-white cursor-pointer rounded-md p-2 w-full flex items-center">
-              <Settings className="mr-2 h-4 w-4 text-brandOrange" />
-              <span>Admin Dashboard</span>
-            </div>
-          </DropdownMenuItem>
-        )}
-      </DropdownMenuGroup>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem>
-        <div
-          onClick={handleLogout}
-          className="text-red-400 hover:bg-red-900/40 hover:text-red-300 cursor-pointer rounded-md p-2 w-full flex items-center"
-        >
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Log out</span>
-        </div>
-      </DropdownMenuItem>
-    </div>
-  );
-
   // Update the SkeletonLoader component to be more reusable
   const SkeletonLoader = ({
     className = "",
@@ -322,187 +197,31 @@ export default function DashboardPage() {
     </div>
   );
 
-  // Create fake notifications
-  const [fakeNotifications, setFakeNotifications] = useState([
-    {
-      id: "1",
-      title: "New Subscriber",
-      message: "JohnFitness subscribed to your channel",
-      time: "10 minutes ago",
-      isRead: false,
-      type: "subscription",
-    },
-    {
-      id: "2",
-      title: "Stream Achievement",
-      message: "You reached 100 viewers in your last stream!",
-      time: "1 hour ago",
-      isRead: false,
-      type: "achievement",
-    },
-    {
-      id: "3",
-      title: "Comment on Stream",
-      message: 'YogaLover22: "Your cobra pose explanation was so helpful!"',
-      time: "3 hours ago",
-      isRead: false,
-      type: "comment",
-    },
-    {
-      id: "4",
-      title: "Stream Reminder",
-      message: "Your scheduled stream starts in 30 minutes",
-      time: "30 minutes ago",
-      isRead: true,
-      type: "reminder",
-    },
-    {
-      id: "5",
-      title: "Platform Update",
-      message: "New analytics features are now available",
-      time: "2 days ago",
-      isRead: true,
-      type: "system",
-    },
-  ]);
-
-  const handleMarkAllAsRead = () => {
-    setFakeNotifications((prev) =>
-      prev.map((notification) => ({
-        ...notification,
-        isRead: true,
-      }))
-    );
-  };
-
-  if (!currentUser) {
-    return null;
-  }
+  if (!currentUser) return null;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      {/* Header */}
-      <header className="border-b border-gray-800 bg-gray-900 shadow-lg">
-        <div className="container mx-auto px-4 py-3 sm:py-4">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
-            <h1 className="text-2xl font-bold text-white">
-              Streamer Dashboard
-            </h1>
-
-            <div className="flex items-center space-x-4">
-              <div className="relative" ref={notificationsDropdownRef}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-gray-800 border-gray-700 hover:bg-gray-700 text-white relative"
-                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                >
-                  <Bell className="h-4 w-4 mr-2 text-brandOrange" />
-                  <span className="hidden sm:inline">Notifications</span>
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-xs text-white rounded-full h-4 w-4 flex items-center justify-center">
-                    3
-                  </span>
-                </Button>
-
-                {isNotificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-80 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-50">
-                    <div className="p-3 border-b border-gray-700 flex justify-between items-center">
-                      <h3 className="font-medium">Notifications</h3>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs text-blue-400 hover:text-blue-300 p-1 h-auto"
-                        onClick={handleMarkAllAsRead}
-                      >
-                        Mark all as read
-                      </Button>
-                    </div>
-                    <div className="max-h-96 overflow-y-auto py-1">
-                      {fakeNotifications.map((notification) => (
-                        <div
-                          key={notification.id}
-                          className={`p-3 hover:bg-gray-700/50 border-l-2 ${
-                            notification.isRead
-                              ? "border-transparent"
-                              : "border-blue-500"
-                          }`}
-                        >
-                          <div className="flex justify-between items-start">
-                            <h4 className="font-medium text-sm">
-                              {notification.title}
-                            </h4>
-                            <span className="text-xs text-gray-400">
-                              {notification.time}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-300 mt-1">
-                            {notification.message}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="p-2 border-t border-gray-700 text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs text-gray-400 w-full"
-                      >
-                        View all notifications
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              {currentUser && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="relative rounded-full hover:bg-gray-800 p-0"
-                    >
-                      <div className="relative h-9 w-9 sm:h-10 sm:w-10 overflow-hidden rounded-full border-2 border-purple-500">
-                        <Image
-                          src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&crop=faces&fit=crop&auto=format&q=80"
-                          alt="Profile picture"
-                          width={40}
-                          height={40}
-                          className="rounded-full object-cover"
-                          priority
-                        />
-                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"></span>
-                      </div>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    {profileDropdownContent}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <div className="min-h-screen bg-brandBlack text-brandWhite">
+      <Header />
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <div className="flex flex-col space-y-6">
           {/* Quick Actions Section */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-            <h2 className="text-xl font-semibold">
+            <h2 className="text-xl font-semibold text-brandOrange">
               Welcome back, {currentUser?.username || "Streamer"}!
             </h2>
             <div className="flex space-x-3 w-full sm:w-auto">
               <Button
                 variant="default"
                 onClick={handleCreateStream}
-                className="bg-brandOrange hover:bg-brandOrange/90 flex-1 sm:flex-auto"
+                className="bg-brandOrange hover:bg-brandWhite hover:text-brandBlack flex-1 sm:flex-auto text-brandBlack border-2 border-brandOrange"
               >
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-4 w-4 mr-2 text-brandBlack" />
                 New Stream
               </Button>
               <Button
                 variant="outline"
-                className="bg-gray-800 border-gray-700 flex-1 sm:flex-auto text-white"
+                className="border-2 border-brandOrange text-brandOrange bg-brandBlack hover:bg-brandOrange hover:text-brandBlack flex-1 sm:flex-auto"
                 onClick={() => setIsSettingsOpen(true)}
               >
                 <Settings className="h-4 w-4 mr-2 text-brandOrange" />
@@ -513,15 +232,17 @@ export default function DashboardPage() {
 
           {/* Live Streams (if any) */}
           {liveStreams.length > 0 && (
-            <div className="bg-gradient-to-r from-purple-900/50 to-purple-600/30 rounded-lg p-4 mb-6 border border-purple-500/30">
+            <div className="bg-brandBlack border-2 border-brandOrange rounded-lg p-4 mb-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                 <div className="flex items-center">
-                  <div className="h-3 w-3 bg-red-500 rounded-full animate-pulse mr-2"></div>
-                  <h3 className="text-lg font-semibold">You&apos;re Live!</h3>
+                  <div className="h-3 w-3 bg-brandOrange rounded-full animate-pulse mr-2"></div>
+                  <h3 className="text-lg font-semibold text-brandOrange">
+                    You&apos;re Live!
+                  </h3>
                 </div>
                 <Button
                   variant="default"
-                  className="bg-brandOrange hover:bg-brandOrange/90 text-sm w-full sm:w-auto"
+                  className="bg-brandOrange hover:bg-brandWhite hover:text-brandBlack text-sm w-full sm:w-auto text-brandBlack border-2 border-brandOrange"
                 >
                   Manage Stream
                 </Button>
@@ -530,7 +251,7 @@ export default function DashboardPage() {
                 {liveStreams.map((stream) => (
                   <div
                     key={stream.id}
-                    className="bg-gray-800/80 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:scale-[1.02]"
+                    className="bg-brandBlack/90 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:scale-[1.02] border border-brandOrange"
                     onClick={() =>
                       router.push(`/dashboard/streams/manage/${stream.id}`)
                     }
@@ -542,13 +263,15 @@ export default function DashboardPage() {
                         fill
                         className="object-cover"
                       />
-                      <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded flex items-center">
-                        <span className="inline-block h-2 w-2 bg-white rounded-full mr-1 animate-pulse"></span>
+                      <div className="absolute top-2 right-2 bg-brandOrange text-brandBlack text-xs px-2 py-1 rounded flex items-center">
+                        <span className="inline-block h-2 w-2 bg-brandBlack rounded-full mr-1 animate-pulse"></span>
                         LIVE
                       </div>
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                        <h3 className="font-medium truncate">{stream.title}</h3>
-                        <div className="flex justify-between items-center text-xs text-gray-300 mt-1">
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-brandBlack/90 to-transparent p-3">
+                        <h3 className="font-medium truncate text-brandWhite">
+                          {stream.title}
+                        </h3>
+                        <div className="flex justify-between items-center text-xs text-brandGray mt-1">
                           <span className="truncate max-w-[120px]">
                             Started{" "}
                             {stream.createdAt
@@ -560,7 +283,7 @@ export default function DashboardPage() {
                               : "Recently"}
                           </span>
                           <div className="flex items-center">
-                            <Activity className="h-3 w-3 mr-1" />
+                            <Activity className="h-3 w-3 mr-1 text-brandOrange" />
                             {stream.viewCount || 0} viewers
                           </div>
                         </div>
@@ -578,7 +301,7 @@ export default function DashboardPage() {
             <div className="lg:col-span-8 space-y-6">
               {/* Stream performance metrics */}
               {isStreamStatsLoading ? (
-                <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
+                <div className="bg-brandBlack rounded-lg p-6 border-2 border-brandOrange">
                   <div className="mb-4">
                     <SkeletonLoader height="h-8" width="w-48" />
                   </div>
@@ -593,7 +316,7 @@ export default function DashboardPage() {
 
               {/* Upcoming streams */}
               {isUpcomingLoading ? (
-                <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
+                <div className="bg-brandBlack rounded-lg p-6 border-2 border-brandOrange">
                   <div className="flex justify-between mb-4">
                     <SkeletonLoader height="h-6" width="w-40" />
                     <SkeletonLoader height="h-8" width="w-32" />
@@ -607,16 +330,19 @@ export default function DashboardPage() {
               )}
 
               {/* Most popular past streams */}
-              <div className="bg-gray-900 rounded-lg p-4 sm:p-6 border border-gray-800">
+              <div className="bg-brandBlack rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
-                  <h3 className="text-lg font-medium">Past Streams</h3>
+                  <h3 className="text-lg font-medium text-brandOrange">
+                    Past Streams
+                  </h3>
                   <Button
                     variant="ghost"
-                    className="text-sm text-gray-400 hover:text-white"
+                    className="text-sm text-brandGray hover:text-brandOrange"
                     type="button"
                     onClick={(e) => e.preventDefault()}
                   >
-                    View all <ChevronRight className="h-4 w-4 ml-1" />
+                    View all{" "}
+                    <ChevronRight className="h-4 w-4 ml-1 text-brandOrange" />
                   </Button>
                 </div>
 
@@ -624,7 +350,7 @@ export default function DashboardPage() {
                   {pastStreams.slice(0, 5).map((stream) => (
                     <div
                       key={stream.id}
-                      className="flex items-center gap-3 sm:gap-4 p-3 rounded-lg hover:bg-gray-800/50 transition-colors"
+                      className="flex items-center gap-3 sm:gap-4 p-3 rounded-lg hover:bg-brandOrange/10 transition-colors border border-brandOrange"
                     >
                       <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-md overflow-hidden flex-shrink-0">
                         <Image
@@ -635,10 +361,10 @@ export default function DashboardPage() {
                         />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-medium truncate text-sm sm:text-base">
+                        <h4 className="font-medium truncate text-sm sm:text-base text-brandWhite">
                           {stream.title}
                         </h4>
-                        <div className="text-xs sm:text-sm text-gray-400 truncate">
+                        <div className="text-xs sm:text-sm text-brandGray truncate">
                           {stream.endedAt
                             ? new Date(
                                 typeof stream.endedAt === "string"
@@ -652,7 +378,7 @@ export default function DashboardPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="flex-shrink-0"
+                        className="flex-shrink-0 text-brandOrange"
                         onClick={() =>
                           router.push(`/dashboard/streams/manage/${stream.id}`)
                         }
@@ -663,7 +389,7 @@ export default function DashboardPage() {
                   ))}
 
                   {pastStreams.length === 0 && (
-                    <div className="text-center py-8 text-gray-400">
+                    <div className="text-center py-8 text-brandGray">
                       <div className="mx-auto w-40 h-40 relative mb-4">
                         <Image
                           src="https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=300&h=300&auto=format&q=80"
@@ -676,7 +402,7 @@ export default function DashboardPage() {
                       <p>No past streams found</p>
                       <Button
                         variant="outline"
-                        className="mt-4 bg-transparent border-gray-700 text-black dark:text-white"
+                        className="mt-4 bg-transparent border-2 border-brandOrange text-brandOrange hover:bg-brandOrange hover:text-brandBlack"
                         onClick={handleCreateStream}
                       >
                         <Plus className="h-4 w-4 mr-2" />
@@ -692,7 +418,7 @@ export default function DashboardPage() {
             <div className="lg:col-span-4 space-y-6">
               {/* Activity Log Card */}
               {isActivityLoading ? (
-                <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
+                <div className="bg-brandBlack rounded-lg p-6 border-2 border-brandOrange">
                   <div className="mb-4">
                     <SkeletonLoader height="h-6" width="w-32" />
                     <SkeletonLoader
@@ -716,7 +442,7 @@ export default function DashboardPage() {
 
               {/* Recommended Streamers Card */}
               {isRecommendedLoading ? (
-                <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
+                <div className="bg-brandBlack rounded-lg p-6 border-2 border-brandOrange">
                   <div className="mb-4">
                     <SkeletonLoader height="h-6" width="w-48" />
                   </div>
@@ -725,16 +451,19 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-gray-900 rounded-lg p-4 sm:p-6 border border-gray-800">
+                <div className="bg-brandBlack rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
-                    <h3 className="text-lg font-medium">Popular Streamers</h3>
+                    <h3 className="text-lg font-medium text-brandOrange">
+                      Popular Streamers
+                    </h3>
                     <Button
                       variant="ghost"
-                      className="text-sm text-gray-400 hover:text-white w-full sm:w-auto"
+                      className="text-sm text-brandGray hover:text-brandOrange w-full sm:w-auto"
                       onClick={() => setIsExploreStreamersOpen(true)}
                       type="button"
                     >
-                      Explore <ChevronRight className="h-4 w-4 ml-1" />
+                      Explore{" "}
+                      <ChevronRight className="h-4 w-4 ml-1 text-brandOrange" />
                     </Button>
                   </div>
 
@@ -747,34 +476,38 @@ export default function DashboardPage() {
               )}
 
               {/* Quick Tips Card */}
-              <div className="bg-gradient-to-r from-blue-900/50 to-indigo-900/50 rounded-lg p-4 sm:p-6 border border-blue-800/30">
-                <h3 className="text-lg font-medium mb-3">Streamer Tips</h3>
+              <div className="bg-brandBlack rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
+                <h3 className="text-lg font-medium mb-3 text-brandOrange">
+                  Streamer Tips
+                </h3>
                 <ul className="space-y-3 text-sm">
                   <li className="flex items-start">
-                    <div className="bg-blue-500/20 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
-                      <Activity className="h-4 w-4 text-blue-400" />
+                    <div className="bg-brandOrange/20 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
+                      <Activity className="h-4 w-4 text-brandOrange" />
                     </div>
-                    <span>
+                    <span className="text-brandWhite">
                       Schedule streams in advance to build anticipation
                     </span>
                   </li>
                   <li className="flex items-start">
-                    <div className="bg-blue-500/20 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
-                      <Activity className="h-4 w-4 text-blue-400" />
+                    <div className="bg-brandOrange/20 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
+                      <Activity className="h-4 w-4 text-brandOrange" />
                     </div>
-                    <span>
+                    <span className="text-brandWhite">
                       Engage with your audience through polls and Q&As
                     </span>
                   </li>
                   <li className="flex items-start">
-                    <div className="bg-blue-500/20 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
-                      <Activity className="h-4 w-4 text-blue-400" />
+                    <div className="bg-brandOrange/20 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
+                      <Activity className="h-4 w-4 text-brandOrange" />
                     </div>
-                    <span>Use detailed descriptions and relevant tags</span>
+                    <span className="text-brandWhite">
+                      Use detailed descriptions and relevant tags
+                    </span>
                   </li>
                 </ul>
                 <Button
-                  className="w-full mt-4 bg-blue-600 hover:bg-blue-700"
+                  className="w-full mt-4 bg-brandOrange hover:bg-brandWhite hover:text-brandBlack text-brandBlack border-2 border-brandOrange"
                   onClick={(e) => {
                     e.preventDefault();
                     setIsStreamerGuideOpen(true);

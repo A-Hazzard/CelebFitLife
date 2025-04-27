@@ -132,16 +132,20 @@ export default function UpcomingStreamsCalendar() {
   };
 
   return (
-    <div className="bg-gray-900 rounded-lg p-4 sm:p-6 border border-gray-800">
+    <div className="bg-brandBlack rounded-lg p-4 sm:p-6 border border-brandOrange">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
-        <h3 className="text-lg font-medium">Upcoming Streams</h3>
+        <h3 className="text-lg font-medium text-brandOrange">
+          Upcoming Streams
+        </h3>
         <div className="flex items-center space-x-2">
-          <div className="flex bg-gray-800 rounded-md p-0.5">
+          <div className="flex bg-brandGray rounded-md p-0.5">
             <Button
               variant={view === "list" ? "default" : "ghost"}
               size="sm"
               className={`text-xs ${
-                view === "list" ? "bg-gray-700" : "bg-transparent text-gray-400"
+                view === "list"
+                  ? "bg-brandOrange text-brandWhite"
+                  : "bg-transparent text-brandGray"
               }`}
               onClick={() => setView("list")}
             >
@@ -152,8 +156,8 @@ export default function UpcomingStreamsCalendar() {
               size="sm"
               className={`text-xs ${
                 view === "calendar"
-                  ? "bg-gray-700"
-                  : "bg-transparent text-gray-400"
+                  ? "bg-brandOrange text-brandWhite"
+                  : "bg-transparent text-brandGray"
               }`}
               onClick={() => setView("calendar")}
             >
@@ -166,7 +170,7 @@ export default function UpcomingStreamsCalendar() {
               <Button
                 variant="outline"
                 size="sm"
-                className="bg-transparent border-gray-700 text-sm text-white"
+                className="bg-transparent border-brandOrange text-sm text-brandWhite hover:bg-brandOrange/10"
               >
                 <Calendar className="h-4 w-4 mr-2 text-brandOrange" />
                 {selectedDate
@@ -174,7 +178,7 @@ export default function UpcomingStreamsCalendar() {
                   : "Select date"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 bg-white border-gray-300">
+            <PopoverContent className="w-auto p-0 bg-brandWhite border-brandOrange">
               <CalendarComponent
                 mode="single"
                 selected={selectedDate}
@@ -197,7 +201,7 @@ export default function UpcomingStreamsCalendar() {
           {streams.slice(0, 5).map((stream) => (
             <div
               key={stream.id}
-              className="bg-gray-800 rounded-lg overflow-hidden"
+              className="bg-brandGray rounded-lg overflow-hidden border border-brandOrange"
             >
               <div className="flex flex-col sm:flex-row">
                 <div className="relative w-full sm:w-40 h-32 sm:h-auto">
@@ -209,36 +213,38 @@ export default function UpcomingStreamsCalendar() {
                     unoptimized
                   />
                   {stream.category && (
-                    <span className="absolute top-2 left-2 bg-gray-900/80 text-white text-xs px-2 py-1 rounded">
+                    <span className="absolute top-2 left-2 bg-brandBlack/80 text-brandWhite text-xs px-2 py-1 rounded">
                       {stream.category}
                     </span>
                   )}
                   {stream.isSubscriberOnly && (
-                    <span className="absolute top-2 right-2 bg-brandOrange text-white text-xs px-2 py-1 rounded">
+                    <span className="absolute top-2 right-2 bg-brandOrange text-brandWhite text-xs px-2 py-1 rounded">
                       Subscribers
                     </span>
                   )}
-                  <div className="absolute bottom-2 left-2 bg-gray-900/80 text-white text-xs px-2 py-1 rounded flex items-center">
-                    <Calendar className="h-3 w-3 mr-1" />
+                  <div className="absolute bottom-2 left-2 bg-brandBlack/80 text-brandWhite text-xs px-2 py-1 rounded flex items-center">
+                    <Calendar className="h-3 w-3 mr-1 text-brandOrange" />
                     {format(stream.date, "MMM d, h:mm a")}
                   </div>
                 </div>
 
                 <div className="p-4 flex flex-col justify-between flex-1">
                   <div>
-                    <h4 className="font-medium mb-1">{stream.title}</h4>
-                    <p className="text-sm text-gray-300 line-clamp-2">
+                    <h4 className="font-medium mb-1 text-brandBlack">
+                      {stream.title}
+                    </h4>
+                    <p className="text-sm text-brandBlack/80 line-clamp-2">
                       {stream.description}
                     </p>
                   </div>
 
                   <div className="flex items-center justify-between mt-3">
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-brandGray">
                       {stream.duration} min
                     </span>
                     <Button
                       size="sm"
-                      className="bg-brandOrange hover:bg-brandOrange/90 text-white text-xs"
+                      className="bg-brandOrange hover:bg-brandOrange/90 text-brandWhite text-xs"
                     >
                       Set Reminder
                     </Button>
@@ -249,14 +255,14 @@ export default function UpcomingStreamsCalendar() {
           ))}
 
           {streams.length === 0 && (
-            <div className="text-center py-8 text-gray-400">
+            <div className="text-center py-8 text-brandGray">
               <p>No upcoming streams scheduled</p>
             </div>
           )}
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="text-sm text-gray-300 mb-2">
+          <div className="text-sm text-brandGray mb-2">
             {selectedDate
               ? `Streams for ${format(selectedDate, "MMMM d, yyyy")}`
               : "Select a date to view streams"}
@@ -267,7 +273,7 @@ export default function UpcomingStreamsCalendar() {
               {selectedDateStreams.map((stream) => (
                 <div
                   key={stream.id}
-                  className="flex gap-3 p-3 bg-gray-800 rounded-lg border border-gray-700"
+                  className="flex gap-3 p-3 bg-brandGray rounded-lg border border-brandOrange"
                 >
                   <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0 relative">
                     <Image
@@ -279,19 +285,21 @@ export default function UpcomingStreamsCalendar() {
                     />
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-medium text-sm">{stream.title}</h4>
-                    <div className="flex items-center text-xs text-gray-400 mt-1">
-                      <Calendar className="h-3 w-3 mr-1" />
+                    <h4 className="font-medium text-sm text-brandBlack">
+                      {stream.title}
+                    </h4>
+                    <div className="flex items-center text-xs text-brandGray mt-1">
+                      <Calendar className="h-3 w-3 mr-1 text-brandOrange" />
                       {formatStreamTime(stream.date)}
                       <span className="mx-1">•</span>
                       {stream.duration} min
                     </div>
                     <div className="flex items-center mt-2">
-                      <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded mr-2">
+                      <span className="text-xs bg-brandBlack/80 text-brandWhite px-2 py-0.5 rounded mr-2">
                         {stream.category}
                       </span>
                       {stream.isSubscriberOnly && (
-                        <span className="text-xs bg-brandOrange/50 text-white px-2 py-0.5 rounded">
+                        <span className="text-xs bg-brandOrange/50 text-brandWhite px-2 py-0.5 rounded">
                           Subscribers Only
                         </span>
                       )}
@@ -301,7 +309,7 @@ export default function UpcomingStreamsCalendar() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-400 border border-dashed border-gray-700 rounded-lg">
+            <div className="text-center py-8 text-brandGray border border-dashed border-brandOrange rounded-lg">
               <p>No streams scheduled for this day</p>
             </div>
           )}

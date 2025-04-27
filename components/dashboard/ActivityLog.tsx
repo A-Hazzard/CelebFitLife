@@ -140,23 +140,23 @@ export default function ActivityLog() {
   const getActivityIcon = (type: ActivityItem["type"]) => {
     switch (type) {
       case "stream_started":
-        return <Activity className="h-4 w-4 text-green-500" />;
+        return <Activity className="h-4 w-4 text-brandOrange" />;
       case "stream_ended":
-        return <CheckCircle className="h-4 w-4 text-blue-500" />;
+        return <CheckCircle className="h-4 w-4 text-brandGray" />;
       case "subscriber":
         return <Users className="h-4 w-4 text-brandOrange" />;
       case "comment":
-        return <MessageSquare className="h-4 w-4 text-amber-500" />;
+        return <MessageSquare className="h-4 w-4 text-brandOrange" />;
       case "like":
-        return <Star className="h-4 w-4 text-rose-500" />;
+        return <Star className="h-4 w-4 text-brandOrange" />;
       case "viewer_milestone":
-        return <Eye className="h-4 w-4 text-cyan-500" />;
+        return <Eye className="h-4 w-4 text-brandOrange" />;
       case "achievement":
-        return <Star className="h-4 w-4 text-yellow-400" />;
+        return <Star className="h-4 w-4 text-brandOrange" />;
       case "error":
         return <AlertCircle className="h-4 w-4 text-red-500" />;
       default:
-        return <Clock className="h-4 w-4 text-gray-500" />;
+        return <Clock className="h-4 w-4 text-brandGray" />;
     }
   };
 
@@ -208,44 +208,42 @@ export default function ActivityLog() {
   const renderActivityItem = (activity: ActivityItem) => (
     <div
       key={activity.id}
-      className={`flex items-start p-3 border-b border-gray-800 hover:bg-gray-800/50 transition-colors last:border-b-0 ${
-        !activity.read ? "bg-gray-800/30" : ""
+      className={`flex items-start p-3 border-b border-brandOrange hover:bg-brandOrange/10 transition-colors last:border-b-0 ${
+        !activity.read ? "bg-brandOrange/5" : ""
       }`}
     >
       <div className="flex-shrink-0 mr-3 mt-1">
         {getActivityIcon(activity.type)}
       </div>
-
       <div className="flex-grow min-w-0">
         <div className="flex flex-col">
-          <div className="text-sm">{getActivityText(activity)}</div>
-          <div className="text-xs text-gray-400 mt-1">
+          <div className="text-sm text-brandWhite">
+            {getActivityText(activity)}
+          </div>
+          <div className="text-xs text-brandGray mt-1">
             {formatDistanceToNow(activity.timestamp.toDate(), {
               addSuffix: true,
             })}
           </div>
         </div>
       </div>
-
       <div className="flex-shrink-0 ml-2 flex space-x-1">
         {activity.streamId && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6"
+            className="h-6 w-6 text-brandOrange"
             onClick={() => navigateToStream(activity.streamId)}
           >
             <ArrowUpRight className="h-3.5 w-3.5" />
           </Button>
         )}
-
         <ActivityLogOptions
           activityId={activity.id}
           onMarkAsRead={() => {
             setActivities((prev) =>
               prev.map((a) => (a.id === activity.id ? { ...a, read: true } : a))
             );
-            // Hide this item if in alerts tab
             if (activeTab === "alerts" && !showRead) {
               setActivities((prev) =>
                 prev.filter((a) => a.id !== activity.id || !a.read)
@@ -275,12 +273,14 @@ export default function ActivityLog() {
   };
 
   return (
-    <Card className="bg-gray-900 border-gray-800">
+    <Card className="bg-brandBlack border-2 border-brandOrange">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-center">
           <div>
-            <CardTitle className="text-lg font-medium">Activity Log</CardTitle>
-            <CardDescription className="text-gray-400">
+            <CardTitle className="text-lg font-medium text-brandOrange">
+              Activity Log
+            </CardTitle>
+            <CardDescription className="text-brandGray">
               Recent events and notifications
             </CardDescription>
           </div>
@@ -300,11 +300,29 @@ export default function ActivityLog() {
       </CardHeader>
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
         <div className="px-4">
-          <TabsList className="bg-gray-800 w-full grid grid-cols-4">
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="streams">Streams</TabsTrigger>
-            <TabsTrigger value="engagement">Engagement</TabsTrigger>
-            <TabsTrigger value="alerts" className="relative">
+          <TabsList className="bg-brandBlack w-full grid grid-cols-4 border-b-2 border-brandOrange">
+            <TabsTrigger
+              value="all"
+              className="data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
+            >
+              All
+            </TabsTrigger>
+            <TabsTrigger
+              value="streams"
+              className="data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
+            >
+              Streams
+            </TabsTrigger>
+            <TabsTrigger
+              value="engagement"
+              className="data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
+            >
+              Engagement
+            </TabsTrigger>
+            <TabsTrigger
+              value="alerts"
+              className="relative data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
+            >
               Alerts
               {activities.filter((a) => !a.read).length > 0 && (
                 <span className="absolute top-0 right-0 transform translate-x-1/4 -translate-y-1/4 h-4 w-4 rounded-full bg-red-500 flex items-center justify-center text-[10px] text-white">
@@ -334,8 +352,8 @@ export default function ActivityLog() {
                 filteredActivities.map(renderActivityItem)
               ) : (
                 <div className="flex flex-col items-center justify-center h-full p-6">
-                  <Calendar className="h-10 w-10 text-gray-500 mb-2" />
-                  <p className="text-gray-400 text-center">
+                  <Calendar className="h-10 w-10 text-brandGray mb-2" />
+                  <p className="text-brandGray text-center">
                     No recent activities found
                   </p>
                 </div>
@@ -362,8 +380,8 @@ export default function ActivityLog() {
                 filteredActivities.map(renderActivityItem)
               ) : (
                 <div className="flex flex-col items-center justify-center h-full p-6">
-                  <Activity className="h-10 w-10 text-gray-500 mb-2" />
-                  <p className="text-gray-400 text-center">
+                  <Activity className="h-10 w-10 text-brandGray mb-2" />
+                  <p className="text-brandGray text-center">
                     No stream activities yet
                   </p>
                 </div>
@@ -389,8 +407,8 @@ export default function ActivityLog() {
                 filteredActivities.map(renderActivityItem)
               ) : (
                 <div className="flex flex-col items-center justify-center h-full p-6">
-                  <Users className="h-10 w-10 text-gray-500 mb-2" />
-                  <p className="text-gray-400 text-center">
+                  <Users className="h-10 w-10 text-brandGray mb-2" />
+                  <p className="text-brandGray text-center">
                     No engagement activities yet
                   </p>
                 </div>
@@ -416,8 +434,8 @@ export default function ActivityLog() {
                 filteredActivities.map(renderActivityItem)
               ) : (
                 <div className="flex flex-col items-center justify-center h-full p-6">
-                  <CheckCircle className="h-10 w-10 text-gray-500 mb-2" />
-                  <p className="text-gray-400 text-center">
+                  <CheckCircle className="h-10 w-10 text-brandGray mb-2" />
+                  <p className="text-brandGray text-center">
                     No alerts to display
                   </p>
                 </div>

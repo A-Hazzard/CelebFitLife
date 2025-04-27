@@ -1,6 +1,6 @@
 "use client";
 "use client";
-import LandingHeader from "@/components/layout/landing/Header";
+import Header from "@/components/layout/Header";
 import Link from "next/link";
 import { useRef, useState, useEffect } from "react";
 import emailjs from "@emailjs/browser";
@@ -10,7 +10,10 @@ import { useAuthStore } from "@/lib/store/useAuthStore";
 export default function LandingPage() {
   const formRef = useRef<HTMLFormElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<{ type: "success" | "error" | null; message: string }>({ type: null, message: "" });
+  const [submitStatus, setSubmitStatus] = useState<{
+    type: "success" | "error" | null;
+    message: string;
+  }>({ type: null, message: "" });
 
   const router = useRouter();
   const { currentUser } = useAuthStore();
@@ -36,19 +39,25 @@ export default function LandingPage() {
     setSubmitStatus({ type: null, message: "" });
     try {
       const result = await emailjs.sendForm(
-          process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID!,
-          process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID!,
-          formRef.current!,
-          process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY
+        process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID!,
+        process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID!,
+        formRef.current!,
+        process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY
       );
       if (result.text === "OK") {
-        setSubmitStatus({ type: "success", message: "Message sent successfully! We'll get back to you soon." });
+        setSubmitStatus({
+          type: "success",
+          message: "Message sent successfully! We'll get back to you soon.",
+        });
         formRef.current?.reset();
       }
     } catch (error) {
       setSubmitStatus({
         type: "error",
-        message: error instanceof Error ? `Failed to send message: ${error.message}` : "Failed to send message. Please try again later.",
+        message:
+          error instanceof Error
+            ? `Failed to send message: ${error.message}`
+            : "Failed to send message. Please try again later.",
       });
     } finally {
       setIsSubmitting(false);
@@ -58,18 +67,18 @@ export default function LandingPage() {
   // Show spinner while loading auth
   if (loading) {
     return (
-        <div className="flex items-center justify-center min-h-screen bg-brandBlack">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-t-brandOrange border-brandGray"></div>
-        </div>
+      <div className="flex items-center justify-center min-h-screen bg-brandBlack">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-t-brandOrange border-brandGray"></div>
+      </div>
     );
   }
 
   // If user is logged in, we already pushed → render nothing
   if (currentUser) return null;
-
-  else return (
+  else
+    return (
       <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite">
-        <LandingHeader />
+        <Header />
 
         {/* Hero Section */}
         <main className="flex-1 flex flex-col items-center justify-center px-4 text-center mt-12">
@@ -77,20 +86,21 @@ export default function LandingPage() {
             Workout with Your Favorite Celebrities
           </h2>
           <p className="text-lg max-w-2xl mb-8">
-            Join live-streaming fitness sessions with top celebrities and fitness
-            instructors. Experience interactive workouts, exclusive Q&amp;A
-            sessions, and a vibrant community to elevate your fitness journey.
+            Join live-streaming fitness sessions with top celebrities and
+            fitness instructors. Experience interactive workouts, exclusive
+            Q&amp;A sessions, and a vibrant community to elevate your fitness
+            journey.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 mb-12">
             <Link
-                href="/register"
-                className="px-6 py-3 bg-brandOrange text-brandBlack rounded-md transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
+              href="/register"
+              className="px-6 py-3 bg-brandOrange text-brandBlack rounded-md transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
             >
               Get Started
             </Link>
             <Link
-                href="/learn-more"
-                className="px-6 py-3 border border-brandOrange rounded-md transition-colors duration-300 hover:bg-brandOrange hover:text-brandBlack"
+              href="/learn-more"
+              className="px-6 py-3 border border-brandOrange rounded-md transition-colors duration-300 hover:bg-brandOrange hover:text-brandBlack"
             >
               Learn More
             </Link>
@@ -115,8 +125,8 @@ export default function LandingPage() {
                   <li>Basic chat access</li>
                 </ul>
                 <Link
-                    href="/register"
-                    className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
+                  href="/register"
+                  className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
                 >
                   Choose Plan
                 </Link>
@@ -134,8 +144,8 @@ export default function LandingPage() {
                   <li>Priority chat access</li>
                 </ul>
                 <Link
-                    href="/register"
-                    className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
+                  href="/register"
+                  className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
                 >
                   Choose Plan
                 </Link>
@@ -153,8 +163,8 @@ export default function LandingPage() {
                   <li>VIP chat access &amp; badges</li>
                 </ul>
                 <Link
-                    href="/register"
-                    className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
+                  href="/register"
+                  className="mt-4 inline-block px-4 py-2 bg-brandOrange text-brandBlack rounded transition-colors duration-300 hover:bg-brandWhite hover:text-brandBlack"
                 >
                   Choose Plan
                 </Link>
@@ -172,32 +182,32 @@ export default function LandingPage() {
             Have questions or feedback? Get in touch with us!
           </p>
           <form
-              ref={formRef}
-              onSubmit={handleSubmit}
-              className="bg-brandWhite text-brandBlack p-6 rounded-lg shadow-lg"
+            ref={formRef}
+            onSubmit={handleSubmit}
+            className="bg-brandWhite text-brandBlack p-6 rounded-lg shadow-lg"
           >
             {submitStatus.type && (
-                <div
-                    className={`mb-4 p-3 rounded ${
-                        submitStatus.type === "success"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                    }`}
-                >
-                  {submitStatus.message}
-                </div>
+              <div
+                className={`mb-4 p-3 rounded ${
+                  submitStatus.type === "success"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                }`}
+              >
+                {submitStatus.message}
+              </div>
             )}
             <div className="mb-4">
               <label htmlFor="user_name" className="block mb-1 font-semibold">
                 Name
               </label>
               <input
-                  id="user_name"
-                  name="user_name"
-                  type="text"
-                  required
-                  placeholder="Your name"
-                  className="w-full border border-brandGray rounded-md px-3 py-2"
+                id="user_name"
+                name="user_name"
+                type="text"
+                required
+                placeholder="Your name"
+                className="w-full border border-brandGray rounded-md px-3 py-2"
               />
             </div>
             <div className="mb-4">
@@ -205,12 +215,12 @@ export default function LandingPage() {
                 Email
               </label>
               <input
-                  id="user_email"
-                  name="user_email"
-                  type="email"
-                  required
-                  placeholder="Your email"
-                  className="w-full border border-brandGray rounded-md px-3 py-2"
+                id="user_email"
+                name="user_email"
+                type="email"
+                required
+                placeholder="Your email"
+                className="w-full border border-brandGray rounded-md px-3 py-2"
               />
             </div>
             <div className="mb-4">
@@ -218,23 +228,23 @@ export default function LandingPage() {
                 Message
               </label>
               <textarea
-                  id="message"
-                  name="message"
-                  required
-                  placeholder="Your message"
-                  rows={5}
-                  className="w-full border border-brandGray rounded-md px-3 py-2"
+                id="message"
+                name="message"
+                required
+                placeholder="Your message"
+                rows={5}
+                className="w-full border border-brandGray rounded-md px-3 py-2"
               ></textarea>
             </div>
             <button
-                type="submit"
-                disabled={isSubmitting}
-                className={`w-full px-4 py-2 bg-brandOrange text-brandBlack rounded-md transition-colors duration-300 
+              type="submit"
+              disabled={isSubmitting}
+              className={`w-full px-4 py-2 bg-brandOrange text-brandBlack rounded-md transition-colors duration-300 
               ${
-                    isSubmitting
-                        ? "opacity-50 cursor-not-allowed"
-                        : "hover:bg-brandWhite hover:text-brandBlack"
-                }`}
+                isSubmitting
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:bg-brandWhite hover:text-brandBlack"
+              }`}
             >
               {isSubmitting ? "Sending..." : "Send Message"}
             </button>
@@ -257,5 +267,5 @@ export default function LandingPage() {
           </p>
         </footer>
       </div>
-  );
+    );
 }

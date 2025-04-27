@@ -1,38 +1,18 @@
 "use client";
 
-import {
-  Search,
-  ChevronDown,
-  ChevronUp,
-  Bell,
-  LogOut,
-  Settings,
-  User,
-  MessageSquare,
-  ChevronRight,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { fetchCategoriesWithTags } from "@/lib/store/categoriesStore";
 import { Category, Tag } from "@/lib/store/categoriesStore";
 import { SLIDER_SETTINGS } from "@/lib/uiConstants";
 import { useStreamerStore } from "@/lib/store/useStreamerStore";
 import StreamerCard from "@/components/streamPage/StreamerCard";
 import { useAuthStore } from "@/lib/store/useAuthStore";
-import { Button } from "@/components/ui/button";
-import Image from "next/image";
-import Link from "next/link";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useRouter } from "next/navigation";
+import Header from "@/components/layout/Header";
 
 export default function UserDashboard() {
   const [visibleDiscoverStreamers, setVisibleDiscoverStreamers] = useState(6);
@@ -43,26 +23,6 @@ export default function UserDashboard() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [notifications] = useState([
-    {
-      id: "1",
-      title: "FitnessPro is Live!",
-      message: "Join the HIIT workout session now",
-      time: "Just now",
-      isRead: false,
-      type: "live",
-    },
-    {
-      id: "2",
-      title: "YogaMaster Starting Soon",
-      message: "Morning Yoga session starts in 15 minutes",
-      time: "10 minutes ago",
-      isRead: false,
-      type: "upcoming",
-    },
-  ]);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const notificationsDropdownRef = useRef<HTMLDivElement>(null);
 
   const { streamers, fetchAll } = useStreamerStore();
   const { currentUser } = useAuthStore();
@@ -120,24 +80,6 @@ export default function UserDashboard() {
     setVisibleDiscoverStreamers((prev) => prev + 3);
   };
 
-  // Add logout handler
-  const handleLogout = async () => {
-    try {
-      // Ensure currentUser exists before trying to log out
-      if (!currentUser) return;
-
-      // First clear the auth store
-      useAuthStore.getState().clearUser();
-
-      // Then import and use the logout utility that handles localStorage and redirect
-      import("@/lib/helpers/auth").then(({ logout }) => {
-        logout();
-      });
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
-  };
-
   // Filter streamers based on selected categories
   const filteredStreamers = streamers.filter(
     (streamer) =>
@@ -153,131 +95,7 @@ export default function UserDashboard() {
 
   return (
     <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite font-inter">
-      {/* Header */}
-      <header className="flex items-center justify-between p-4 md:p-6 bg-brandBlack border-b border-brandOrange/30">
-        <div className="flex items-center gap-6">
-          <div className="relative w-full max-w-md">
-            <input
-              type="text"
-              placeholder="Search streamers..."
-              className="w-full px-4 py-2 bg-brandBlack border border-brandOrange/30 text-brandWhite rounded-full focus:outline-none focus:ring-2 focus:ring-brandOrange text-sm"
-            />
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-brandOrange w-5 h-5" />
-          </div>
-          <nav className="hidden md:flex items-center space-x-6">
-            <Link
-              href="/feeds"
-              className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
-            >
-              Feeds
-            </Link>
-            <Link
-              href="/streaming"
-              className="text-sm font-medium text-orange-500 hover:text-orange-400 transition-colors"
-            >
-              Streaming
-            </Link>
-          </nav>
-        </div>
-
-        <div className="flex items-center space-x-4">
-          {/* Notifications */}
-          <div className="relative" ref={notificationsDropdownRef}>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-gray-800 border-gray-700 hover:bg-gray-700 text-white relative"
-              onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-            >
-              <Bell className="h-4 w-4 mr-2 text-brandOrange" />
-              <span className="hidden sm:inline">Notifications</span>
-              <span className="absolute -top-1 -right-1 bg-red-500 text-xs text-white rounded-full h-4 w-4 flex items-center justify-center">
-                2
-              </span>
-            </Button>
-
-            {isNotificationsOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-50">
-                <div className="p-3 border-b border-gray-700">
-                  <h3 className="font-medium">Stream Notifications</h3>
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  {notifications.map((notification) => (
-                    <div
-                      key={notification.id}
-                      className={`p-3 hover:bg-gray-700/50 border-l-2 ${
-                        notification.type === "live"
-                          ? "border-red-500"
-                          : "border-blue-500"
-                      }`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-medium text-sm">
-                          {notification.title}
-                        </h4>
-                        <span className="text-xs text-gray-400">
-                          {notification.time}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-300 mt-1">
-                        {notification.message}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* User Menu */}
-          {currentUser && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="relative h-10 w-10 rounded-full"
-                >
-                  <Image
-                    src="/images/default-avatar.png"
-                    alt={currentUser?.username || "User"}
-                    width={40}
-                    height={40}
-                    className="rounded-full"
-                  />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 bg-gray-800 border-gray-700">
-                <DropdownMenuLabel className="text-gray-300">
-                  My Account
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-gray-700" />
-                <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  <Link href="/profile" className="w-full">
-                    Profile
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 cursor-pointer">
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  <span>Messages</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-gray-700" />
-                <DropdownMenuItem
-                  className="text-red-400 hover:bg-gray-700 cursor-pointer"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-      </header>
+      <Header />
 
       {/* 🧱 Main Layout */}
       <main className="flex flex-col p-4 md:p-6 space-y-6">

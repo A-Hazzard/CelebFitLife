@@ -2,11 +2,8 @@
 
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import {
-  Bell,
-  User,
   Settings,
   MessageSquare,
-  LogOut,
   ChevronRight,
   Calendar,
   CreditCard,
@@ -22,7 +19,6 @@ import {
   Edit2,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -57,6 +53,7 @@ import {
 } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import Header from "@/components/layout/Header";
 
 // Custom debounce function
 function debounce<T extends (...args: string[]) => unknown>(
@@ -240,91 +237,9 @@ export default function ProfilePage() {
   } = useProfileUpdate();
 
   return (
-    <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite font-inter">
+    <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite">
+      <Header />
       <Toaster richColors position="top-center" />
-
-      {/* Header */}
-      <header className="flex items-center justify-between p-4 md:p-6 bg-brandBlack border-b border-brandOrange/30">
-        <div className="flex items-center gap-6">
-          <nav className="hidden md:flex items-center space-x-6">
-            <Link
-              href="/feeds"
-              className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
-            >
-              Feeds
-            </Link>
-            <Link
-              href="/streaming"
-              className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
-            >
-              Streaming
-            </Link>
-            <Link
-              href="/profile"
-              className="text-sm font-medium text-orange-500 hover:text-orange-400 transition-colors"
-            >
-              Profile
-            </Link>
-          </nav>
-        </div>
-
-        <div className="flex items-center space-x-4">
-          {/* Notifications */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-gray-800 border-gray-700 hover:bg-gray-700 text-white relative"
-          >
-            <Bell className="h-4 w-4 mr-2 text-brandOrange" />
-            <span className="hidden sm:inline">Notifications</span>
-          </Button>
-
-          {/* User Menu */}
-          {currentUser && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="relative h-10 w-10 rounded-full"
-                >
-                  <Image
-                    src="/images/default-avatar.png"
-                    alt={currentUser?.username || "User"}
-                    width={40}
-                    height={40}
-                    className="rounded-full"
-                  />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 bg-gray-800 border-gray-700">
-                <DropdownMenuLabel className="text-gray-300">
-                  My Account
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-gray-700" />
-                <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  <Link href="/profile" className="w-full">
-                    Profile
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-gray-300 hover:bg-gray-700 cursor-pointer">
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  <span>Messages</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-gray-700" />
-                <DropdownMenuItem className="text-red-400 hover:bg-gray-700 cursor-pointer">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-      </header>
 
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-6">

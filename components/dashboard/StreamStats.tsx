@@ -89,19 +89,27 @@ const categoryData = [
   { name: "Other", value: 5 },
 ];
 
-const COLORS = ["#8884d8", "#83a6ed", "#8dd1e1", "#82ca9d", "#a4de6c"];
+const COLORS = [
+  "#FF7F30", // brandOrange
+  "#FFA45B", // lighter orange
+  "#FFB97A", // even lighter orange
+  "#FFD2A6", // pale orange
+  "#A6A6A6", // brandGray
+];
 
 const MetricCard = ({ title, value, change, icon }: MetricCardProps) => (
-  <div className="bg-gray-800 rounded-lg p-3 sm:p-4 flex items-center">
-    <div className="mr-3 sm:mr-4 bg-gray-700 p-2 sm:p-3 rounded-lg flex-shrink-0">
+  <div className="bg-brandBlack rounded-lg p-3 sm:p-4 flex items-center border-2 border-brandOrange">
+    <div className="mr-3 sm:mr-4 bg-brandOrange/20 p-2 sm:p-3 rounded-lg flex-shrink-0">
       {icon}
     </div>
     <div className="min-w-0">
-      <div className="text-xs sm:text-sm text-gray-400 truncate">{title}</div>
-      <div className="text-lg sm:text-xl font-bold truncate">{value}</div>
+      <div className="text-xs sm:text-sm text-brandGray truncate">{title}</div>
+      <div className="text-lg sm:text-xl font-bold truncate text-brandWhite">
+        {value}
+      </div>
       <div
         className={`text-xs flex items-center mt-1 ${
-          change >= 0 ? "text-green-400" : "text-red-400"
+          change >= 0 ? "text-brandOrange" : "text-red-400"
         }`}
       >
         {change >= 0 ? "↑" : "↓"} {Math.abs(change)}% from last week
@@ -172,14 +180,14 @@ export default function StreamStats() {
   );
 
   return (
-    <Card className="bg-gray-900 border-gray-800">
+    <Card className="bg-brandBlack border-2 border-brandOrange">
       <CardHeader className="pb-2">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <CardTitle className="text-xl font-medium">
+            <CardTitle className="text-xl font-medium text-brandOrange">
               Stream Performance
             </CardTitle>
-            <CardDescription className="text-gray-400">
+            <CardDescription className="text-brandGray">
               Analytics and metrics for your streams
             </CardDescription>
           </div>
@@ -246,7 +254,9 @@ export default function StreamStats() {
                 title="Total Viewers"
                 value="24.4K"
                 change={12}
-                icon={<Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400" />}
+                icon={
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-brandOrange" />
+                }
               />
               <MetricCard
                 title="Watch Time"
@@ -261,14 +271,16 @@ export default function StreamStats() {
                 value="327"
                 change={5}
                 icon={
-                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-brandOrange" />
                 }
               />
               <MetricCard
                 title="Followers"
                 value="1.2K"
                 change={24}
-                icon={<Heart className="h-4 w-4 sm:h-5 sm:w-5 text-pink-400" />}
+                icon={
+                  <Heart className="h-4 w-4 sm:h-5 sm:w-5 text-brandOrange" />
+                }
               />
             </>
           )}
@@ -281,10 +293,10 @@ export default function StreamStats() {
           className="w-full"
         >
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 mb-4 pb-1 gap-2">
-            <TabsList className="bg-transparent h-auto sm:h-12 w-full sm:w-auto">
+            <TabsList className="bg-transparent h-auto sm:h-12 w-full sm:w-auto border-b-2 border-brandOrange">
               <TabsTrigger
                 value="viewers"
-                className="data-[state=active]:bg-gray-800 text-xs sm:text-sm h-9"
+                className="data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-xs sm:text-sm h-9 text-brandGray"
               >
                 <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 <span className="hidden sm:inline">Viewers</span>
@@ -292,7 +304,7 @@ export default function StreamStats() {
               </TabsTrigger>
               <TabsTrigger
                 value="engagement"
-                className="data-[state=active]:bg-gray-800 text-xs sm:text-sm h-9"
+                className="data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-xs sm:text-sm h-9 text-brandGray"
               >
                 <Heart className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 <span className="hidden sm:inline">Engagement</span>
@@ -300,14 +312,14 @@ export default function StreamStats() {
               </TabsTrigger>
               <TabsTrigger
                 value="revenue"
-                className="data-[state=active]:bg-gray-800 text-xs sm:text-sm h-9"
+                className="data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-xs sm:text-sm h-9 text-brandGray"
               >
                 <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 <span>Revenue</span>
               </TabsTrigger>
               <TabsTrigger
                 value="categories"
-                className="data-[state=active]:bg-gray-800 text-xs sm:text-sm h-9"
+                className="data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-xs sm:text-sm h-9 text-brandGray"
               >
                 <BarChartIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 <span className="hidden sm:inline">Categories</span>
@@ -326,12 +338,12 @@ export default function StreamStats() {
           </div>
 
           <TabsContent value="viewers" className="mt-0">
-            <div className="rounded-lg bg-gray-800 p-3 sm:p-4">
+            <div className="rounded-lg bg-brandBlack p-3 sm:p-4 border-2 border-brandOrange">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-1">
-                <h3 className="font-medium text-sm sm:text-base">
+                <h3 className="font-medium text-sm sm:text-base text-brandOrange">
                   Viewer Growth
                 </h3>
-                <div className="flex items-center text-xs text-green-400">
+                <div className="flex items-center text-xs text-brandOrange">
                   <TrendingUp className="h-3 w-3 mr-1" />
                   +24.3% vs. previous period
                 </div>
@@ -355,12 +367,12 @@ export default function StreamStats() {
                         >
                           <stop
                             offset="5%"
-                            stopColor="#8884d8"
+                            stopColor="#FF7F30"
                             stopOpacity={0.8}
                           />
                           <stop
                             offset="95%"
-                            stopColor="#8884d8"
+                            stopColor="#FF7F30"
                             stopOpacity={0}
                           />
                         </linearGradient>
@@ -372,22 +384,26 @@ export default function StreamStats() {
                       />
                       <XAxis
                         dataKey="name"
-                        tick={{ fill: "#aaa" }}
+                        tick={{ fill: "#A6A6A6" }}
                         fontSize={12}
                       />
-                      <YAxis tick={{ fill: "#aaa" }} fontSize={12} width={30} />
+                      <YAxis
+                        tick={{ fill: "#A6A6A6" }}
+                        fontSize={12}
+                        width={30}
+                      />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: "#222",
-                          borderColor: "#444",
+                          backgroundColor: "#111",
+                          borderColor: "#FF7F30",
                         }}
-                        itemStyle={{ color: "#fff" }}
-                        labelStyle={{ color: "#aaa" }}
+                        itemStyle={{ color: "#FF7F30" }}
+                        labelStyle={{ color: "#A6A6A6" }}
                       />
                       <Area
                         type="monotone"
                         dataKey="value"
-                        stroke="#8884d8"
+                        stroke="#FF7F30"
                         fillOpacity={1}
                         fill="url(#colorViewer)"
                         strokeWidth={2}
@@ -400,12 +416,12 @@ export default function StreamStats() {
           </TabsContent>
 
           <TabsContent value="engagement" className="mt-0">
-            <div className="rounded-lg bg-gray-800 p-3 sm:p-4">
+            <div className="rounded-lg bg-brandBlack p-3 sm:p-4 border-2 border-brandOrange">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-1">
-                <h3 className="font-medium text-sm sm:text-base">
+                <h3 className="font-medium text-sm sm:text-base text-brandOrange">
                   Engagement Metrics
                 </h3>
-                <div className="flex items-center text-xs text-green-400">
+                <div className="flex items-center text-xs text-brandOrange">
                   <TrendingUp className="h-3 w-3 mr-1" />
                   +18.7% vs. previous period
                 </div>
@@ -423,22 +439,26 @@ export default function StreamStats() {
                     />
                     <XAxis
                       dataKey="name"
-                      tick={{ fill: "#aaa" }}
+                      tick={{ fill: "#A6A6A6" }}
                       fontSize={12}
                     />
-                    <YAxis tick={{ fill: "#aaa" }} fontSize={12} width={30} />
+                    <YAxis
+                      tick={{ fill: "#A6A6A6" }}
+                      fontSize={12}
+                      width={30}
+                    />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "#222",
-                        borderColor: "#444",
+                        backgroundColor: "#111",
+                        borderColor: "#FF7F30",
                       }}
-                      itemStyle={{ color: "#fff" }}
-                      labelStyle={{ color: "#aaa" }}
+                      itemStyle={{ color: "#FF7F30" }}
+                      labelStyle={{ color: "#A6A6A6" }}
                     />
                     <Legend />
-                    <Bar dataKey="comments" fill="#8884d8" name="Comments" />
-                    <Bar dataKey="likes" fill="#82ca9d" name="Likes" />
-                    <Bar dataKey="shares" fill="#ffc658" name="Shares" />
+                    <Bar dataKey="comments" fill="#FF7F30" name="Comments" />
+                    <Bar dataKey="likes" fill="#FF7F30" name="Likes" />
+                    <Bar dataKey="shares" fill="#FF7F30" name="Shares" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -446,12 +466,12 @@ export default function StreamStats() {
           </TabsContent>
 
           <TabsContent value="revenue" className="mt-0">
-            <div className="rounded-lg bg-gray-800 p-3 sm:p-4">
+            <div className="rounded-lg bg-brandBlack p-3 sm:p-4 border-2 border-brandOrange">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-1">
-                <h3 className="font-medium text-sm sm:text-base">
+                <h3 className="font-medium text-sm sm:text-base text-brandOrange">
                   Revenue Trends
                 </h3>
-                <div className="flex items-center text-xs text-green-400">
+                <div className="flex items-center text-xs text-brandOrange">
                   <TrendingUp className="h-3 w-3 mr-1" />
                   +15.4% vs. previous period
                 </div>
@@ -469,25 +489,29 @@ export default function StreamStats() {
                     />
                     <XAxis
                       dataKey="name"
-                      tick={{ fill: "#aaa" }}
+                      tick={{ fill: "#A6A6A6" }}
                       fontSize={12}
                     />
-                    <YAxis tick={{ fill: "#aaa" }} fontSize={12} width={30} />
+                    <YAxis
+                      tick={{ fill: "#A6A6A6" }}
+                      fontSize={12}
+                      width={30}
+                    />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "#222",
-                        borderColor: "#444",
+                        backgroundColor: "#111",
+                        borderColor: "#FF7F30",
                       }}
-                      itemStyle={{ color: "#fff" }}
-                      labelStyle={{ color: "#aaa" }}
+                      itemStyle={{ color: "#FF7F30" }}
+                      labelStyle={{ color: "#A6A6A6" }}
                       formatter={(value) => [`$${value}`, "Revenue"]}
                     />
                     <Line
                       type="monotone"
                       dataKey="value"
-                      stroke="#82ca9d"
-                      dot={{ stroke: "#82ca9d", strokeWidth: 2, r: 4 }}
-                      activeDot={{ stroke: "#82ca9d", strokeWidth: 2, r: 6 }}
+                      stroke="#FF7F30"
+                      dot={{ stroke: "#FF7F30", strokeWidth: 2, r: 4 }}
+                      activeDot={{ stroke: "#FF7F30", strokeWidth: 2, r: 6 }}
                       strokeWidth={2}
                     />
                   </LineChart>
@@ -497,12 +521,12 @@ export default function StreamStats() {
           </TabsContent>
 
           <TabsContent value="categories" className="mt-0">
-            <div className="rounded-lg bg-gray-800 p-3 sm:p-4">
+            <div className="rounded-lg bg-brandBlack p-3 sm:p-4 border-2 border-brandOrange">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-1">
-                <h3 className="font-medium text-sm sm:text-base">
+                <h3 className="font-medium text-sm sm:text-base text-brandOrange">
                   Stream Categories
                 </h3>
-                <div className="flex items-center text-xs text-gray-400">
+                <div className="flex items-center text-xs text-brandGray">
                   <span className="mr-2">Total streams: 32</span>
                 </div>
               </div>
@@ -516,7 +540,7 @@ export default function StreamStats() {
                         cy="50%"
                         labelLine={false}
                         outerRadius={80}
-                        fill="#8884d8"
+                        fill="#FF7F30"
                         dataKey="value"
                         label={({ name, percent }) =>
                           `${name}: ${(percent * 100).toFixed(0)}%`
@@ -531,17 +555,17 @@ export default function StreamStats() {
                       </Pie>
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: "#222",
-                          borderColor: "#444",
+                          backgroundColor: "#111",
+                          borderColor: "#FF7F30",
                         }}
-                        itemStyle={{ color: "#fff" }}
+                        itemStyle={{ color: "#FF7F30" }}
                         formatter={(value) => [`${value}%`, "Percentage"]}
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="p-4 bg-gray-900/50 rounded-lg">
-                  <h4 className="font-medium mb-3 text-sm">
+                <div className="p-4 bg-brandBlack/50 rounded-lg">
+                  <h4 className="font-medium mb-3 text-sm text-brandGray">
                     Category Breakdown
                   </h4>
                   <div className="space-y-3">
@@ -553,14 +577,14 @@ export default function StreamStats() {
                             backgroundColor: COLORS[index % COLORS.length],
                           }}
                         ></div>
-                        <div className="flex-1 text-sm">
+                        <div className="flex-1 text-sm text-brandGray">
                           <div className="flex justify-between mb-1">
                             <span className="truncate">{category.name}</span>
                             <span className="font-medium">
                               {category.value}%
                             </span>
                           </div>
-                          <div className="w-full bg-gray-700 rounded-full h-1.5">
+                          <div className="w-full bg-brandBlack rounded-full h-1.5">
                             <div
                               className="rounded-full h-1.5"
                               style={{
@@ -577,7 +601,7 @@ export default function StreamStats() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full bg-transparent border-gray-700 text-gray-300"
+                      className="w-full bg-transparent border-brandGray text-brandGray"
                     >
                       View Full Report
                     </Button>

@@ -1,37 +1,36 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { FirebaseError } from 'firebase/app';
-import Link from 'next/link';
-import LandingHeader from '@/components/layout/landing/Header';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import React, { useState } from "react";
+import { FirebaseError } from "firebase/app";
+import Link from "next/link";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
 export default function ResetPasswordPage() {
-  const [email, setEmail] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage('');
-    setError('');
+    setMessage("");
+    setError("");
     try {
       // await sendPasswordReset(email);
-      setMessage('Password reset email sent. Check your inbox.');
+      setMessage("Password reset email sent. Check your inbox.");
     } catch (err: unknown) {
       if (err instanceof FirebaseError) {
         setError(err.message);
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('An unknown error occurred');
+        setError("An unknown error occurred");
       }
     }
   };
 
   return (
     <>
-      <LandingHeader />
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-brandBlack to-gray-900 text-brandWhite">
         <div className="w-full max-w-md bg-gray-800 shadow-xl rounded-lg px-8 py-10">
           <h1 className="text-4xl font-extrabold text-brandOrange text-center mb-6">

@@ -1084,15 +1084,15 @@ export default function LiveViewPage() {
   return (
     <div className="flex h-screen bg-brandBlack text-brandWhite overflow-hidden">
       {/* Left sidebar for navigation/avatar placeholders */}
-      <div className="w-16 bg-gray-900 flex flex-col items-center py-4 border-r border-gray-800">
+      <div className="w-16 bg-brandBlack flex flex-col items-center py-4 border-r border-brandOrange">
         {/* Avatar placeholders */}
         {[1, 2, 3, 4, 5, 6, 7].map((index) => (
           <div
             key={index}
-            className="w-10 h-10 rounded-full bg-gray-800 mb-4 flex items-center justify-center overflow-hidden"
+            className="w-10 h-10 rounded-full bg-brandGray mb-4 flex items-center justify-center overflow-hidden"
           >
             {index === 1 && (
-              <div className="w-2 h-2 rounded-full bg-green-500 absolute top-0 right-0"></div>
+              <div className="w-2 h-2 rounded-full bg-brandOrange absolute top-0 right-0"></div>
             )}
           </div>
         ))}
@@ -1112,8 +1112,8 @@ export default function LiveViewPage() {
           {/* Stream status indicators */}
           <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
             {hasStarted && videoStatus === "active" ? (
-              <div className="flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-white text-sm">
-                <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+              <div className="flex items-center gap-2 bg-brandOrange px-3 py-1 rounded-full text-brandBlack text-sm">
+                <span className="h-2 w-2 rounded-full bg-brandWhite animate-pulse"></span>
                 LIVE
               </div>
             ) : null}
@@ -1127,11 +1127,11 @@ export default function LiveViewPage() {
 
           {/* Streamer name and viewer count */}
           <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-            <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-brandWhite text-sm flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500"></span>
+            <div className="bg-brandBlack bg-opacity-60 px-3 py-1 rounded-full text-brandWhite text-sm flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-brandOrange"></span>
               <span>@Streamer</span>
             </div>
-            <div className="bg-black bg-opacity-60 px-3 py-1 rounded-full text-brandWhite text-sm">
+            <div className="bg-brandBlack bg-opacity-60 px-3 py-1 rounded-full text-brandWhite text-sm">
               1.2K viewers
             </div>
           </div>
@@ -1150,10 +1150,10 @@ export default function LiveViewPage() {
 
           {/* Scheduled stream countdown */}
           {isScheduled && videoStatus === "waiting" && scheduledTime && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 z-10">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-brandBlack bg-opacity-90 z-10">
               <div className="text-center max-w-md">
                 <h2 className="text-2xl font-bold mb-2">Stream Scheduled</h2>
-                <p className="text-gray-400 mb-4">
+                <p className="text-brandGray mb-4">
                   This stream is scheduled to begin soon.
                 </p>
 
@@ -1179,7 +1179,7 @@ export default function LiveViewPage() {
           {hasStarted &&
             videoStatus === "active" &&
             streamerStatus.audioMuted && (
-              <div className="absolute bottom-4 left-4 bg-black bg-opacity-60 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+              <div className="absolute bottom-4 left-4 bg-brandBlack bg-opacity-60 px-3 py-1 rounded-full text-sm flex items-center gap-2">
                 <MicOff size={16} className="text-brandOrange" />
                 <span>Streamer is muted</span>
               </div>
@@ -1200,13 +1200,13 @@ export default function LiveViewPage() {
         </div>
 
         {/* Right sidebar: Chat and stream info */}
-        <div className="w-full md:w-96 bg-gray-900 border-l border-gray-800 flex flex-col h-full">
+        <div className="w-full md:w-96 bg-brandBlack border-l border-brandOrange flex flex-col h-full">
           {/* Stream info */}
-          <div className="p-4 border-b border-gray-800">
+          <div className="p-4 border-b border-brandOrange">
             <h1 className="text-xl font-bold mb-1 truncate">
               {streamTitle || "Live Stream"}
             </h1>
-            <div className="flex items-center text-sm text-gray-400">
+            <div className="flex items-center text-sm text-brandGray">
               <span>@Streamer</span>
               <span className="mx-2">•</span>
               <span>
@@ -1216,20 +1216,20 @@ export default function LiveViewPage() {
           </div>
 
           {/* Stream Tags */}
-          <div className="px-4 py-2 border-b border-gray-800 flex flex-wrap gap-2">
+          <div className="px-4 py-2 border-b border-brandOrange flex flex-wrap gap-2">
             <span className="bg-brandOrange/20 text-brandOrange text-xs px-2 py-1 rounded-full">
               Top Charts
             </span>
-            <span className="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded-full">
+            <span className="bg-brandGray text-brandBlack text-xs px-2 py-1 rounded-full">
               Tags
             </span>
-            <span className="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded-full">
+            <span className="bg-brandGray text-brandBlack text-xs px-2 py-1 rounded-full">
               Question 1
             </span>
-            <span className="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded-full">
+            <span className="bg-brandGray text-brandBlack text-xs px-2 py-1 rounded-full">
               Question 2
             </span>
-            <span className="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded-full">
+            <span className="bg-brandGray text-brandBlack text-xs px-2 py-1 rounded-full">
               Question 3
             </span>
           </div>
