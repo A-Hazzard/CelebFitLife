@@ -4,18 +4,18 @@ import { cn } from "@/lib/utils";
 import { BadgeProps } from "@/lib/types/ui";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border border-gray-800 px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-gray-950 focus:ring-offset-2 dark:border-gray-800 dark:focus:ring-gray-300",
+  "inline-flex items-center rounded-full border border-brandOrange px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-gray-950 focus:ring-offset-2 dark:border-brandGray dark:focus:ring-gray-300",
   {
     variants: {
       variant: {
-        default: "bg-gray-900 text-white hover:bg-gray-800 border-transparent",
+        default: "bg-brandBlack text-brandWhite hover:bg-brandOrange border-transparent",
         secondary:
-          "bg-gray-800 text-gray-100 hover:bg-gray-700 border-transparent",
+          "bg-brandGray text-brandWhite hover:bg-brandOrange border-transparent",
         destructive:
-          "bg-red-500 text-white hover:bg-red-600 border-transparent",
-        outline: "text-gray-300 border-gray-700",
+          "bg-brandOrange text-brandWhite hover:bg-brandOrange/80 border-transparent",
+        outline: "text-brandGray border-brandGray",
         success:
-          "bg-green-500 text-white hover:bg-green-600 border-transparent",
+          "bg-brandOrange text-brandWhite hover:bg-brandOrange/80 border-transparent",
       },
     },
     defaultVariants: {

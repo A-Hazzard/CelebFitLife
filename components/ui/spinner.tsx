@@ -22,7 +22,7 @@ export const Spinner = ({
   return (
     <div
       className={cn(
-        "animate-spin rounded-full border-solid border-t-solid border-gray-200",
+        "animate-spin rounded-full border-solid border-t-solid border-brandGray",
         sizeClasses[size],
         colorClasses[color],
         className

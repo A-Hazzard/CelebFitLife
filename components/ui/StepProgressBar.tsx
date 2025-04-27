@@ -12,17 +12,17 @@ export default function StepProgressBar({
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-gray-400">
+        <span className="text-sm text-brandGray">
           Step {currentStep} of {totalSteps}
         </span>
         {stepNames.length > 0 && currentStep <= stepNames.length && (
-          <span className="text-sm text-gray-400">
+          <span className="text-sm text-brandGray">
             {stepNames[currentStep - 1]}
           </span>
         )}
       </div>
 
-      <div className="w-full bg-gray-700 rounded-full h-2.5">
+      <div className="w-full bg-brandGray rounded-full h-2.5">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
