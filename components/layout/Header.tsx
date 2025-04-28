@@ -222,7 +222,7 @@ export default function Header() {
 
   if (isLandingOrAuth) {
     return (
-      <header className="bg-brandBlack border-b-2 border-brandOrange p-4 flex items-center justify-between relative">
+      <header className="bg-blue-900 border-b-2 border-brandOrange p-4 flex items-center justify-between relative">
         {/* Logo and Title */}
         <div
           className="flex items-center space-x-4 cursor-pointer"
@@ -314,7 +314,7 @@ export default function Header() {
 
   // --- Dashboard Header ---
   return (
-    <header className="bg-brandBlack border-b-2 border-brandOrange shadow-lg">
+    <header className="bg-blue-900 border-b-2 border-brandOrange shadow-lg">
       <div className="container mx-auto px-4 py-3 sm:py-4">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
           <h1 className="text-2xl font-bold text-brandOrange">

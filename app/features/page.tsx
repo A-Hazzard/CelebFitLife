@@ -3,7 +3,7 @@ import Header from "@/components/layout/Header";
 
 export default function FeaturesPage() {
   return (
-    <div className="min-h-screen flex flex-col bg-brandBlack text-brandWhite font-inter">
+    <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite font-inter">
       <Header />
 
       {/* Main Content */}
@@ -34,7 +34,7 @@ export default function FeaturesPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             {/* Basic Plan */}
-            <div className="bg-brandBlack border border-brandGray rounded-lg p-8 flex flex-col text-left">
+            <div className="bg-blue-900 border border-brandGray rounded-lg p-8 flex flex-col text-left">
               <h4 className="text-xl font-bold text-white mb-4">Basic</h4>
               <p className="text-3xl font-bold text-brandOrange mb-4">
                 $9.99<span className="text-lg">/month</span>
@@ -57,7 +57,7 @@ export default function FeaturesPage() {
               </Link>
             </div>
             {/* Plus Plan */}
-            <div className="bg-brandBlack border border-brandGray rounded-lg p-8 flex flex-col text-left">
+            <div className="bg-blue-900 border border-brandGray rounded-lg p-8 flex flex-col text-left">
               <h4 className="text-xl font-bold text-white mb-4">Plus</h4>
               <p className="text-3xl font-bold text-brandOrange mb-4">
                 $19.99<span className="text-lg">/month</span>
@@ -80,7 +80,7 @@ export default function FeaturesPage() {
               </Link>
             </div>
             {/* Unlimited Plan */}
-            <div className="bg-brandBlack border border-brandGray rounded-lg p-8 flex flex-col text-left">
+            <div className="bg-blue-900 border border-brandGray rounded-lg p-8 flex flex-col text-left">
               <h4 className="text-xl font-bold text-white mb-4">Unlimited</h4>
               <p className="text-3xl font-bold text-brandOrange mb-4">
                 $29.99<span className="text-lg">/month</span>

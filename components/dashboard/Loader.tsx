@@ -1,7 +1,7 @@
 "use client";
 
-import React from 'react';
-import { Loader2 } from 'lucide-react';
+import React from "react";
+import { Loader2 } from "lucide-react";
 
 export default function Loader() {
   return (
@@ -25,8 +25,8 @@ export default function Loader() {
         <div 
           className="h-full bg-brandOrange animate-progress-bar" 
           style={{
-            animation: 'progress-bar 2s infinite',
-            transformOrigin: 'left'
+            animation: "progress-bar 2s infinite",
+            transformOrigin: "left",
           }}
         ></div>
       </div>

@@ -6,7 +6,7 @@ const StreamerCard: React.FC<{ streamer: EnrichedStreamer }> = ({
   streamer,
 }) => {
   return (
-    <div className="bg-brandBlack border border-brandOrange/30 p-4 md:p-5 rounded-xl shadow-lg hover:shadow-2xl">
+    <div className="bg-blue-900 border border-brandOrange/30 p-4 md:p-5 rounded-xl shadow-lg hover:shadow-2xl">
       {/* Avatar + Name */}
       <div className="flex items-center mb-4 space-x-3 md:space-x-4">
         <div
@@ -45,7 +45,7 @@ const StreamerCard: React.FC<{ streamer: EnrichedStreamer }> = ({
           streamer.tagNames?.map((tag: string, i: number) => (
             <span
               key={i}
-              className="bg-brandBlack border border-brandOrange/30 text-xs px-2 py-1 rounded-full text-brandOrange"
+              className="bg-blue-900 border border-brandOrange/30 text-xs px-2 py-1 rounded-full text-brandOrange"
             >
               {tag}
             </span>

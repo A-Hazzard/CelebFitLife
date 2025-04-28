@@ -363,7 +363,7 @@ export default function FeedsPage() {
           <div className="grid grid-cols-12 gap-6">
             {/* Left Sidebar - Popular Streamers */}
             <div className="col-span-3">
-              <div className="bg-[#111827] rounded-xl p-4 border border-orange-500/20 sticky top-4">
+              <div className="bg-blue-900 rounded-xl p-4 border border-orange-500/20 sticky top-4">
                 <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                   <Users className="h-5 w-5 text-orange-500" />
                   Popular Streamers
@@ -446,7 +446,7 @@ export default function FeedsPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5 }}
-                  className="bg-[#111827] rounded-xl p-6 border border-orange-500/20"
+                  className="bg-blue-900 rounded-xl p-6 border border-orange-500/20"
                 >
                   <motion.h2
                     initial={{ opacity: 0 }}
@@ -476,7 +476,7 @@ export default function FeedsPage() {
                     Share Your Fitness Journey
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-[#111827] border border-orange-500/20">
+                <DialogContent className="bg-blue-900 border border-orange-500/20">
                   <DialogHeader>
                     <DialogTitle className="text-white">
                       Create Post
@@ -596,7 +596,7 @@ export default function FeedsPage() {
                 {posts.map((post) => (
                   <div
                     key={post.id}
-                    className="bg-[#111827] rounded-xl p-4 border border-orange-500/20"
+                    className="bg-blue-900 rounded-xl p-4 border border-orange-500/20"
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-3">
@@ -795,7 +795,7 @@ export default function FeedsPage() {
                 </motion.div>
 
                 {/* Trending Topics */}
-                <div className="bg-[#111827] rounded-xl p-4 border border-orange-500/20">
+                <div className="bg-blue-900 rounded-xl p-4 border border-orange-500/20">
                   <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                     <TrendingUp className="h-5 w-5 text-orange-500" />
                     Trending Topics
@@ -825,7 +825,7 @@ export default function FeedsPage() {
                 </div>
 
                 {/* Your Stats */}
-                <div className="bg-[#111827] rounded-xl p-4 border border-orange-500/20">
+                <div className="bg-blue-900 rounded-xl p-4 border border-orange-500/20">
                   <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                     <BarChart2 className="h-5 w-5 text-orange-500" />
                     Your Stats

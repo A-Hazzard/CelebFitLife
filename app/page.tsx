@@ -113,7 +113,7 @@ export default function LandingPage() {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {/* Basic Plan */}
-              <div className="bg-brandBlack border border-brandGray rounded-lg p-6 flex flex-col text-left">
+              <div className="bg-blue-900 border border-brandGray rounded-lg p-6 flex flex-col text-left">
                 <h4 className="text-xl font-bold text-white mb-4">Basic</h4>
                 <p className="text-3xl font-bold text-brandOrange mb-2">
                   $9.99<span className="text-lg">/month</span>
@@ -132,7 +132,7 @@ export default function LandingPage() {
                 </Link>
               </div>
               {/* Plus Plan */}
-              <div className="bg-brandBlack border border-brandGray rounded-lg p-6 flex flex-col text-left">
+              <div className="bg-blue-900 border border-brandGray rounded-lg p-6 flex flex-col text-left">
                 <h4 className="text-xl font-bold text-white mb-4">Plus</h4>
                 <p className="text-3xl font-bold text-brandOrange mb-2">
                   $19.99<span className="text-lg">/month</span>
@@ -151,7 +151,7 @@ export default function LandingPage() {
                 </Link>
               </div>
               {/* Unlimited Plan */}
-              <div className="bg-brandBlack border border-brandGray rounded-lg p-6 flex flex-col text-left">
+              <div className="bg-blue-900 border border-brandGray rounded-lg p-6 flex flex-col text-left">
                 <h4 className="text-xl font-bold text-white mb-4">Unlimited</h4>
                 <p className="text-3xl font-bold text-brandOrange mb-2">
                   $29.99<span className="text-lg">/month</span>

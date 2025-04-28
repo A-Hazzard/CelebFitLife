@@ -4,16 +4,17 @@ import { cn } from "@/lib/utils";
 import { BadgeProps } from "@/lib/types/ui";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border border-brandOrange px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-gray-950 focus:ring-offset-2 dark:border-brandGray dark:focus:ring-gray-300",
+  "inline-flex items-center rounded-full border border-blue-700 px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-900 focus:ring-offset-2 dark:border-gray-700 dark:focus:ring-blue-300",
   {
     variants: {
       variant: {
-        default: "bg-brandBlack text-brandWhite hover:bg-brandOrange border-transparent",
+        default:
+          "bg-brandBlack text-brandWhite hover:bg-brandOrange border-transparent",
         secondary:
           "bg-brandGray text-brandWhite hover:bg-brandOrange border-transparent",
         destructive:
           "bg-brandOrange text-brandWhite hover:bg-brandOrange/80 border-transparent",
-        outline: "text-brandGray border-brandGray",
+        outline: "text-brandGray border-blue-700",
         success:
           "bg-brandOrange text-brandWhite hover:bg-brandOrange/80 border-transparent",
       },

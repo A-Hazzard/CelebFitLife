@@ -200,7 +200,7 @@ export default function DashboardPage() {
   if (!currentUser) return null;
 
   return (
-    <div className="min-h-screen bg-brandBlack text-brandWhite">
+    <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite">
       <Header />
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
@@ -301,7 +301,7 @@ export default function DashboardPage() {
             <div className="lg:col-span-8 space-y-6">
               {/* Stream performance metrics */}
               {isStreamStatsLoading ? (
-                <div className="bg-brandBlack rounded-lg p-6 border-2 border-brandOrange">
+                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
                   <div className="mb-4">
                     <SkeletonLoader height="h-8" width="w-48" />
                   </div>
@@ -311,12 +311,14 @@ export default function DashboardPage() {
                   <SkeletonLoader height="h-64" />
                 </div>
               ) : (
-                <StreamStats />
+                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
+                  <StreamStats />
+                </div>
               )}
 
               {/* Upcoming streams */}
               {isUpcomingLoading ? (
-                <div className="bg-brandBlack rounded-lg p-6 border-2 border-brandOrange">
+                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
                   <div className="flex justify-between mb-4">
                     <SkeletonLoader height="h-6" width="w-40" />
                     <SkeletonLoader height="h-8" width="w-32" />
@@ -326,11 +328,13 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <UpcomingStreamsCalendar />
+                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
+                  <UpcomingStreamsCalendar />
+                </div>
               )}
 
               {/* Most popular past streams */}
-              <div className="bg-brandBlack rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
+              <div className="bg-blue-900 rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
                   <h3 className="text-lg font-medium text-brandOrange">
                     Past Streams
@@ -418,7 +422,7 @@ export default function DashboardPage() {
             <div className="lg:col-span-4 space-y-6">
               {/* Activity Log Card */}
               {isActivityLoading ? (
-                <div className="bg-brandBlack rounded-lg p-6 border-2 border-brandOrange">
+                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
                   <div className="mb-4">
                     <SkeletonLoader height="h-6" width="w-32" />
                     <SkeletonLoader
@@ -442,7 +446,7 @@ export default function DashboardPage() {
 
               {/* Recommended Streamers Card */}
               {isRecommendedLoading ? (
-                <div className="bg-brandBlack rounded-lg p-6 border-2 border-brandOrange">
+                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
                   <div className="mb-4">
                     <SkeletonLoader height="h-6" width="w-48" />
                   </div>
@@ -451,7 +455,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-brandBlack rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
+                <div className="bg-blue-900 rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
                     <h3 className="text-lg font-medium text-brandOrange">
                       Popular Streamers
@@ -476,7 +480,7 @@ export default function DashboardPage() {
               )}
 
               {/* Quick Tips Card */}
-              <div className="bg-brandBlack rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
+              <div className="bg-blue-900 rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
                 <h3 className="text-lg font-medium mb-3 text-brandOrange">
                   Streamer Tips
                 </h3>
