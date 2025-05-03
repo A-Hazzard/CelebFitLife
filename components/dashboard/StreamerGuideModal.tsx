@@ -71,7 +71,7 @@ export function StreamerGuideModal({
                 ))}
               </ul>
 
-              <div className="bg-brandOrange/10 dark:bg-brandOrange/30 p-3 rounded-md mt-4">
+              <div className="bg-brandBlack dark:bg-brandOrange/30 p-3 rounded-md mt-4">
                 <p className="text-sm font-medium text-brandOrange dark:text-brandOrange">
                   Celebrity Success Tip: Consistency is key! Viewers are 3x more
                   likely to follow streamers with a regular schedule.

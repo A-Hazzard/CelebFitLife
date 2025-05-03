@@ -157,7 +157,7 @@ export default function UserDashboard() {
               {categories.map((category) => (
                 <div key={category.name} className="mb-1">
                   <div
-                    className={`flex justify-between items-center bg-blue-900 border border-brandOrange/30 p-2 rounded-lg hover:bg-brandOrange/10 transition-colors cursor-pointer ${
+                    className={`flex justify-between items-center bg-blue-900 border border-brandOrange/30 p-2 rounded-lg hover:bg-brandBlack transition-colors cursor-pointer ${
                       selectedCategories.includes(category.name)
                         ? "bg-brandOrange/20"
                         : ""

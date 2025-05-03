@@ -170,7 +170,7 @@ export default function UpcomingStreamsCalendar() {
               <Button
                 variant="outline"
                 size="sm"
-                className="bg-transparent border-brandOrange text-sm text-brandWhite hover:bg-brandOrange/10"
+                className="bg-transparent border-brandOrange text-sm text-brandWhite hover:bg-brandBlack"
               >
                 <Calendar className="h-4 w-4 mr-2 text-brandOrange" />
                 {selectedDate

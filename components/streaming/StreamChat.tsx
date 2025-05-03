@@ -81,7 +81,7 @@ const StreamChat: React.FC<StreamChatProps> = ({
             <Button
               variant="outline"
               onClick={retryConnection}
-              className="flex items-center gap-2 text-brandOrange border-brandOrange/50 hover:bg-brandOrange/10"
+              className="flex items-center gap-2 text-brandOrange border-brandOrange/50 hover:bg-brandBlack"
             >
               <RefreshCw size={16} />
               Retry Connection

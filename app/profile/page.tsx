@@ -477,7 +477,7 @@ export default function ProfilePage() {
                           className={cn(
                             "border rounded-lg p-4 cursor-pointer transition-all",
                             selectedPlan === "basic"
-                              ? "border-brandOrange bg-brandOrange/10"
+                              ? "border-brandOrange bg-brandBlack"
                               : "border-gray-700 hover:border-gray-600"
                           )}
                           onClick={() => setSelectedPlan("basic")}
@@ -499,7 +499,7 @@ export default function ProfilePage() {
                           className={cn(
                             "border rounded-lg p-4 cursor-pointer transition-all",
                             selectedPlan === "premium"
-                              ? "border-brandOrange bg-brandOrange/10"
+                              ? "border-brandOrange bg-brandBlack"
                               : "border-gray-700 hover:border-gray-600"
                           )}
                           onClick={() => setSelectedPlan("premium")}
@@ -525,7 +525,7 @@ export default function ProfilePage() {
                           className={cn(
                             "border rounded-lg p-4 cursor-pointer transition-all",
                             selectedPlan === "pro"
-                              ? "border-brandOrange bg-brandOrange/10"
+                              ? "border-brandOrange bg-brandBlack"
                               : "border-gray-700 hover:border-gray-600"
                           )}
                           onClick={() => setSelectedPlan("pro")}

@@ -208,7 +208,7 @@ export default function ActivityLog() {
   const renderActivityItem = (activity: ActivityItem) => (
     <div
       key={activity.id}
-      className={`flex items-start p-3 border-b border-brandOrange hover:bg-brandOrange/10 transition-colors last:border-b-0 ${
+      className={`flex items-start p-3 border-b border-brandOrange hover:bg-brandBlack transition-colors last:border-b-0 ${
         !activity.read ? "bg-brandOrange/5" : ""
       }`}
     >

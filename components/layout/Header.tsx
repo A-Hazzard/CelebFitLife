@@ -355,7 +355,7 @@ export default function Header() {
                     {fakeNotifications.map((notification) => (
                       <div
                         key={notification.id}
-                        className={`p-3 hover:bg-brandOrange/10 border-l-2 ${
+                        className={`p-3 hover:bg-brandBlack border-l-2 ${
                           notification.isRead
                             ? "border-transparent"
                             : "border-brandOrange"
@@ -392,7 +392,7 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    className="relative rounded-full hover:bg-brandOrange/10 p-0"
+                    className="relative rounded-full hover:bg-brandBlack p-0"
                   >
                     <div className="relative h-9 w-9 sm:h-10 sm:w-10 overflow-hidden rounded-full border-2 border-brandOrange">
                       <Image

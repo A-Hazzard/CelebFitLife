@@ -354,7 +354,7 @@ export default function DashboardPage() {
                   {pastStreams.slice(0, 5).map((stream) => (
                     <div
                       key={stream.id}
-                      className="flex items-center gap-3 sm:gap-4 p-3 rounded-lg hover:bg-brandOrange/10 transition-colors border border-brandOrange"
+                      className="flex items-center gap-3 sm:gap-4 p-3 rounded-lg hover:bg-brandBlack transition-colors border border-brandOrange"
                     >
                       <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-md overflow-hidden flex-shrink-0">
                         <Image
