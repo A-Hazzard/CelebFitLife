@@ -11,7 +11,14 @@ import ActivityLog from "@/components/dashboard/ActivityLog";
 import StreamStats from "@/components/dashboard/StreamStats";
 import { fetchAllUserStreams } from "@/lib/helpers/dashboard";
 import { StreamDoc } from "@/lib/types/streaming.types";
-import { Activity, ChevronRight, Edit, Plus, Settings } from "lucide-react";
+import {
+  Activity,
+  ChevronRight,
+  Edit,
+  Plus,
+  Settings,
+  Users,
+} from "lucide-react";
 import { useOnClickOutside } from "@/lib/hooks/useOnClickOutside";
 import { SettingsModal } from "@/components/dashboard/SettingsModal";
 import { StreamerGuideModal } from "@/components/dashboard/StreamerGuideModal";
@@ -200,13 +207,13 @@ export default function DashboardPage() {
   if (!currentUser) return null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite">
+    <div className="flex flex-col min-h-screen text-brandWhite">
       <Header />
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6">
+      <main className="container mx-auto px-2 sm:px-4 py-6">
         <div className="flex flex-col space-y-6">
           {/* Quick Actions Section */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 bg-blue-800 rounded-lg p-4 border border-blue-700">
             <h2 className="text-xl font-semibold text-brandOrange">
               Welcome back, {currentUser?.username || "Streamer"}!
             </h2>
@@ -232,7 +239,7 @@ export default function DashboardPage() {
 
           {/* Live Streams (if any) */}
           {liveStreams.length > 0 && (
-            <div className="bg-brandBlack border-2 border-brandOrange rounded-lg p-4 mb-6">
+            <div className="bg-blue-800 border-2 border-brandOrange rounded-lg p-4 mb-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                 <div className="flex items-center">
                   <div className="h-3 w-3 bg-brandOrange rounded-full animate-pulse mr-2"></div>
@@ -301,7 +308,7 @@ export default function DashboardPage() {
             <div className="lg:col-span-8 space-y-6">
               {/* Stream performance metrics */}
               {isStreamStatsLoading ? (
-                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
+                <div className="bg-blue-800 rounded-lg p-6 border-2 border-brandOrange">
                   <div className="mb-4">
                     <SkeletonLoader height="h-8" width="w-48" />
                   </div>
@@ -311,14 +318,14 @@ export default function DashboardPage() {
                   <SkeletonLoader height="h-64" />
                 </div>
               ) : (
-                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
+                <div className="bg-blue-800 rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
                   <StreamStats />
                 </div>
               )}
 
               {/* Upcoming streams */}
               {isUpcomingLoading ? (
-                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
+                <div className="bg-blue-800 rounded-lg p-6 border-2 border-brandOrange">
                   <div className="flex justify-between mb-4">
                     <SkeletonLoader height="h-6" width="w-40" />
                     <SkeletonLoader height="h-8" width="w-32" />
@@ -328,13 +335,13 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
+                <div className="bg-blue-800 rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
                   <UpcomingStreamsCalendar />
                 </div>
               )}
 
               {/* Most popular past streams */}
-              <div className="bg-blue-900 rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
+              <div className="bg-blue-800 rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
                   <h3 className="text-lg font-medium text-brandOrange">
                     Past Streams
@@ -422,7 +429,7 @@ export default function DashboardPage() {
             <div className="lg:col-span-4 space-y-6">
               {/* Activity Log Card */}
               {isActivityLoading ? (
-                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
+                <div className="bg-brandBlack rounded-lg p-6 border-2 border-brandOrange">
                   <div className="mb-4">
                     <SkeletonLoader height="h-6" width="w-32" />
                     <SkeletonLoader
@@ -441,12 +448,14 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <ActivityLog />
+                <div className="bg-brandBlack rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
+                  <ActivityLog />
+                </div>
               )}
 
               {/* Recommended Streamers Card */}
               {isRecommendedLoading ? (
-                <div className="bg-blue-900 rounded-lg p-6 border-2 border-brandOrange">
+                <div className="bg-brandBlack rounded-lg p-6 border-2 border-brandOrange">
                   <div className="mb-4">
                     <SkeletonLoader height="h-6" width="w-48" />
                   </div>
@@ -455,32 +464,44 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-blue-900 rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
-                    <h3 className="text-lg font-medium text-brandOrange">
+                <div className="bg-brandBlack rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-6">
+                    <h3 className="text-xl font-medium text-brandOrange flex items-center">
+                      <Users className="h-5 w-5 mr-2 text-brandOrange" />
                       Popular Streamers
                     </h3>
                     <Button
-                      variant="ghost"
-                      className="text-sm text-brandGray hover:text-brandOrange w-full sm:w-auto"
+                      variant="default"
+                      className="text-sm bg-brandOrange text-brandBlack hover:bg-brandWhite hover:text-brandBlack font-medium w-full sm:w-auto border-none"
                       onClick={() => setIsExploreStreamersOpen(true)}
                       type="button"
                     >
-                      Explore{" "}
-                      <ChevronRight className="h-4 w-4 ml-1 text-brandOrange" />
+                      Explore
+                      <ChevronRight className="h-4 w-4 ml-1" />
                     </Button>
                   </div>
 
                   <div className="space-y-3">
-                    {recommendedStreamers.map((streamer) => (
-                      <StreamerCard key={streamer.id} streamer={streamer} />
+                    {recommendedStreamers.map((streamer, index) => (
+                      <div
+                        key={streamer.id}
+                        className={`${
+                          index % 3 === 0
+                            ? "bg-gradient-to-r from-blue-900 to-blue-800"
+                            : index % 3 === 1
+                            ? "bg-gradient-to-r from-blue-800 to-blue-700"
+                            : "bg-gradient-to-r from-blue-700 to-blue-900"
+                        } rounded-lg overflow-hidden border border-brandOrange`}
+                      >
+                        <StreamerCard streamer={streamer} />
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
 
               {/* Quick Tips Card */}
-              <div className="bg-blue-900 rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
+              <div className="bg-brandBlack rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
                 <h3 className="text-lg font-medium mb-3 text-brandOrange">
                   Streamer Tips
                 </h3>

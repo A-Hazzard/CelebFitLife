@@ -22,6 +22,7 @@ import {
   AlertCircle,
   ArrowUpRight,
   Calendar,
+  ChevronDown,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/lib/store/useAuthStore";
@@ -31,6 +32,12 @@ import { formatDistanceToNow } from "date-fns";
 import { ActivityItem } from "@/lib/types/ui";
 import { Timestamp } from "firebase/firestore";
 import ActivityLogOptions from "./ActivityLogOptions";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function ActivityLog() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -299,29 +306,30 @@ export default function ActivityLog() {
         </div>
       </CardHeader>
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
-        <div className="px-4">
-          <TabsList className="bg-brandBlack w-full grid grid-cols-4 border-b-2 border-brandOrange">
+        {/* Desktop Tabs - visible on xl and above */}
+        <div className="px-4 hidden xl:block">
+          <TabsList className="bg-brandBlack w-full flex justify-between border-b-2 border-brandOrange">
             <TabsTrigger
               value="all"
-              className="data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
+              className="flex-1 data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
             >
               All
             </TabsTrigger>
             <TabsTrigger
               value="streams"
-              className="data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
+              className="flex-1 data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
             >
               Streams
             </TabsTrigger>
             <TabsTrigger
               value="engagement"
-              className="data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
+              className="flex-1 data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
             >
               Engagement
             </TabsTrigger>
             <TabsTrigger
               value="alerts"
-              className="relative data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
+              className="flex-1 relative data-[state=active]:bg-brandOrange data-[state=active]:text-brandBlack text-brandGray"
             >
               Alerts
               {activities.filter((a) => !a.read).length > 0 && (
@@ -331,6 +339,56 @@ export default function ActivityLog() {
               )}
             </TabsTrigger>
           </TabsList>
+        </div>
+
+        {/* Mobile Dropdown - visible below xl breakpoint */}
+        <div className="px-4 xl:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-between bg-brandBlack border-b-2 border-brandOrange text-brandWhite flex items-center"
+              >
+                <div className="flex items-center">
+                  {activeTab === "all" && "All"}
+                  {activeTab === "streams" && "Streams"}
+                  {activeTab === "engagement" && "Engagement"}
+                  {activeTab === "alerts" && (
+                    <div className="relative">
+                      Alerts
+                      {activities.filter((a) => !a.read).length > 0 && (
+                        <span className="absolute top-0 right-0 transform translate-x-full -translate-y-1/2 h-4 w-4 rounded-full bg-red-500 flex items-center justify-center text-[10px] text-white">
+                          {activities.filter((a) => !a.read).length}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <ChevronDown className="h-4 w-4 ml-2 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-full min-w-[200px]">
+              <DropdownMenuItem onClick={() => setActiveTab("all")}>
+                All
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveTab("streams")}>
+                Streams
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveTab("engagement")}>
+                Engagement
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActiveTab("alerts")}>
+                <div className="relative flex items-center">
+                  Alerts
+                  {activities.filter((a) => !a.read).length > 0 && (
+                    <span className="ml-2 h-4 w-4 rounded-full bg-red-500 flex items-center justify-center text-[10px] text-white">
+                      {activities.filter((a) => !a.read).length}
+                    </span>
+                  )}
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <CardContent className="p-0 pt-2">

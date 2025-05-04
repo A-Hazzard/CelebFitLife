@@ -132,7 +132,7 @@ export default function UserDashboard() {
           </section>
 
           {/* 🎛 CATEGORY SIDEBAR */}
-          <aside className="w-full md:w-1/5 bg-blue-900 border border-brandOrange/30 rounded-xl">
+          <aside className="w-full md:w-1/5 bg-brandBlack border border-brandOrange/30 rounded-xl">
             <div
               className="flex justify-between items-center p-3 cursor-pointer md:cursor-default"
               onClick={() => setIsTagsOpen(!isTagsOpen)}
@@ -157,9 +157,9 @@ export default function UserDashboard() {
               {categories.map((category) => (
                 <div key={category.name} className="mb-1">
                   <div
-                    className={`flex justify-between items-center bg-blue-900 border border-brandOrange/30 p-2 rounded-lg hover:bg-brandBlack transition-colors cursor-pointer ${
+                    className={`flex justify-between items-center bg-brandBlack border border-brandOrange/30 p-2 rounded-lg hover:bg-brandBlack transition-colors cursor-pointer ${
                       selectedCategories.includes(category.name)
-                        ? "bg-brandOrange/20"
+                        ? "bg-brandBlack"
                         : ""
                     }`}
                     onClick={() => toggleCategory(category.name)}
@@ -184,9 +184,9 @@ export default function UserDashboard() {
                             e.stopPropagation();
                             toggleTagSelection(tag.name);
                           }}
-                          className={`bg-blue-900 border border-brandOrange/30 text-[10px] p-1 rounded-lg hover:bg-brandOrange/20 transition-colors ${
+                          className={`bg-brandBlack border border-brandOrange/30 text-[10px] p-1 rounded-lg hover:bg-brandBlack transition-colors ${
                             selectedTags.includes(tag.name)
-                              ? "bg-brandOrange text-brandBlack"
+                              ? "bg-brandBlack"
                               : "text-brandWhite"
                           }`}
                         >

@@ -184,7 +184,7 @@ export default function LandingPage() {
           <form
             ref={formRef}
             onSubmit={handleSubmit}
-            className="bg-brandWhite text-brandBlack p-6 rounded-lg shadow-lg"
+            className="bg-brandBlack text-brandWhite p-6 rounded-lg shadow-lg"
           >
             {submitStatus.type && (
               <div

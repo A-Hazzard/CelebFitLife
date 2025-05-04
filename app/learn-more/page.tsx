@@ -55,7 +55,7 @@ export default function LearnMorePage() {
         </section>
 
         {/* Features Section */}
-        <section className="py-12 px-4 bg-brandGray text-brandBlack">
+        <section className="py-12 px-4 bg-brandBlack text-brandWhite">
           <div className="max-w-6xl mx-auto">
             <h3 className="text-3xl font-bold mb-6">Features</h3>
             <ul className="space-y-4 text-lg">
@@ -82,7 +82,7 @@ export default function LearnMorePage() {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {/* Basic Plan */}
-              <div className="bg-blue-900 border border-brandGray rounded-lg p-6 flex flex-col text-left">
+              <div className="bg-brandBlack border border-brandGray rounded-lg p-6 flex flex-col text-left">
                 <h4 className="text-xl font-bold text-white mb-4">Basic</h4>
                 <p className="text-3xl font-bold text-brandOrange mb-2">
                   $9.99<span className="text-lg">/month</span>
@@ -101,7 +101,7 @@ export default function LearnMorePage() {
                 </Link>
               </div>
               {/* Plus Plan */}
-              <div className="bg-blue-900 border border-brandGray rounded-lg p-6 flex flex-col text-left">
+              <div className="bg-brandBlack border border-brandGray rounded-lg p-6 flex flex-col text-left">
                 <h4 className="text-xl font-bold text-white mb-4">Plus</h4>
                 <p className="text-3xl font-bold text-brandOrange mb-2">
                   $19.99<span className="text-lg">/month</span>
@@ -120,7 +120,7 @@ export default function LearnMorePage() {
                 </Link>
               </div>
               {/* Unlimited Plan */}
-              <div className="bg-blue-900 border border-brandGray rounded-lg p-6 flex flex-col text-left">
+              <div className="bg-brandBlack border border-brandGray rounded-lg p-6 flex flex-col text-left">
                 <h4 className="text-xl font-bold text-white mb-4">Unlimited</h4>
                 <p className="text-3xl font-bold text-brandOrange mb-2">
                   $29.99<span className="text-lg">/month</span>
@@ -143,7 +143,7 @@ export default function LearnMorePage() {
         </section>
 
         {/* How It Works Section */}
-        <section className="py-12 px-4 bg-brandGray text-brandBlack">
+        <section className="py-12 px-4 bg-brandBlack text-brandWhite">
           <div className="max-w-6xl mx-auto">
             <h3 className="text-3xl font-bold mb-6">How It Works</h3>
             <ol className="space-y-4 text-lg list-decimal list-inside">

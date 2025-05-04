@@ -98,17 +98,19 @@ const COLORS = [
 ];
 
 const MetricCard = ({ title, value, change, icon }: MetricCardProps) => (
-  <div className="bg-brandBlack rounded-lg p-3 sm:p-4 flex items-center border-2 border-brandOrange">
-    <div className="mr-3 sm:mr-4 bg-brandOrange/20 p-2 sm:p-3 rounded-lg flex-shrink-0">
+  <div className="bg-brandBlack rounded-lg p-3 sm:p-4 flex flex-col items-center border-2 border-brandOrange text-center">
+    <div className="mb-2 bg-brandOrange/20 p-2 sm:p-3 rounded-lg flex-shrink-0 flex items-center justify-center">
       {icon}
     </div>
-    <div className="min-w-0">
-      <div className="text-xs sm:text-sm text-brandGray truncate">{title}</div>
-      <div className="text-lg sm:text-xl font-bold truncate text-brandWhite">
+    <div className="min-w-0 w-full">
+      <div className="text-xs sm:text-sm text-brandGray truncate w-full">
+        {title}
+      </div>
+      <div className="text-lg sm:text-xl font-bold truncate text-brandWhite w-full">
         {value}
       </div>
       <div
-        className={`text-xs flex items-center mt-1 ${
+        className={`text-xs flex items-center justify-center mt-1 w-full ${
           change >= 0 ? "text-brandOrange" : "text-red-400"
         }`}
       >

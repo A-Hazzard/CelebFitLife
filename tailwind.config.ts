@@ -11,7 +11,7 @@ export default {
     extend: {
       colors: {
         brandOrange: "#FF7F30",
-        brandBlack: "#18181b",
+        brandBlack: "#000000",
         brandWhite: "#ffffff",
         blue: {
           900: "#0f172a",
