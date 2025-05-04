@@ -308,12 +308,12 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           ? {
               deviceId: { exact: deviceId },
               echoCancellation: { ideal: true },
-              noiseSuppression: { ideal: true },
+              noiseSuppression: true,
               autoGainControl: { ideal: true },
             }
           : {
               echoCancellation: { ideal: true },
-              noiseSuppression: { ideal: true },
+              noiseSuppression: true,
               autoGainControl: { ideal: true },
             },
         video: false,
@@ -398,70 +398,98 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
     async (deviceId?: string) => {
       try {
         cleanupMicAnalysis();
-        setMicLevel(10);
+        setMicLevel(5); // Set initial level
         setMicPulse(false);
+
         const stream = await getMicStream(deviceId);
         if (!stream) {
           toast.error("Could not access microphone");
           return;
         }
+
         micStreamRef.current = stream;
         const context = getAudioContext();
         if (!context) {
           toast.error("Audio system not available for microphone test");
           return;
         }
+
         try {
+          // Create and configure analyser with better settings for voice
           const analyser = context.createAnalyser();
-          analyser.fftSize = 1024;
-          analyser.smoothingTimeConstant = 0.2;
+          analyser.fftSize = 1024; // Higher resolution for better detection
+          analyser.smoothingTimeConstant = 0.2; // Less smoothing for more responsive visualization
           micAnalyserRef.current = analyser;
+
+          // Create source from microphone stream
           const sourceNode = context.createMediaStreamSource(stream);
           micSourceNodeRef.current = sourceNode;
+
+          // Create gain node to boost signal
           const gainNode = context.createGain();
-          gainNode.gain.value = 3.0;
+          gainNode.gain.value = 1.2; // Lower gain for more suppression
           micGainNodeRef.current = gainNode;
+
+          // Connect the audio pipeline
           sourceNode.connect(gainNode);
           gainNode.connect(analyser);
+
+          // Create data array for analysis
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
           let movingAvg = 0;
+
+          // Analysis function that runs in animation frame
           const runAnalysis = () => {
-            if (!micAnalyserRef.current) return;
+            if (!micAnalyserRef.current || !micEnabled) {
+              const currentLevel = micLevel;
+              setMicLevel((prev) => Math.max(0, prev - 5));
+              if (currentLevel > 5) {
+                animationFrameRef.current = requestAnimationFrame(runAnalysis);
+              }
+              return;
+            }
+
             try {
               micAnalyserRef.current.getByteFrequencyData(dataArray);
+
+              // Focus on frequency range typical for human voice (300Hz-3400Hz)
+              const voiceStart = Math.floor(dataArray.length * 0.015); // ~300Hz
+              const voiceEnd = Math.floor(dataArray.length * 0.08); // ~3400Hz
+
               let sum = 0;
               let peak = 0;
-              const voiceStart = Math.floor(dataArray.length * 0.05);
-              const voiceEnd = Math.floor(dataArray.length * 0.3);
               for (let i = voiceStart; i < voiceEnd; i++) {
                 sum += dataArray[i];
                 peak = Math.max(peak, dataArray[i]);
               }
               const count = voiceEnd - voiceStart;
               const average = sum / count;
-              // Soft-knee compression: log curve
-              const noiseFloor = 3;
-              const adjustedPeak = Math.max(0, peak - noiseFloor);
-              let compressed = Math.log1p(average * 0.3 + adjustedPeak * 0.7);
-              compressed = Math.min(1, compressed / Math.log1p(255));
-              // Moving average for smoothness
-              movingAvg = movingAvg * 0.8 + compressed * 0.2;
+
+              // More aggressive noise gate
+              const noiseFloor = 12; // Higher threshold for more suppression
+
+              if (peak < noiseFloor) {
+                movingAvg = Math.max(0, movingAvg * 0.93);
+              } else {
+                const adjustedPeak = Math.max(0, peak - noiseFloor);
+                let compressed = Math.log1p(average * 0.4 + adjustedPeak * 0.6);
+                compressed = Math.min(1, compressed / Math.log1p(255));
+                movingAvg = movingAvg * 0.8 + compressed * 0.2;
+              }
               micMovingAvgRef.current = movingAvg;
-              // Scale to 0-100
-              const scaledLevel = Math.round(movingAvg * 100);
+              const scaledLevel = Math.round(Math.min(100, movingAvg * 120));
               setMicLevel(scaledLevel);
-              // Pulse if above 60% of recent average
               if (
-                scaledLevel > Math.max(30, micMovingAvgRef.current * 100 * 0.6)
+                scaledLevel > Math.max(25, micMovingAvgRef.current * 100 * 0.6)
               ) {
                 setMicPulse(true);
-                setTimeout(() => setMicPulse(false), 300);
+                setTimeout(() => setMicPulse(false), 200);
               }
               animationFrameRef.current = requestAnimationFrame(runAnalysis);
             } catch (error) {
               console.error("Error in mic analysis:", error);
               cleanupMicAnalysis();
-              setMicLevel(15);
+              setMicLevel(5);
             }
           };
           animationFrameRef.current = requestAnimationFrame(runAnalysis);
@@ -469,15 +497,15 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           console.error("Error setting up mic analysis:", error);
           toast.error("Failed to analyze microphone input");
           cleanupMicAnalysis();
-          setMicLevel(15);
+          setMicLevel(5);
         }
       } catch (error) {
         console.error("Critical error in mic analysis:", error);
         toast.error("Could not access microphone");
-        setMicLevel(15);
+        setMicLevel(5);
       }
     },
-    [getAudioContext, getMicStream, cleanupMicAnalysis]
+    [getAudioContext, getMicStream, cleanupMicAnalysis, micEnabled, micLevel]
   );
 
   // 2. Refactor startSpeakerAnalysis for robust visualization and pulse
@@ -740,96 +768,71 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
         audioRef.current.onerror = null;
       }
 
-      // Audio element for speaker test
+      // Use an <audio> element for the test sound
       const audioEl = new Audio("/audio/test-speaker.mp3");
-      if (VERBOSE_LOGGING)
-        console.log("Created Audio element with src: /audio/test-speaker.mp3");
       audioEl.loop = false;
-
-      if (selectedSpeaker) {
-        try {
-          if (VERBOSE_LOGGING)
-            console.log(
-              `Attempting to set audio output device to: ${selectedSpeaker}`
-            );
-          if (audioEl.setSinkId && typeof audioEl.setSinkId === "function") {
-            audioEl
-              .setSinkId(selectedSpeaker)
-              .then(() => {
-                if (VERBOSE_LOGGING)
-                  console.log(`Audio output device set to ${selectedSpeaker}`);
-              })
-              .catch((error) => {
-                console.error("Error setting sink ID:", error);
-              });
-          } else if (VERBOSE_LOGGING) {
-            console.warn("setSinkId not supported in this browser");
-          }
-        } catch (error) {
-          console.error("Error setting sink ID:", error);
-        }
+      audioEl.autoplay = true;
+      // Set output device if possible
+      if (selectedSpeaker && "setSinkId" in HTMLAudioElement.prototype) {
+        audioEl.setSinkId(selectedSpeaker).catch(() => {});
       }
-
-      // Save reference for cleanup
-      audioRef.current = audioEl;
-
-      // Function to handle multiple plays with delays
-      const playWithDelay = () => {
-        if (playCount < maxPlays && isTesting && testType === "speaker") {
-          playCount++;
-          audioEl.play().catch((error) => {
-            console.error("Error playing audio:", error);
-          });
+      speakerAudioElRef.current = audioEl;
+      // Connect audio element to analyser
+      const sourceNode = audioCtx.createMediaElementSource(audioEl);
+      sourceNode.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      speakerSourceNodeRef.current = sourceNode;
+      // Visualization
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let movingAvg = 0;
+      const analyzeLoop = () => {
+        if (!isSpeakerTestActive) return;
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        let peak = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const value = dataArray[i];
+          sum += value;
+          peak = Math.max(peak, value);
         }
+        const avg = sum / dataArray.length;
+        // More aggressive noise gate for speaker visualization
+        const noiseFloor = 12;
+        let combinedLevel = 0;
+        if (peak < noiseFloor) {
+          movingAvg = Math.max(0, movingAvg * 0.93);
+        } else {
+          combinedLevel = (peak * 0.7 + avg * 0.3) / 255;
+          movingAvg = movingAvg * 0.9 + combinedLevel * 0.1;
+        }
+        const speakerLevel = Math.min(100, movingAvg * 150);
+        setSpeakerLevel(speakerLevel);
+        if (speakerLevel > 50) {
+          if (!speakerPulse) setSpeakerPulse(true);
+        } else {
+          if (speakerPulse) setSpeakerPulse(false);
+        }
+        speakerAnalysisFrameRef.current = requestAnimationFrame(analyzeLoop);
       };
-
-      // Set up onended handler to handle repeating playback
+      speakerAnalysisFrameRef.current = requestAnimationFrame(analyzeLoop);
+      // Play the audio and clean up after
       audioEl.onended = () => {
-        if (playCount < maxPlays && isTesting && testType === "speaker") {
-          // Wait 2 seconds before playing again
-          setTimeout(playWithDelay, 2000);
-        } else if (playCount >= maxPlays) {
-          // We've reached max plays, show toast notification
-          toast.info("Speaker test complete");
-        }
+        speakerTestCleanup();
+        toast.success("Speaker test completed");
       };
-
-      audioEl.oncanplaythrough = () => {
-        if (VERBOSE_LOGGING)
-          console.log("Audio can play through, starting playback and analysis");
-        startSpeakerAnalysis();
-        playWithDelay(); // Start the first play
-      };
-
       audioEl.onerror = () => {
-        console.error("Audio element error:");
-        if (!hasErrored) {
-          toast.error("Failed to load test sound");
-          hasErrored = true;
-        }
+        speakerTestCleanup();
+        toast.error("Failed to play test sound");
       };
-
-      return () => {
-        if (VERBOSE_LOGGING) console.log("Cleaning up speaker test");
-        // First make sure to cancel any animations
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = null;
-        }
-
-        // Then run the full cleanup
-        cleanupSpeakerAnalysis();
-
-        // Finally, clean up the audio element
-        if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current.src = "";
-          audioRef.current.onended = null;
-          audioRef.current.oncanplaythrough = null;
-          audioRef.current.onerror = null;
-          audioRef.current = null;
-        }
-      };
+      audioEl.play().catch(() => {
+        speakerTestCleanup();
+        toast.error("Failed to play test sound");
+      });
+      // Timeout fallback in case onended doesn't fire
+      speakerTestTimeoutRef.current = setTimeout(() => {
+        speakerTestCleanup();
+        toast.success("Speaker test completed");
+      }, 10000);
     }
 
     // Return empty cleanup function when not testing speaker
@@ -917,9 +920,9 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           size={28}
           className={`${
             micLevel > 10 ? "text-green-500" : "text-gray-400"
-          } transition-colors`}
+          } transition-colors duration-300`}
         />
-        {micLevel > 30 && (
+        {micPulse && (
           <div className="absolute inset-0 border-2 border-green-500 rounded-full animate-ping opacity-75"></div>
         )}
       </div>
@@ -927,7 +930,7 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
       <h3 className="text-lg font-bold mb-3">Microphone Test</h3>
 
       <div className="text-sm text-gray-400 mb-6 text-center max-w-md">
-        Speak into your microphone. The bars below should move when you talk.
+        Speak into your microphone. The meter below will move when you talk.
       </div>
 
       <div className="w-full max-w-md mb-6">
@@ -935,9 +938,6 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           level={
             isTesting && testType === "mic" ? Math.max(micLevel, 5) : micLevel
           }
-          isActive={isTesting && testType === "mic"}
-          type="microphone"
-          pulse={micPulse}
         />
       </div>
 
@@ -946,17 +946,18 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           variant={isTesting && testType === "mic" ? "default" : "outline"}
           onClick={() => {
             if (isTesting && testType === "mic") {
-              toast.info("Mic test: Stop Test button pressed (button branch)");
               setIsTesting(false);
               setTestType(null);
               cleanupMicAnalysis();
-              toast.info("Mic test stopped (button branch)");
             } else {
-              toast.info("Mic test: Start Test button pressed (button branch)");
               handleTestMic();
             }
           }}
-          className="min-w-24"
+          className={`min-w-24 ${
+            isTesting && testType === "mic"
+              ? "bg-green-600 hover:bg-green-700 text-white"
+              : ""
+          }`}
           aria-label={
             isTesting && testType === "mic"
               ? "Stop Microphone Test"
@@ -986,9 +987,9 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
           size={28}
           className={`${
             speakerLevel > 10 ? "text-blue-500" : "text-gray-400"
-          } transition-colors`}
+          } transition-colors duration-300`}
         />
-        {speakerLevel > 30 && (
+        {speakerPulse && (
           <div className="absolute inset-0 border-2 border-blue-500 rounded-full animate-ping opacity-75"></div>
         )}
       </div>
@@ -997,22 +998,18 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
 
       <div className="text-sm text-gray-400 mb-6 text-center max-w-md">
         Click &quot;Start Test&quot; to play a sound. You should hear audio and
-        see the bars move.
+        see the meter move.
       </div>
 
       <div className="w-full max-w-md mb-6">
-        <AudioLevelMeter
-          level={speakerLevel}
-          isActive={isSpeakerTestActive}
-          pulse={speakerPulse}
-        />
+        <AudioLevelMeter level={speakerLevel} />
       </div>
 
       <Button
         variant={isSpeakerTestActive ? "default" : "outline"}
         onClick={testSpeaker}
         className={`min-w-24 ${
-          isSpeakerTestActive ? "bg-white hover:bg-gray-200 text-black" : ""
+          isSpeakerTestActive ? "bg-blue-600 hover:bg-blue-700 text-white" : ""
         }`}
         aria-label={
           isSpeakerTestActive ? "Stop Speaker Test" : "Start Speaker Test"
@@ -1114,140 +1111,91 @@ const DeviceTester: React.FC<DeviceTesterProps> = ({
   // Speaker test function
   const testSpeaker = useCallback(() => {
     if (isSpeakerTestActive) {
-      // Already running, so stop the test
       speakerTestCleanup();
       return;
     }
-
-    // Show toast notification at the start
-    toast.info(
-      "Speaker test starting - please ensure your volume is turned up"
-    );
-
+    toast.info("Testing speakers - please ensure your volume is turned up");
     setIsSpeakerTestActive(true);
-
+    setSpeakerLevel(5);
     try {
-      // Create an audio context for the test
       const audioCtx = new (window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext })
           .webkitAudioContext)();
       speakerAudioContextRef.current = audioCtx;
-
-      // Create an audio element for routing to the selected output device
-      const routingAudioEl = new Audio();
-      routingAudioEl.autoplay = true;
-      speakerAudioElRef.current = routingAudioEl;
-
-      // Check if the selected device is supported
-      let outputConnected = false;
-      if (selectedSpeaker && "setSinkId" in HTMLAudioElement.prototype) {
-        try {
-          routingAudioEl
-            .setSinkId(selectedSpeaker)
-            .then(() => {
-              console.log("Audio output successfully set to:", selectedSpeaker);
-              outputConnected = true;
-            })
-            .catch((error) => {
-              console.error("Error setting sink ID:", error);
-            });
-        } catch (error) {
-          console.error("Error setting sink ID:", error);
-        }
-      }
-
-      // Create analyzer for visualization
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.3;
-
-      // Create oscillators for test sound
-      const osc1 = audioCtx.createOscillator();
-      osc1.type = "square"; // Square wave is more audible
-      osc1.frequency.value = 440; // A4 note
-
-      const osc2 = audioCtx.createOscillator();
-      osc2.type = "sine";
-      osc2.frequency.value = 587.33; // D5 note - creates an interval with A4
-
-      // Create gain nodes for volume control
-      const gain1 = audioCtx.createGain();
-      gain1.gain.value = 0.3; // Higher gain for better audibility
-
-      const gain2 = audioCtx.createGain();
-      gain2.gain.value = 0.25;
-
-      // Connect nodes
-      osc1.connect(gain1);
-      osc2.connect(gain2);
-
-      gain1.connect(analyser);
-      gain2.connect(analyser);
-
-      // If we successfully set the sink ID, route through the audio element
-      if (outputConnected && "setSinkId" in HTMLAudioElement.prototype) {
-        const sourceNode = audioCtx.createMediaElementSource(routingAudioEl);
-        sourceNode.connect(audioCtx.destination);
-        speakerSourceNodeRef.current = sourceNode;
-      } else {
-        // Otherwise connect directly to the destination
-        analyser.connect(audioCtx.destination);
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.4;
+      // Use an <audio> element for the test sound
+      const audioEl = new Audio("/audio/test-speaker.mp3");
+      audioEl.loop = false;
+      audioEl.autoplay = true;
+      // Set output device if possible
+      if (selectedSpeaker && "setSinkId" in HTMLAudioElement.prototype) {
+        audioEl.setSinkId(selectedSpeaker).catch(() => {});
       }
-
-      // Store references for cleanup
-      speakerOscillatorRefs.current = [osc1, osc2];
-      speakerGainRefs.current = [gain1, gain2];
-
-      // Start oscillators
-      osc1.start();
-      osc2.start();
-
-      // Start analysis loop
+      speakerAudioElRef.current = audioEl;
+      // Connect audio element to analyser
+      const sourceNode = audioCtx.createMediaElementSource(audioEl);
+      sourceNode.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      speakerSourceNodeRef.current = sourceNode;
+      // Visualization
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let movingAvg = 0;
       const analyzeLoop = () => {
         if (!isSpeakerTestActive) return;
-
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(dataArray);
-
-        // Calculate level - amplify for better visualization
-        const sum = dataArray.reduce((acc, val) => acc + val, 0);
-        const avg = sum / dataArray.length;
-        const speakerLevel = Math.min(100, avg * 2); // Amplify for better visibility
-
-        setSpeakerLevel(speakerLevel);
-
-        // Set pulse when level exceeds threshold
-        if (speakerLevel > 30) {
-          setSpeakerPulse(true);
-          setTimeout(() => setSpeakerPulse(false), 300);
+        let sum = 0;
+        let peak = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const value = dataArray[i];
+          sum += value;
+          peak = Math.max(peak, value);
         }
-
+        const avg = sum / dataArray.length;
+        // More aggressive noise gate for speaker visualization
+        const noiseFloor = 12;
+        let combinedLevel = 0;
+        if (peak < noiseFloor) {
+          movingAvg = Math.max(0, movingAvg * 0.93);
+        } else {
+          combinedLevel = (peak * 0.7 + avg * 0.3) / 255;
+          movingAvg = movingAvg * 0.9 + combinedLevel * 0.1;
+        }
+        const speakerLevel = Math.min(100, movingAvg * 150);
+        setSpeakerLevel(speakerLevel);
+        if (speakerLevel > 50) {
+          if (!speakerPulse) setSpeakerPulse(true);
+        } else {
+          if (speakerPulse) setSpeakerPulse(false);
+        }
         speakerAnalysisFrameRef.current = requestAnimationFrame(analyzeLoop);
       };
-
       speakerAnalysisFrameRef.current = requestAnimationFrame(analyzeLoop);
-
-      // Set a timeout to cleanup after 5 seconds
+      // Play the audio and clean up after
+      audioEl.onended = () => {
+        speakerTestCleanup();
+        toast.success("Speaker test completed");
+      };
+      audioEl.onerror = () => {
+        speakerTestCleanup();
+        toast.error("Failed to play test sound");
+      };
+      audioEl.play().catch(() => {
+        speakerTestCleanup();
+        toast.error("Failed to play test sound");
+      });
+      // Timeout fallback in case onended doesn't fire
       speakerTestTimeoutRef.current = setTimeout(() => {
-        // Fade out the oscillators gracefully
-        const currentTime = audioCtx.currentTime;
-        gain1.gain.linearRampToValueAtTime(0, currentTime + 0.5);
-        gain2.gain.linearRampToValueAtTime(0, currentTime + 0.5);
-
-        // Cleanup after fade out
-        setTimeout(() => {
-          speakerTestCleanup();
-          toast.success(
-            "Speaker test completed - if you didn't hear any sound, check your device volume settings"
-          );
-        }, 600);
-      }, 5000); // Extended to 5 seconds for better user experience
+        speakerTestCleanup();
+        toast.success("Speaker test completed");
+      }, 10000);
     } catch (error) {
       console.error("Error in speaker test:", error);
       toast.error("Failed to run speaker test");
       speakerTestCleanup();
     }
-  }, [isSpeakerTestActive, selectedSpeaker, speakerTestCleanup]);
+  }, [isSpeakerTestActive, speakerTestCleanup, selectedSpeaker]);
 
   // --- Render ---
   return (
