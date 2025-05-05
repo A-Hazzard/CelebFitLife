@@ -79,8 +79,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import Image from "next/image";
+import { useMediaDevices } from "@/lib/hooks/useMediaDevices";
 
 // Mock data for analytics (would be replaced with real data in production)
 const mockAnalytics = {
@@ -635,9 +637,6 @@ const NotificationBell = () => {
         onClick={() => setIsOpen(!isOpen)}
       >
         <Bell className="h-5 w-5" />
-        <span className="absolute -top-1 -right-1 bg-red-500 rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
-          3
-        </span>
       </button>
       {isOpen && (
         <div className="absolute right-0 top-10 w-80 bg-gray-800 rounded-lg shadow-lg p-2 z-50">
@@ -687,7 +686,7 @@ export default function ManageStreamPage() {
 
   const [stream, setStream] = useState<Stream | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showDeviceTester, setShowDeviceTester] = useState(false);
+  const [showDeviceTesterModal, setShowDeviceTesterModal] = useState(false);
   const [shouldStartStreamAfterTest, setShouldStartStreamAfterTest] =
     useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -707,6 +706,9 @@ export default function ManageStreamPage() {
     startStream: () => Promise<void>;
     disconnect: () => Promise<void>;
   } | null>(null);
+
+  // Call useMediaDevices hook here
+  const mediaDeviceProps = useMediaDevices();
 
   // Use currentUser to avoid lint error
   useEffect(() => {
@@ -760,14 +762,15 @@ export default function ManageStreamPage() {
   }, [fetchStream, slug]);
 
   const handleStartStream = () => {
-    // If device tester hasn't been shown yet, show it first and flag to start streaming after
-    if (!localStorage.getItem("deviceSettings")) {
-      setShowDeviceTester(true);
+    // Check local storage for saved settings *before* showing the modal
+    const savedSettings = localStorage.getItem("deviceSettings");
+    if (!savedSettings) {
+      setShowDeviceTesterModal(true);
       setShouldStartStreamAfterTest(true);
       return;
     }
 
-    // Start stream
+    // Start stream if settings exist
     startStream();
   };
 
@@ -872,7 +875,7 @@ export default function ManageStreamPage() {
   };
 
   const handleDeviceTestComplete = () => {
-    setShowDeviceTester(false);
+    setShowDeviceTesterModal(false);
 
     // If we should start streaming after device test
     if (shouldStartStreamAfterTest) {
@@ -1003,7 +1006,7 @@ export default function ManageStreamPage() {
                 <Button
                   variant="outline"
                   className="bg-transparent border-gray-700 text-gray-300 hover:bg-gray-800"
-                  onClick={() => setShowDeviceTester(true)}
+                  onClick={() => setShowDeviceTesterModal(true)}
                 >
                   <Settings className="w-4 h-4 mr-2" />
                   Device Settings
@@ -1050,52 +1053,45 @@ export default function ManageStreamPage() {
           {/* Left column - Stream preview and controls */}
           <div className="lg:w-2/3">
             <div className="bg-gray-900 rounded-lg overflow-hidden mb-6">
-              {showDeviceTester ? (
-                <DeviceTester
-                  onComplete={handleDeviceTestComplete}
+              <div className="relative">
+                <StreamManager
+                  ref={streamManagerRef}
+                  stream={stream}
                   className="min-h-[500px]"
                 />
-              ) : (
-                <div className="relative">
-                  <StreamManager
-                    ref={streamManagerRef}
-                    stream={stream}
-                    className="min-h-[500px]"
-                  />
 
-                  {/* Connection error overlay */}
-                  {connectionError && (
-                    <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center z-10">
-                      <div className="w-16 h-16 rounded-full bg-gray-800 mb-6 mx-auto flex items-center justify-center">
-                        <AlertCircle className="w-8 h-8 text-red-500" />
-                      </div>
-                      <div className="text-xl font-bold mb-4 text-red-500">
-                        Connection Error
-                      </div>
-                      <div className="text-gray-300 text-center max-w-md mb-6">
-                        {connectionError}
-                      </div>
-                      <Button
-                        onClick={handleRetryConnection}
-                        className="flex items-center gap-2"
-                        disabled={isRetrying}
-                      >
-                        {isRetrying ? (
-                          "Retrying..."
-                        ) : (
-                          <>
-                            <RefreshCw className="w-4 h-4 mr-2" />
-                            Retry Connection
-                          </>
-                        )}
-                      </Button>
+                {/* Connection error overlay */}
+                {connectionError && (
+                  <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center z-10">
+                    <div className="w-16 h-16 rounded-full bg-gray-800 mb-6 mx-auto flex items-center justify-center">
+                      <AlertCircle className="w-8 h-8 text-red-500" />
                     </div>
-                  )}
-                </div>
-              )}
+                    <div className="text-xl font-bold mb-4 text-red-500">
+                      Connection Error
+                    </div>
+                    <div className="text-gray-300 text-center max-w-md mb-6">
+                      {connectionError}
+                    </div>
+                    <Button
+                      onClick={handleRetryConnection}
+                      className="flex items-center gap-2"
+                      disabled={isRetrying}
+                    >
+                      {isRetrying ? (
+                        "Retrying..."
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Retry Connection
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {!showDeviceTester && (
+            {!showDeviceTesterModal && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
                   <div className="flex items-center mb-2">
@@ -1313,7 +1309,7 @@ export default function ManageStreamPage() {
 
           {/* Right column - Chat and stream info */}
           <div className="lg:w-1/3 space-y-6">
-            {!showDeviceTester && (
+            {!showDeviceTesterModal && (
               <>
                 <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
                   <h3 className="text-lg font-bold mb-4">Stream Status</h3>
@@ -1463,6 +1459,34 @@ export default function ManageStreamPage() {
           streamId={stream.id}
         />
       )}
+
+      {/* Device Tester Modal */}
+      <Dialog
+        open={showDeviceTesterModal}
+        onOpenChange={setShowDeviceTesterModal}
+      >
+        <DialogContent className="bg-brandBlack border-gray-800 text-brandWhite max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-brandOrange font-bold">
+              Device Settings & Test
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Test your microphone, speakers, and camera. Adjust settings and
+              save them for your stream.
+            </DialogDescription>
+          </DialogHeader>
+          <DeviceTester
+            onComplete={handleDeviceTestComplete}
+            cameraDevices={mediaDeviceProps.cameraDevices}
+            micDevices={mediaDeviceProps.micDevices}
+            speakerDevices={mediaDeviceProps.speakerDevices}
+            currentCameraId={mediaDeviceProps.currentCameraId}
+            currentMicId={mediaDeviceProps.currentMicId}
+            currentSpeakerId={mediaDeviceProps.currentSpeakerId}
+            loadingDevices={mediaDeviceProps.loadingDevices}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

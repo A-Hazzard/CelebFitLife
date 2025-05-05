@@ -40,6 +40,18 @@ export type StreamChatProps = {
 export type DeviceTesterProps = {
   onComplete: () => void;
   className?: string;
+  // Props for lifted state from useMediaDevices
+  cameraDevices: MediaDeviceInfo[];
+  micDevices: MediaDeviceInfo[];
+  speakerDevices: MediaDeviceInfo[];
+  currentCameraId: string;
+  currentMicId: string;
+  currentSpeakerId: string;
+  setCurrentCameraId: React.Dispatch<React.SetStateAction<string>>;
+  setCurrentMicId: React.Dispatch<React.SetStateAction<string>>;
+  setCurrentSpeakerId: React.Dispatch<React.SetStateAction<string>>;
+  loadingDevices: boolean;
+  mediaDeviceError: string | null;
 };
 
 export type DeviceOption = {

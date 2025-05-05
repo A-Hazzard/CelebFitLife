@@ -651,7 +651,7 @@ const StreamManager = forwardRef<
     }
   };
 
-  // Set up camera feed on component mount
+  // Set up camera feed ONLY when Twilio connection is established
   useEffect(() => {
     const setupLocalPreview = async () => {
       try {
@@ -718,23 +718,29 @@ const StreamManager = forwardRef<
       }
     };
 
-    // Always set up the preview, regardless of streaming state
-    setupLocalPreview();
+    // Capture videoRef.current for cleanup
+    const videoElement = videoRef.current;
 
+    // Only set up the preview if the stream is connected to Twilio
+    if (connectionStatus === "connected") {
+      console.log(
+        "[StreamManager] Twilio connected, setting up local preview..."
+      );
+      setupLocalPreview();
+    }
+
+    // Cleanup function
     return () => {
-      // Clean up Twilio room on unmount
-      if (twilioRoomRef.current) {
-        twilioRoomRef.current.disconnect();
-        twilioRoomRef.current = null;
-      }
-
-      // Clean up stream on unmount
       if (localStreamRef.current) {
+        console.log("[StreamManager] Cleaning up local preview tracks...");
         localStreamRef.current.getTracks().forEach((track) => track.stop());
         localStreamRef.current = null;
+        if (videoElement) {
+          videoElement.srcObject = null;
+        }
       }
     };
-  }, [isVideoEnabled, isMicEnabled]); // Add isMicEnabled as dependency to reinitialize when it changes
+  }, [connectionStatus, isVideoEnabled, isMicEnabled]); // Run when connectionStatus changes, or mic/video state changes
 
   // End streaming
   const endStream = () => {
