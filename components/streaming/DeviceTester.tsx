@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import AudioLevelMeter from "./AudioLevelMeter";
 import { toast } from "sonner";
 import { createLogger } from "@/lib/utils/logger";
+import { DeviceTesterProps } from "@/lib/types/streaming.types";
 
 // --- Constants ---
 const VERBOSE_LOGGING = false;
@@ -19,16 +20,8 @@ const isSetSinkIdSupported = (): boolean => {
   return typeof audio.setSinkId === "function";
 };
 
-type DeviceTesterActualProps = {
-  onComplete: () => void;
-  cameraDevices: MediaDeviceInfo[];
-  micDevices: MediaDeviceInfo[];
-  speakerDevices: MediaDeviceInfo[];
-  currentCameraId: string;
-  currentMicId: string;
-  currentSpeakerId: string;
-  loadingDevices: boolean;
-};
+// Define the props type based on the original DeviceTesterProps again
+type DeviceTesterActualProps = DeviceTesterProps;
 
 const logger = createLogger("DeviceTester");
 
@@ -40,7 +33,11 @@ export default function DeviceTester({
   currentCameraId,
   currentMicId,
   currentSpeakerId,
+  setCurrentCameraId,
+  setCurrentMicId,
+  setCurrentSpeakerId,
   loadingDevices,
+  mediaDeviceError,
 }: DeviceTesterActualProps) {
   // --- UI state ---
   const [isTesting, setIsTesting] = useState<boolean>(false);
@@ -323,6 +320,9 @@ export default function DeviceTester({
           comp = Math.min(1, Math.max(0, comp));
           movingAvg = movingAvg * 0.8 + comp * 0.2;
           const level = Math.round(movingAvg * 100);
+          if (level !== micLevel) {
+            logger.debug(`Mic Level Calculated: ${level}`);
+          }
           setMicLevel(level);
           animationFrameRef.current = requestAnimationFrame(runAnalysis);
         };
@@ -598,20 +598,26 @@ export default function DeviceTester({
       {/* Microphone Tab */}
       {activeTab === "microphone" && (
         <div className="p-6 bg-gray-900 rounded-lg flex flex-col items-center border border-gray-800">
-          {/* Mic selector */}
           <div className="mb-6 w-full max-w-xs">
             <label className="block text-xs text-gray-400 mb-1">
-              Microphone
+              Select Microphone
             </label>
-            <div className="w-full bg-gray-800 text-white rounded px-2 py-1 border border-gray-700">
-              {loadingDevices
-                ? "Loading devices..."
-                : micDevices.length === 0
-                ? "Select a microphone"
-                : micDevices.find(
-                    (d: MediaDeviceInfo) => d.deviceId === currentMicId
-                  )?.label || "Select a microphone"}
-            </div>
+            <select
+              className="w-full bg-gray-800 text-white rounded px-2 py-1 border border-gray-700 focus:border-brandOrange focus:ring-brandOrange"
+              value={currentMicId}
+              onChange={(e) => setCurrentMicId(e.target.value)}
+              disabled={loadingDevices || isTesting}
+            >
+              {loadingDevices && <option value="">Loading devices...</option>}
+              {micDevices.length === 0 && !loadingDevices && (
+                <option value="">No microphones found</option>
+              )}
+              {micDevices.map((d: MediaDeviceInfo) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Microphone (${d.deviceId.substring(0, 8)}...)`}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="w-16 h-16 rounded-full bg-gray-800 mb-4 flex items-center justify-center relative">
@@ -681,21 +687,27 @@ export default function DeviceTester({
       {/* Speakers Tab */}
       {activeTab === "speakers" && (
         <div className="p-6 bg-gray-900 rounded-lg flex flex-col items-center border border-gray-800">
-          {/* Speaker selector (if supported) */}
           {isSetSinkIdSupported() && (
             <div className="mb-6 w-full max-w-xs">
               <label className="block text-xs text-gray-400 mb-1">
-                Speaker
+                Select Speaker
               </label>
-              <div className="w-full bg-gray-800 text-white rounded px-2 py-1 border border-gray-700">
-                {loadingDevices
-                  ? "Loading devices..."
-                  : speakerDevices.length === 0
-                  ? "Select a speaker"
-                  : speakerDevices.find(
-                      (d: MediaDeviceInfo) => d.deviceId === currentSpeakerId
-                    )?.label || "Select a speaker"}
-              </div>
+              <select
+                className="w-full bg-gray-800 text-white rounded px-2 py-1 border border-gray-700 focus:border-brandOrange focus:ring-brandOrange"
+                value={currentSpeakerId}
+                onChange={(e) => setCurrentSpeakerId(e.target.value)}
+                disabled={loadingDevices || isSpeakerTestActive}
+              >
+                {loadingDevices && <option value="">Loading devices...</option>}
+                {speakerDevices.length === 0 && !loadingDevices && (
+                  <option value="">No speakers found</option>
+                )}
+                {speakerDevices.map((d: MediaDeviceInfo) => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.label || `Speaker (${d.deviceId.substring(0, 8)}...)`}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -736,18 +748,26 @@ export default function DeviceTester({
       {/* Camera Tab */}
       {activeTab === "camera" && (
         <div className="p-6 bg-gray-900 rounded-lg flex flex-col items-center border border-gray-800">
-          {/* Camera selector */}
           <div className="mb-6 w-full max-w-xs">
-            <label className="block text-xs text-gray-400 mb-1">Camera</label>
-            <div className="w-full bg-gray-800 text-white rounded px-2 py-1 border border-gray-700">
-              {loadingDevices
-                ? "Loading devices..."
-                : cameraDevices.length === 0
-                ? "Select a camera"
-                : cameraDevices.find(
-                    (d: MediaDeviceInfo) => d.deviceId === currentCameraId
-                  )?.label || "Select a camera"}
-            </div>
+            <label className="block text-xs text-gray-400 mb-1">
+              Select Camera
+            </label>
+            <select
+              className="w-full bg-gray-800 text-white rounded px-2 py-1 border border-gray-700 focus:border-brandOrange focus:ring-brandOrange"
+              value={currentCameraId}
+              onChange={(e) => setCurrentCameraId(e.target.value)}
+              disabled={loadingDevices || isCameraTestActive}
+            >
+              {loadingDevices && <option value="">Loading devices...</option>}
+              {cameraDevices.length === 0 && !loadingDevices && (
+                <option value="">No cameras found</option>
+              )}
+              {cameraDevices.map((d: MediaDeviceInfo) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Camera (${d.deviceId.substring(0, 8)}...)`}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="w-16 h-16 rounded-full bg-gray-800 mb-4 flex items-center justify-center relative">

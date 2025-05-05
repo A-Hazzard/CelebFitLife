@@ -1483,7 +1483,11 @@ export default function ManageStreamPage() {
             currentCameraId={mediaDeviceProps.currentCameraId}
             currentMicId={mediaDeviceProps.currentMicId}
             currentSpeakerId={mediaDeviceProps.currentSpeakerId}
+            setCurrentCameraId={mediaDeviceProps.setCurrentCameraId}
+            setCurrentMicId={mediaDeviceProps.setCurrentMicId}
+            setCurrentSpeakerId={mediaDeviceProps.setCurrentSpeakerId}
             loadingDevices={mediaDeviceProps.loadingDevices}
+            mediaDeviceError={mediaDeviceProps.deviceError}
           />
         </DialogContent>
       </Dialog>
