@@ -1487,7 +1487,6 @@ export default function ManageStreamPage() {
             setCurrentMicId={mediaDeviceProps.setCurrentMicId}
             setCurrentSpeakerId={mediaDeviceProps.setCurrentSpeakerId}
             loadingDevices={mediaDeviceProps.loadingDevices}
-            mediaDeviceError={mediaDeviceProps.deviceError}
           />
         </DialogContent>
       </Dialog>

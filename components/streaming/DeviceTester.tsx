@@ -20,9 +20,6 @@ const isSetSinkIdSupported = (): boolean => {
   return typeof audio.setSinkId === "function";
 };
 
-// Define the props type based on the original DeviceTesterProps again
-type DeviceTesterActualProps = DeviceTesterProps;
-
 const logger = createLogger("DeviceTester");
 
 export default function DeviceTester({
@@ -37,8 +34,7 @@ export default function DeviceTester({
   setCurrentMicId,
   setCurrentSpeakerId,
   loadingDevices,
-  mediaDeviceError,
-}: DeviceTesterActualProps) {
+}: Omit<DeviceTesterProps, "className" | "mediaDeviceError">) {
   // --- UI state ---
   const [isTesting, setIsTesting] = useState<boolean>(false);
   const [testType, setTestType] = useState<"mic" | "speaker" | "camera" | null>(
@@ -337,7 +333,7 @@ export default function DeviceTester({
         setTestType(null);
       }
     },
-    [getAudioContext, cleanupMicAnalysis, micEnabled]
+    [getAudioContext, cleanupMicAnalysis, micEnabled, micLevel]
   );
 
   // --- Stop Mic Test and Trigger Auto-Playback Setup ---
