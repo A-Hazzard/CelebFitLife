@@ -5,9 +5,6 @@ import { useSignupStore } from "@/lib/store/useSignupStore";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import {
-  doc,
-  setDoc,
-  getDoc,
   collection,
   getDocs,
   query,
@@ -21,6 +18,7 @@ import "slick-carousel/slick/slick-theme.css";
 import { ArrowRight, ArrowLeft, Check, User, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { Streamer, Category, SlickArrowProps } from "@/lib/types/streamer";
+import { registerUser } from "@/lib/helpers/auth";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -189,42 +187,17 @@ export default function SelectStreamers() {
         myStreamers: selectedStreamers,
       });
 
-      // Save all user data to Firestore using email as document ID
-      if (userData.email) {
-        // Prepare the final user data object
-        const finalUserData = {
-          ...userData,
-          myStreamers: selectedStreamers,
-          plan: userData.plan || "basic",
-          createdAt: new Date().toISOString(),
-        };
-
-        // Only delete known properties that should be excluded
-        delete finalUserData.planDetails;
-
-        // Check if email already exists
-        const userDocRef = doc(db, "users", userData.email);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          setError(
-            "This email is already registered. Please use a different email."
-          );
-          setSubmitting(false);
-          return;
-        }
-
-        // Save to Firestore
-        await setDoc(userDocRef, finalUserData);
-
-        // Registration successful, redirect to login page
-        router.push("/login?registered=true");
-      } else {
-        setError("Registration failed: Email information is missing.");
-      }
+      // Register user via API to ensure password is hashed
+      await registerUser({
+        ...userData,
+        password: userData.password || "",
+        myStreamers: selectedStreamers,
+      });
+      router.push("/login?registered=true");
     } catch (err) {
-      setError("Failed to complete registration. Please try again.");
-      console.error("Error during registration:", err);
+      setError(
+        err instanceof Error ? err.message : "Registration failed."
+      );
     } finally {
       setSubmitting(false);
     }

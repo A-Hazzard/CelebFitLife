@@ -178,6 +178,7 @@ export type StreamerWithStreams = {
   isActive?: boolean;
   createdAt: string;
   updatedAt: string;
+  thumbnail?: string;
   streams: Stream[];
   // Fields that might be added by the categories lookup
   Category?: string;

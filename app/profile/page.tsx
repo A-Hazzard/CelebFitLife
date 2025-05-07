@@ -35,7 +35,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Toaster } from "sonner";
@@ -54,6 +54,10 @@ import {
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import Header from "@/components/layout/Header";
+import { getStreamerChangeLimit, canChangeStreamer, resetStreamerChangeIfNeeded } from "@/lib/utils/userUtils";
+import type { User } from "@/lib/types/user";
+import { db } from "@/lib/firebase/client";
+import { doc, updateDoc } from "firebase/firestore";
 
 // Custom debounce function
 function debounce<T extends (...args: string[]) => unknown>(
@@ -208,6 +212,9 @@ const useProfileUpdate = () => {
   };
 };
 
+// fallbackUser is a constant and does not change, so it is safe to use in the dependency array
+const fallbackUser: User = { role: { admin: false, streamer: false, viewer: true }, email: '', username: '' };
+
 export default function ProfilePage() {
   const { currentUser } = useAuthStore();
   const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
@@ -220,6 +227,14 @@ export default function ProfilePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [followingPage, setFollowingPage] = useState(1);
+  const [myStreamers, setMyStreamers] = useState<string[]>(currentUser?.myStreamers || []);
+  const [changeCount, setChangeCount] = useState<number>(currentUser?.streamerChangeCount || 0);
+  const [changeLimit, setChangeLimit] = useState<number>(getStreamerChangeLimit(currentUser || fallbackUser));
+  const [changeReset, setChangeReset] = useState<string | Date | undefined>(currentUser?.streamerChangeReset);
+  const [removalLoading, setRemovalLoading] = useState(false);
+  const [notification, setNotification] = useState<string>("");
+  const [pickNewStreamer, setPickNewStreamer] = useState(false);
+  // const [availableStreamers, setAvailableStreamers] = useState<string[]>([]); // Uncomment and type properly if used
 
   const {
     currentPassword,
@@ -235,6 +250,43 @@ export default function ProfilePage() {
     handleUsernameChange,
     handleProfileUpdate,
   } = useProfileUpdate();
+
+  useEffect(() => {
+    if (!currentUser) return;
+    // Reset change count if needed
+    const resetUser = resetStreamerChangeIfNeeded(currentUser || fallbackUser);
+    setChangeCount(resetUser.streamerChangeCount || 0);
+    setChangeLimit(getStreamerChangeLimit(resetUser || fallbackUser));
+    setChangeReset(resetUser.streamerChangeReset);
+    setMyStreamers(resetUser.myStreamers || []);
+  }, [currentUser]);
+
+  const handleRemoveStreamer = async (streamerId: string) => {
+    if (!currentUser) return;
+    if (!canChangeStreamer(currentUser || fallbackUser)) {
+      setNotification("You have reached your streamer change limit for this month.");
+      return;
+    }
+    setRemovalLoading(true);
+    try {
+      const newStreamers = myStreamers.filter((id) => id !== streamerId);
+      setMyStreamers(newStreamers);
+      setChangeCount((prev) => prev + 1);
+      setNotification(`You have ${changeLimit - (changeCount + 1)} streamer changes left this month.`);
+      // Update Firestore
+      const userRef = doc(db, "users", currentUser.email);
+      await updateDoc(userRef, {
+        myStreamers: newStreamers,
+        streamerChangeCount: (changeCount + 1),
+        streamerChangeReset: changeReset,
+      });
+      setPickNewStreamer(true);
+    } catch {
+      setNotification("Failed to remove streamer. Please try again.");
+    } finally {
+      setRemovalLoading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite">
@@ -918,6 +970,45 @@ export default function ProfilePage() {
                 </DialogContent>
               </Dialog>
             </div>
+          </div>
+
+          {/* My Streamers Section */}
+          <div className="bg-gray-800 rounded-xl p-6 border border-brandOrange/30 mb-6">
+            <h2 className="text-xl font-bold text-white mb-4">My Streamers</h2>
+            {notification && <div className="mb-2 text-sm text-brandOrange">{notification}</div>}
+            <div className="flex flex-wrap gap-4">
+              {myStreamers.length === 0 ? (
+                <div className="text-gray-400">You have no streamers selected.</div>
+              ) : (
+                myStreamers.map((streamerId) => (
+                  <div key={streamerId} className="flex items-center gap-2 bg-gray-700/50 px-4 py-2 rounded-lg">
+                    <span className="text-white">{streamerId}</span>
+                    {canChangeStreamer(currentUser || fallbackUser) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="ml-2 text-red-400 border-red-400"
+                        onClick={() => handleRemoveStreamer(streamerId)}
+                        disabled={removalLoading}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="mt-4 text-sm text-gray-400">
+              {`You can change your streamers ${changeLimit - changeCount} more time(s) this month.`}
+            </div>
+            {pickNewStreamer && (
+              <Button
+                className="mt-4 bg-brandOrange text-brandBlack"
+                onClick={() => { /* TODO: open streamer picker modal */ }}
+              >
+                Pick a New Streamer
+              </Button>
+            )}
           </div>
 
           {/* Profile Tabs */}

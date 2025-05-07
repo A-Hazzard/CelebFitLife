@@ -178,7 +178,7 @@ export async function registerUser(data: RegistrationData): Promise<void> {
     country: country || undefined,
     city: city || undefined,
     role: userRole,
-    myStreamers: [], // Initialize empty myStreamers array
+    myStreamers: Array.isArray(data.myStreamers) ? data.myStreamers : [], // Use provided streamer IDs
   };
 
   console.log("[CLIENT] Sending registration data:", {

@@ -45,3 +45,43 @@ export function getUserRoles(user: User | null | undefined) {
 
   // Removed fallback logic for deprecated isAdmin/isStreamer fields
 }
+
+/**
+ * Gets the user's streamer change limit for the month (from planDetails or default 3)
+ */
+export function getStreamerChangeLimit(user: User): number {
+  return (
+    user.streamerChangeLimit ||
+    (user.planDetails && typeof user.planDetails.maxStreamers === 'number'
+      ? user.planDetails.maxStreamers
+      : 3)
+  );
+}
+
+/**
+ * Checks if the user can change a streamer this month
+ */
+export function canChangeStreamer(user: User): boolean {
+  const limit = getStreamerChangeLimit(user);
+  return (user.streamerChangeCount || 0) < limit;
+}
+
+/**
+ * Resets the user's streamer change count if the reset date has passed
+ * Returns a new user object with reset count if needed
+ */
+export function resetStreamerChangeIfNeeded(user: User): User {
+  const now = new Date();
+  const resetDate = user.streamerChangeReset ? new Date(user.streamerChangeReset) : null;
+  if (!resetDate || now >= resetDate) {
+    // Set next reset to 1 month from now
+    const nextReset = new Date(now);
+    nextReset.setMonth(now.getMonth() + 1);
+    return {
+      ...user,
+      streamerChangeCount: 0,
+      streamerChangeReset: nextReset.toISOString(),
+    };
+  }
+  return user;
+}

@@ -2,9 +2,6 @@ import { db } from "@/lib/firebase/client";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { Stream, StreamerWithStreams } from "@/lib/types/streaming.types";
 
-// Define a simpler Streamer type that matches the database structure
-type Streamer = Omit<StreamerWithStreams, "streams" | "Category" | "Tags">;
-
 export const fetchStreamersWithStreams = async () => {
   const streamerCol = collection(db, "streamer");
   const streamerSnap = await getDocs(streamerCol);
@@ -12,7 +9,22 @@ export const fetchStreamersWithStreams = async () => {
   const streamerData: StreamerWithStreams[] = [];
 
   for (const streamerDoc of streamerSnap.docs) {
-    const streamer = { id: streamerDoc.id, ...streamerDoc.data() } as Streamer;
+    const data = streamerDoc.data();
+    // Map streamerName to name and username for compatibility
+    const streamer = {
+      id: streamerDoc.id,
+      name: data.streamerName || data.username || "Unknown Streamer",
+      username: data.streamerName || data.username || "unknown_streamer",
+      avatarUrl: data.avatarUrl || "",
+      bio: data.bio || data.Quote || "",
+      isActive: data.isActive ?? true,
+      createdAt: data.createdAt || "",
+      updatedAt: data.updatedAt || "",
+      thumbnail: data.thumbnail || "",
+      Category: data.Category || "",
+      Tags: data.Tags || [],
+      // Any other fields needed for StreamerWithStreams
+    } as StreamerWithStreams;
 
     const streamQuery = query(
       collection(db, "streams"),

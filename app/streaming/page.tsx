@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight, Lock } from "lucide-react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -13,6 +13,18 @@ import StreamerCard from "@/components/streamPage/StreamerCard";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { useRouter } from "next/navigation";
 import Header from "@/components/layout/Header";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { doc, updateDoc, arrayUnion, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase/client";
 
 export default function UserDashboard() {
   const [visibleDiscoverStreamers, setVisibleDiscoverStreamers] = useState(6);
@@ -23,6 +35,11 @@ export default function UserDashboard() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [showLockedModal, setShowLockedModal] = useState<string | null>(null);
+  const [previewingStreamerId, setPreviewingStreamerId] = useState<string | null>(null);
+  const [previewCountdown, setPreviewCountdown] = useState<number>(60);
+  const [previewInterval, setPreviewInterval] = useState<NodeJS.Timeout | null>(null);
+  const [previewedStreamers, setPreviewedStreamers] = useState<string[]>([]);
 
   const { streamers, fetchAll } = useStreamerStore();
   const { currentUser } = useAuthStore();
@@ -40,6 +57,23 @@ export default function UserDashboard() {
       router.push("/dashboard");
     }
   }, [currentUser, router]);
+
+  // Fetch previewedStreamers from Firestore
+  useEffect(() => {
+    if (currentUser?.email) {
+      const userRef = doc(db, "users", currentUser.email);
+      const unsubscribe = onSnapshot(userRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setPreviewedStreamers(data.previewedStreamers || []);
+        }
+      });
+
+      return () => unsubscribe();
+    }
+    // Always return a cleanup function
+    return () => {};
+  }, [currentUser?.email]);
 
   useEffect(() => {
     fetchAll();
@@ -93,54 +127,159 @@ export default function UserDashboard() {
     new Map(streamers.map((s) => [s.id, s])).values()
   );
 
+  // Get myStreamers from currentUser
+  const myStreamers = currentUser?.myStreamers || [];
+
+  const handlePreview = async (streamerId: string) => {
+    // Check if streamer has already been previewed
+    if (previewedStreamers.includes(streamerId)) {
+      toast.error("You have already previewed this streamer");
+      return;
+    }
+
+    // Find the streamer's active stream
+    const streamer = streamers.find(s => s.id === streamerId);
+    const liveStream = streamer?.streams?.find(
+      (s) => s.hasStarted === true && s.hasEnded !== true
+    );
+
+    if (!liveStream) {
+      toast.error("This streamer is not currently live");
+      return;
+    }
+
+    setPreviewingStreamerId(streamerId);
+    setPreviewCountdown(60);
+
+    // Navigate to the live stream
+    router.push(`/streaming/live/${liveStream.id}?preview=true&countdown=${60}`);
+
+    // Start countdown
+    const interval = setInterval(() => {
+      setPreviewCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setPreviewingStreamerId(null);
+          // Update Firestore: add streamerId to previewedStreamers
+          if (currentUser && currentUser.email) {
+            const userRef = doc(db, "users", currentUser.email);
+            updateDoc(userRef, {
+              previewedStreamers: arrayUnion(streamerId),
+            });
+          }
+          // Redirect back after preview ends
+          router.push("/streaming");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    setPreviewInterval(interval);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewInterval) clearInterval(previewInterval);
+    };
+  }, [previewInterval]);
+
   return (
-    <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite font-inter">
+    <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite font-inter overflow-x-hidden">
       <Header />
 
       {/* 🧱 Main Layout */}
-      <main className="flex flex-col p-4 md:p-6 space-y-6">
-        <div className="flex flex-col md:flex-row space-y-6 md:space-y-0 md:space-x-6">
+      <main className="flex flex-col p-4 md:p-6 space-y-6 w-full">
+        <div className="flex flex-col lg:flex-row gap-6">
           {/* 🎞 MY STREAMERS */}
-          <section className="w-full md:w-3/4 space-y-6">
+          <section className="w-full lg:w-4/5 space-y-4">
             <h2 className="text-xl md:text-2xl font-bold text-brandWhite">
               MY STREAMERS
             </h2>
-            <Slider {...SLIDER_SETTINGS}>
-              {uniqueStreamers.slice(0, 3).map((streamer, index) => (
-                <div
-                  key={index}
-                  className="px-2 md:p-4 transform transition-all duration-300 hover:scale-105"
-                >
-                  <StreamerCard
-                    streamer={{
-                      ...streamer,
-                      avatarUrl: streamer.avatarUrl || "/favicon.ico",
-                      username: streamer.username || streamer.name,
-                      bio: streamer.bio || "",
-                      streams:
-                        streamer.streams?.map((stream) => ({
-                          ...stream,
-                          thumbnail: stream.thumbnail || "/favicon.ico",
-                          hasEnded: stream.hasEnded || false,
-                          title: stream.title || "Untitled Stream",
-                        })) || [],
-                    }}
-                  />
-                </div>
-              ))}
-            </Slider>
+            <div className="w-full relative group">
+              <Slider {...{
+                ...SLIDER_SETTINGS,
+                dots: false,
+                infinite: true,
+                speed: 500,
+                slidesToShow: 3,
+                slidesToScroll: 1,
+                arrows: true,
+                autoplay: false,
+                responsive: [
+                  {
+                    breakpoint: 1536,
+                    settings: {
+                      slidesToShow: 3,
+                      slidesToScroll: 1,
+                    }
+                  },
+                  {
+                    breakpoint: 1280,
+                    settings: {
+                      slidesToShow: 2,
+                      slidesToScroll: 1,
+                    }
+                  },
+                  {
+                    breakpoint: 768,
+                    settings: {
+                      slidesToShow: 1,
+                      slidesToScroll: 1,
+                    }
+                  }
+                ],
+                className: "w-full",
+              }}>
+                {uniqueStreamers.slice(0, 3).map((streamer, index) => {
+                  const liveStream = streamer.streams?.find(
+                    (s) => s.hasStarted === true && s.hasEnded !== true
+                  );
+                  return (
+                    <div
+                      key={index}
+                      className="px-2 aspect-[4/3]"
+                      onClick={() => {
+                        if (liveStream) {
+                          router.push(`/streaming/live/${liveStream.id}`);
+                        } else {
+                          toast("This streamer is not currently live.");
+                        }
+                      }}
+                    >
+                      <div className="h-full">
+                        <StreamerCard
+                          streamer={{
+                            ...streamer,
+                            avatarUrl: streamer.avatarUrl || "/favicon.ico",
+                            username: streamer.username || streamer.name,
+                            bio: streamer.bio || "",
+                            streams:
+                              streamer.streams?.map((stream) => ({
+                                ...stream,
+                                thumbnail: streamer.thumbnail || "/favicon.ico",
+                                hasEnded: stream.hasEnded || false,
+                                title: stream.title || "Untitled Stream",
+                              })) || [],
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </Slider>
+            </div>
           </section>
 
           {/* 🎛 CATEGORY SIDEBAR */}
-          <aside className="w-full md:w-1/5 bg-brandBlack border border-brandOrange/30 rounded-xl">
+          <aside className="w-full lg:w-1/5 bg-brandBlack border border-brandOrange/30 rounded-xl h-fit sticky top-4">
             <div
-              className="flex justify-between items-center p-3 cursor-pointer md:cursor-default"
+              className="flex justify-between items-center p-3 cursor-pointer lg:cursor-default"
               onClick={() => setIsTagsOpen(!isTagsOpen)}
             >
               <h2 className="text-base md:text-lg font-bold text-brandWhite">
                 CATEGORIES
               </h2>
-              <div className="md:hidden">
+              <div className="lg:hidden">
                 {isTagsOpen ? (
                   <ChevronUp className="text-brandOrange w-4 h-4" />
                 ) : (
@@ -152,7 +291,7 @@ export default function UserDashboard() {
             <div
               className={`${
                 isTagsOpen ? "block" : "hidden"
-              } md:block space-y-1 p-2 pt-0`}
+              } lg:block space-y-1 p-2 pt-0`}
             >
               {categories.map((category) => (
                 <div key={category.name} className="mb-1">
@@ -210,32 +349,108 @@ export default function UserDashboard() {
             What fits your needs from your previous tags?
           </p>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-6">
             {filteredStreamers
               .slice(0, visibleDiscoverStreamers)
-              .map((streamer, index) => (
-                <div
-                  key={index}
-                  className="transform transition-all duration-300 hover:scale-105"
-                >
-                  <StreamerCard
-                    streamer={{
-                      ...streamer,
-                      avatarUrl: streamer.avatarUrl || "/favicon.ico",
-                      username: streamer.username || streamer.name,
-                      bio: streamer.bio || "",
-                      streams:
-                        streamer.streams?.map((stream) => ({
-                          ...stream,
-                          thumbnail: stream.thumbnail || "/favicon.ico",
-                          hasEnded: stream.hasEnded || false,
-                          title: stream.title || "Untitled Stream",
-                        })) || [],
-                    }}
-                  />
-                </div>
-              ))}
+              .map((streamer, index) => {
+                const isLocked = !myStreamers.includes(streamer.id);
+                return (
+                  <div
+                    key={index}
+                    className="aspect-[4/3]"
+                  >
+                    <div className="h-full">
+                      <StreamerCard
+                        streamer={{
+                          ...streamer,
+                          avatarUrl: streamer.avatarUrl || "/favicon.ico",
+                          username: streamer.username || streamer.name,
+                          bio: streamer.bio || "",
+                          streams:
+                            streamer.streams?.map((stream) => ({
+                              ...stream,
+                              thumbnail: stream.thumbnail || "/favicon.ico",
+                              hasEnded: stream.hasEnded || false,
+                              title: stream.title || "Untitled Stream",
+                            })) || [],
+                        }}
+                        isLocked={isLocked}
+                        onLockedClick={isLocked ? () => setShowLockedModal(streamer.id) : undefined}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
           </div>
+
+          {/* Locked Streamer Modal */}
+          <Dialog open={!!showLockedModal} onOpenChange={() => setShowLockedModal(null)}>
+            <DialogContent className="max-w-lg w-full p-5 rounded-2xl border-2 border-brandOrange bg-brandBlack sm:mx-2 mx-0 fixed inset-0 flex flex-col justify-center items-center z-[100]">
+              <DialogHeader>
+                <div className="flex flex-col items-center gap-4">
+                  <span className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brandOrange/10 mb-2">
+                    <Lock className="w-10 h-10 text-brandOrange" />
+                  </span>
+                  <DialogTitle className="text-2xl text-center text-brandOrange font-extrabold">Unlock Streamer</DialogTitle>
+                  <DialogDescription className="text-base text-center text-brandGray mt-2">
+                    This streamer is locked. Buy another streamer or preview for 1 minute.
+                  </DialogDescription>
+                </div>
+              </DialogHeader>
+              <div className="my-6 border-t border-brandOrange/20 w-full" />
+              {showLockedModal && (
+                <div className="flex flex-col sm:flex-row gap-4 justify-center w-full">
+                  <Button
+                    variant="default"
+                    className="bg-brandOrange text-brandBlack font-bold px-6 py-3 rounded-full text-lg shadow-md hover:scale-105 transition-transform w-full sm:w-auto"
+                    onClick={() => {
+                      setShowLockedModal(null);
+                      // TODO: Implement buy logic
+                    }}
+                  >
+                    Buy Another Streamer
+                  </Button>
+                  {showLockedModal && (
+                    <Button
+                      variant="outline"
+                      className="border-2 border-brandOrange text-brandOrange font-bold px-6 py-3 rounded-full text-lg shadow-md hover:bg-brandOrange/10 hover:scale-105 transition-transform w-full sm:w-auto"
+                      onClick={() => {
+                        setShowLockedModal(null);
+                        handlePreview(showLockedModal);
+                      }}
+                    >
+                      Preview 1 min
+                    </Button>
+                  )}
+                </div>
+              )}
+              <DialogClose asChild>
+                <button className="absolute top-4 right-4 text-brandOrange hover:text-brandWhite transition-colors">
+                  <span className="sr-only">Close</span>
+                </button>
+              </DialogClose>
+            </DialogContent>
+          </Dialog>
+
+          {previewingStreamerId && (
+            <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80">
+              <div className="bg-brandBlack border-2 border-brandOrange rounded-2xl p-8 flex flex-col items-center">
+                <Lock className="w-12 h-12 text-brandOrange mb-4" />
+                <h2 className="text-2xl font-bold text-brandOrange mb-2">Previewing Stream</h2>
+                <p className="text-lg text-brandWhite mb-4">You have {previewCountdown} seconds left</p>
+                <Button
+                  variant="default"
+                  className="bg-brandOrange text-brandBlack font-bold px-6 py-3 rounded-full text-lg shadow-md hover:scale-105 transition-transform"
+                  onClick={() => {
+                    setPreviewingStreamerId(null);
+                    if (previewInterval) clearInterval(previewInterval);
+                  }}
+                >
+                  Stop Preview
+                </Button>
+              </div>
+            </div>
+          )}
 
           {visibleDiscoverStreamers < filteredStreamers.length && (
             <div className="flex justify-center mt-6">

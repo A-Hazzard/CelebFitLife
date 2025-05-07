@@ -144,6 +144,7 @@ export class UserService {
           streamer: userData.role?.streamer || false,
           viewer: userData.role?.viewer || true,
         },
+        myStreamers: Array.isArray(userData.myStreamers) ? userData.myStreamers : [], // Persist selected streamer IDs
       };
 
       // Save to database using email as document ID

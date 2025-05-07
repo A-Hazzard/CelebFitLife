@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { db } from "@/lib/firebase/client";
 import { doc, getDoc, onSnapshot, Timestamp } from "firebase/firestore";
@@ -16,12 +16,21 @@ import {
   TwilioError,
   connect,
 } from "twilio-video";
-import { MicOff, Mic } from "lucide-react";
+import { MicOff, Mic, Lock } from "lucide-react";
 import { Countdown } from "@/components/streaming/Countdown";
 import { Button } from "@/components/ui/button";
 import VideoContainer from "@/components/streaming/VideoContainer";
 import StreamStatusOverlay from "@/components/streaming/StreamStatusOverlay";
 import { ClientTwilioService } from "@/lib/services/ClientTwilioService";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 // Create a static instance of ClientTwilioService for the client side
 const clientTwilioService = new ClientTwilioService();
@@ -35,8 +44,51 @@ const generateUniqueIdentity = (prefix: string, userId: string): string => {
 
 export default function LiveViewPage() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const slug = pathname?.split("/").pop() || "";
   const { currentUser } = useAuthStore();
+
+  // Preview mode state
+  const isPreview = searchParams.get("preview") === "true";
+  const initialCountdown = parseInt(searchParams.get("countdown") || "0", 10);
+  const [previewCountdown, setPreviewCountdown] = useState(initialCountdown);
+  const [previewInterval, setPreviewInterval] = useState<NodeJS.Timeout | null>(null);
+
+  // Start preview countdown if in preview mode
+  useEffect(() => {
+    if (isPreview && previewCountdown > 0) {
+      const interval = setInterval(() => {
+        setPreviewCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            // Redirect back to streaming page when preview ends
+            router.push("/streaming");
+            return 0;
+          }
+          // Update countdown in URL to persist across page refreshes
+          const newParams = new URLSearchParams(searchParams);
+          newParams.set("countdown", (prev - 1).toString());
+          router.replace(`${pathname}?${newParams.toString()}`, { scroll: false });
+          return prev - 1;
+        });
+      }, 1000);
+      setPreviewInterval(interval);
+
+      return () => {
+        if (interval) clearInterval(interval);
+      };
+    }
+    // Always return a cleanup function
+    return () => {};
+  }, [isPreview, pathname, router, searchParams]);
+
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (previewInterval) clearInterval(previewInterval);
+    };
+  }, [previewInterval]);
 
   // Using isStreamStarted to track if the stream is active
   const [hasStarted, setHasStarted] = useState(false);
@@ -1079,7 +1131,68 @@ export default function LiveViewPage() {
     };
   }, [slug, videoStatus, twilioRoom, hasEnded, handleRetryAttempt]);
 
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [showLockModal, setShowLockModal] = useState(false);
+
+  // Secure access: check if user owns the streamer for this stream
+  useEffect(() => {
+    if (!slug || !currentUser) return;
+    (async () => {
+      const streamRef = doc(db, "streams", slug);
+      const streamDoc = await getDoc(streamRef);
+      if (!streamDoc.exists()) {
+        setIsAuthorized(false);
+        setShowLockModal(true);
+        return;
+      }
+      const streamData = streamDoc.data();
+      const streamerId = streamData.streamerId;
+      if (
+        currentUser.myStreamers &&
+        Array.isArray(currentUser.myStreamers) &&
+        currentUser.myStreamers.includes(streamerId)
+      ) {
+        setIsAuthorized(true);
+      } else {
+        setIsAuthorized(false);
+        setShowLockModal(true);
+      }
+    })();
+  }, [slug, currentUser]);
+
   if (!hasHydrated || !currentUser) return null;
+  if (isAuthorized === false) {
+    return (
+      <Dialog open={showLockModal} onOpenChange={setShowLockModal}>
+        <DialogContent className="max-w-lg p-10 rounded-2xl border-2 border-brandOrange bg-brandBlack">
+          <DialogHeader>
+            <div className="flex flex-col items-center gap-4">
+              <span className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brandOrange/10 mb-2">
+                <Lock className="w-10 h-10 text-brandOrange" />
+              </span>
+              <DialogTitle className="text-2xl text-center text-brandOrange font-extrabold">Access Denied</DialogTitle>
+              <DialogDescription className="text-base text-center text-brandGray mt-2">
+                You do not have access to this stream. Only users who own this streamer can view this stream.<br />
+                Please add this streamer to your account to unlock access.
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <div className="my-6 border-t border-brandOrange/20" />
+          <DialogFooter className="flex flex-row gap-4 justify-center">
+            <DialogClose asChild>
+              <Button
+                variant="default"
+                className="bg-brandOrange text-brandBlack font-bold px-6 py-3 rounded-full text-lg shadow-md hover:scale-105 transition-transform"
+                onClick={() => setShowLockModal(false)}
+              >
+                Close
+              </Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-brandBlack text-brandWhite overflow-hidden">
@@ -1240,6 +1353,14 @@ export default function LiveViewPage() {
           </div>
         </div>
       </div>
+
+      {/* Preview countdown overlay */}
+      {isPreview && previewCountdown > 0 && (
+        <div className="fixed top-4 right-4 z-50 bg-brandBlack border-2 border-brandOrange rounded-lg p-4 text-white">
+          <p className="text-lg font-bold">Preview Time Remaining:</p>
+          <p className="text-3xl text-brandOrange text-center">{previewCountdown}s</p>
+        </div>
+      )}
     </div>
   );
 }
