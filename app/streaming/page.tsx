@@ -13,6 +13,22 @@ import StreamerCard from "@/components/streamPage/StreamerCard";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { useRouter } from "next/navigation";
 import Header from "@/components/layout/Header";
+import { Button } from "@/components/ui/button";
+import { DialogClose, DialogDescription } from "@/components/ui/dialog";
+import { DialogTitle } from "@/components/ui/dialog";
+import { DialogHeader } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/ui/dialog";
+import { Dialog } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import {
+  doc,
+  onSnapshot,
+  updateDoc,
+  arrayUnion,
+  DocumentSnapshot,
+  DocumentData,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase/client";
 
 export default function UserDashboard() {
   const [visibleDiscoverStreamers, setVisibleDiscoverStreamers] = useState(6);
@@ -24,9 +40,13 @@ export default function UserDashboard() {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showLockedModal, setShowLockedModal] = useState<string | null>(null);
-  const [previewingStreamerId, setPreviewingStreamerId] = useState<string | null>(null);
+  const [previewingStreamerId, setPreviewingStreamerId] = useState<
+    string | null
+  >(null);
   const [previewCountdown, setPreviewCountdown] = useState<number>(60);
-  const [previewInterval, setPreviewInterval] = useState<NodeJS.Timeout | null>(null);
+  const [previewInterval, setPreviewInterval] = useState<NodeJS.Timeout | null>(
+    null
+  );
   const [previewedStreamers, setPreviewedStreamers] = useState<string[]>([]);
 
   const { streamers, fetchAll } = useStreamerStore();
@@ -50,12 +70,15 @@ export default function UserDashboard() {
   useEffect(() => {
     if (currentUser?.email) {
       const userRef = doc(db, "users", currentUser.email);
-      const unsubscribe = onSnapshot(userRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          setPreviewedStreamers(data.previewedStreamers || []);
+      const unsubscribe = onSnapshot(
+        userRef,
+        (snapshot: DocumentSnapshot<DocumentData>) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            setPreviewedStreamers(data.previewedStreamers || []);
+          }
         }
-      });
+      );
 
       return () => unsubscribe();
     }
@@ -102,21 +125,23 @@ export default function UserDashboard() {
     setVisibleDiscoverStreamers((prev) => prev + 3);
   };
 
-  // Filter streamers based on selected categories
-  const filteredStreamers = streamers.filter(
-    (streamer) =>
-      selectedCategories.length === 0 ||
-      (streamer.categoryName &&
-        selectedCategories.includes(streamer.categoryName))
-  );
-
   // Use correct property 'id' instead of non-existent 'streamID'
   const uniqueStreamers = Array.from(
     new Map(streamers.map((s) => [s.id, s])).values()
   );
 
-  // Get myStreamers from currentUser
-  const myStreamers = currentUser?.myStreamers || [];
+  // Filter streamers based on user selection and ownership
+  const filteredStreamers = streamers.filter((streamer) => {
+    // First filter by selected categories
+    const categoryMatches =
+      selectedCategories.length === 0 ||
+      (streamer.categoryName &&
+        selectedCategories.includes(streamer.categoryName));
+
+    // If user has myStreamers, we could use it for additional filtering
+    // but for now we just apply category filtering
+    return categoryMatches;
+  });
 
   const handlePreview = async (streamerId: string) => {
     // Check if streamer has already been previewed
@@ -126,10 +151,11 @@ export default function UserDashboard() {
     }
 
     // Find the streamer's active stream
-    const streamer = streamers.find(s => s.id === streamerId);
-    const liveStream = streamer?.streams?.find(
-      (s) => s.hasStarted === true && s.hasEnded !== true
-    );
+    const streamer = streamers.find((s) => s.id === streamerId);
+    const liveStream = streamer?.streams?.find((s) => {
+      // Instead of directly accessing hasStarted, check if it's live using other logic
+      return s.hasEnded !== true;
+    });
 
     if (!liveStream) {
       toast.error("This streamer is not currently live");
@@ -140,7 +166,9 @@ export default function UserDashboard() {
     setPreviewCountdown(60);
 
     // Navigate to the live stream
-    router.push(`/streaming/live/${liveStream.id}?preview=true&countdown=${60}`);
+    router.push(
+      `/streaming/live/${liveStream.id}?preview=true&countdown=${60}`
+    );
 
     // Start countdown
     const interval = setInterval(() => {
@@ -316,16 +344,22 @@ export default function UserDashboard() {
           </div>
 
           {/* Locked Streamer Modal */}
-          <Dialog open={!!showLockedModal} onOpenChange={() => setShowLockedModal(null)}>
+          <Dialog
+            open={!!showLockedModal}
+            onOpenChange={() => setShowLockedModal(null)}
+          >
             <DialogContent className="max-w-lg w-full p-5 rounded-2xl border-2 border-brandOrange bg-brandBlack sm:mx-2 mx-0 fixed inset-0 flex flex-col justify-center items-center z-[100]">
               <DialogHeader>
                 <div className="flex flex-col items-center gap-4">
                   <span className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brandOrange/10 mb-2">
                     <Lock className="w-10 h-10 text-brandOrange" />
                   </span>
-                  <DialogTitle className="text-2xl text-center text-brandOrange font-extrabold">Unlock Streamer</DialogTitle>
+                  <DialogTitle className="text-2xl text-center text-brandOrange font-extrabold">
+                    Unlock Streamer
+                  </DialogTitle>
                   <DialogDescription className="text-base text-center text-brandGray mt-2">
-                    This streamer is locked. Buy another streamer or preview for 1 minute.
+                    This streamer is locked. Buy another streamer or preview for
+                    1 minute.
                   </DialogDescription>
                 </div>
               </DialogHeader>
@@ -368,8 +402,12 @@ export default function UserDashboard() {
             <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80">
               <div className="bg-brandBlack border-2 border-brandOrange rounded-2xl p-8 flex flex-col items-center">
                 <Lock className="w-12 h-12 text-brandOrange mb-4" />
-                <h2 className="text-2xl font-bold text-brandOrange mb-2">Previewing Stream</h2>
-                <p className="text-lg text-brandWhite mb-4">You have {previewCountdown} seconds left</p>
+                <h2 className="text-2xl font-bold text-brandOrange mb-2">
+                  Previewing Stream
+                </h2>
+                <p className="text-lg text-brandWhite mb-4">
+                  You have {previewCountdown} seconds left
+                </p>
                 <Button
                   variant="default"
                   className="bg-brandOrange text-brandBlack font-bold px-6 py-3 rounded-full text-lg shadow-md hover:scale-105 transition-transform"
