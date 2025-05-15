@@ -44,8 +44,8 @@ export const useStreamData = (slug: string) => {
             ...data,
             // Provide defaults for potentially missing fields if needed
             title: data.title || "",
-            thumbnail:
-              data.thumbnail ||
+            thumbnailUrl:
+              data.thumbnailUrl ||
               "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg",
             audioMuted: data.audioMuted ?? false,
             cameraOff: data.cameraOff ?? false,

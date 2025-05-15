@@ -14,6 +14,13 @@ import { useAuthStore } from "@/lib/store/useAuthStore";
 import { useRouter } from "next/navigation";
 import Header from "@/components/layout/Header";
 
+interface StreamBasicInfo {
+  id: string;
+  title?: string;
+  thumbnailUrl?: string;
+  hasEnded?: boolean;
+}
+
 export default function UserDashboard() {
   const [visibleDiscoverStreamers, setVisibleDiscoverStreamers] = useState(6);
   const [isTagsOpen, setIsTagsOpen] = useState(false);
@@ -118,11 +125,11 @@ export default function UserDashboard() {
                       username: streamer.username || streamer.name,
                       bio: streamer.bio || "",
                       streams:
-                        streamer.streams?.map((stream) => ({
-                          ...stream,
-                          thumbnail: stream.thumbnail || "/favicon.ico",
-                          hasEnded: stream.hasEnded || false,
+                        streamer.streams?.map((stream: StreamBasicInfo) => ({
+                          id: stream.id,
                           title: stream.title || "Untitled Stream",
+                          thumbnail: stream.thumbnailUrl || "/favicon.ico",
+                          hasEnded: stream.hasEnded || false,
                         })) || [],
                     }}
                   />
@@ -225,11 +232,11 @@ export default function UserDashboard() {
                       username: streamer.username || streamer.name,
                       bio: streamer.bio || "",
                       streams:
-                        streamer.streams?.map((stream) => ({
-                          ...stream,
-                          thumbnail: stream.thumbnail || "/favicon.ico",
-                          hasEnded: stream.hasEnded || false,
+                        streamer.streams?.map((stream: StreamBasicInfo) => ({
+                          id: stream.id,
                           title: stream.title || "Untitled Stream",
+                          thumbnail: stream.thumbnailUrl || "/favicon.ico",
+                          hasEnded: stream.hasEnded || false,
                         })) || [],
                     }}
                   />

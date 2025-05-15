@@ -12,7 +12,12 @@ export const fetchStreamersWithStreams = async () => {
   const streamerData: StreamerWithStreams[] = [];
 
   for (const streamerDoc of streamerSnap.docs) {
-    const streamer = { id: streamerDoc.id, ...streamerDoc.data() } as Streamer;
+    const docData = streamerDoc.data();
+    const streamer = {
+      id: streamerDoc.id,
+      ...docData,
+      name: docData.name || "Unknown Streamer", // Ensure name is always present
+    } as Streamer;
 
     const streamQuery = query(
       collection(db, "streams"),

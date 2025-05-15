@@ -28,28 +28,32 @@ import { useAuthStore } from "@/lib/store/useAuthStore";
 import type { StreamDoc } from "@/lib/types/streaming.types";
 
 /**
- * Returns a thumbnail URL for a given stream, using a static Unsplash image if none is provided.
- * @param stream - The stream object (StreamDoc)
- * @returns The thumbnail URL string
+ * Utility function to get the thumbnail URL for a stream
+ * Falls back to placeholder images based on categories if no thumbnail is set
  */
 export function getStreamThumbnail(stream: StreamDoc): string {
-  if (stream.thumbnail) return stream.thumbnail;
+  if (stream.thumbnailUrl) return stream.thumbnailUrl;
   const thumbnailImages = {
     fitness:
       "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&h=400&auto=format&q=80",
-    yoga: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&h=400&auto=format&q=80",
+    yoga: "https://images.unsplash.com/photo-1545205597-3d9d02c29597?w=600&h=400&auto=format&q=80",
+    meditation:
+      "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&h=400&auto=format&q=80",
     nutrition:
-      "https://images.unsplash.com/photo-1490818387583-1baba5e638af?w=600&h=400&auto=format&q=80",
-    mindfulness:
-      "https://images.unsplash.com/photo-1545205597-3d9d02c29597?w=600&h=400&auto=format&q=80",
+      "https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=600&h=400&auto=format&q=80",
     default:
-      "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&h=400&auto=format&q=80",
+      "https://images.unsplash.com/photo-1561214078-f3247647fc5e?w=600&h=400&auto=format&q=80",
   };
-  const category = stream.category?.toLowerCase() || "default";
-  return (
+
+  // Safely access category with type assertion
+  const streamWithCategory = stream as unknown as { category?: string };
+  const category = (streamWithCategory.category || "").toLowerCase();
+
+  // Use type assertion to access dynamic property
+  const result =
     thumbnailImages[category as keyof typeof thumbnailImages] ||
-    thumbnailImages.default
-  );
+    thumbnailImages.default;
+  return result;
 }
 
 export default function Header() {

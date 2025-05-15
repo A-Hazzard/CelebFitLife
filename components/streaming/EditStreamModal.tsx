@@ -15,7 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { X } from "lucide-react";
 import { toast } from "sonner";
-import { EditStreamFormData } from "@/lib/types/ui";
 import { Stream } from "@/lib/types/streaming.types";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
@@ -56,10 +55,10 @@ const EditStreamModal: React.FC<EditStreamModalProps> = ({
   const [tagInput, setTagInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<EditStreamFormData>({
+  const [formData, setFormData] = useState({
     title: stream.title || "",
     description: stream.description || "",
-    thumbnail: stream.thumbnail || "",
+    thumbnail: stream.thumbnailUrl || "",
     category: stream.category || "",
     tags: stream.tags || [],
   });
@@ -69,7 +68,7 @@ const EditStreamModal: React.FC<EditStreamModalProps> = ({
     setFormData({
       title: stream.title || "",
       description: stream.description || "",
-      thumbnail: stream.thumbnail || "",
+      thumbnail: stream.thumbnailUrl || "",
       category: stream.category || "",
       tags: stream.tags || [],
     });

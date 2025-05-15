@@ -90,7 +90,7 @@ export const useNetworkQualityMonitor = (
       const quality = (localParticipant as NetworkQualityStats)
         .networkQualityLevel;
 
-      if (quality !== undefined) {
+      if (quality !== undefined && quality !== null) {
         if (quality <= 2) {
           onQualityChange("low", { success: false, track: null });
         } else if (quality === 3) {

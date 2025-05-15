@@ -1,0 +1,549 @@
+# Comprehensive Guide: Next.js & Twilio Video Live Streaming
+
+This guide provides a step-by-step walkthrough for implementing a live video streaming feature in a Next.js application using the Twilio Video SDK. We'll cover:
+- Setting up your Twilio account and Next.js project.
+- Implementing the streamer's side: broadcasting video and audio.
+- Implementing the viewer's side: watching the live stream.
+- Managing access and permissions to ensure the streamer controls who can view.
+
+## 1. Introduction to Twilio Video
+
+Twilio Video allows you to build real-time video and audio applications. For live streaming, we typically use Twilio Video Rooms. One participant (the streamer) publishes their audio and video tracks to a room, and other participants (viewers) subscribe to these tracks.
+
+**Key Concepts:**
+-   **Room:** A virtual space where participants interact. For a live stream, this is where the streamer broadcasts.
+-   **Participant:** Represents a user connected to a Room (either a streamer or a viewer).
+-   **Track:** Represents a stream of audio or video data.
+-   **Access Token:** A short-lived credential used to authenticate a client and authorize its actions within a Twilio Video Room.
+
+## 2. Prerequisites
+
+Before you begin, ensure you have the following:
+-   **Twilio Account:**
+    -   Account SID
+    -   API Key SID
+    -   API Key Secret
+    (You can find these in your [Twilio Console](https://www.twilio.com/console)).
+-   **Node.js and npm/yarn:** Installed on your development machine. (Node.js >= 14.x recommended).
+-   **Next.js Project:** A new or existing Next.js project. If new, create one with `npx create-next-app@latest my-twilio-stream-app`.
+-   **Basic Knowledge:** Familiarity with React, Next.js (Pages Router or App Router - this guide will primarily use concepts applicable to both, with API routes typically in `pages/api` or App Router Route Handlers), and JavaScript.
+
+## 3. Project Setup
+
+### 3.1. Install Dependencies
+
+Navigate to your Next.js project directory and install the necessary Twilio SDKs:
+
+```bash
+npm install twilio twilio-video
+# or
+yarn add twilio twilio-video
+twilio: The official Node.js helper library for Twilio services (used on the backend).twilio-video: The client-side JavaScript SDK for connecting to Twilio Video Rooms.3.2. Configure Environment VariablesCreate a .env.local file in the root of your Next.js project to store your Twilio credentials securely. Never commit this file to version control.# .env.local
+
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_API_KEY_SID=SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_API_KEY_SECRET=your_api_key_secret
+
+# Optional: Define a specific Twilio Video room type if needed, e.g., 'group' or 'group-small'
+# TWILIO_VIDEO_ROOM_TYPE=group
+Next.js automatically loads .env.local into process.env.4. Backend: API Routes for Access TokensWe need API endpoints to generate Twilio Access Tokens. These tokens are requested by the client-side before joining a room.4.1. API Route for Streamer TokenThis endpoint will generate a token for the streamer, granting them permission to create/join a room and publish tracks.Create pages/api/twilio/streamer-token.js:// pages/api/twilio/streamer-token.js
+import Twilio from 'twilio';
+
+const { AccessToken } = Twilio.jwt;
+const { VideoGrant } = AccessToken;
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'Method Not Allowed' });
+  }
+
+  const { identity, roomName } = req.body;
+
+  if (!identity || !roomName) {
+    return res.status(400).json({ message: 'Missing identity or roomName' });
+  }
+
+  const apiKey = process.env.TWILIO_API_KEY_SID;
+  const apiSecret = process.env.TWILIO_API_KEY_SECRET;
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+
+  if (!apiKey || !apiSecret || !accountSid) {
+    console.error("Twilio credentials missing in environment variables.");
+    return res.status(500).json({ message: 'Server configuration error.' });
+  }
+
+  // Create an Access Token
+  const token = new AccessToken(accountSid, apiKey, apiSecret, {
+    identity: identity,
+    ttl: 3600, // Token Time-To-Live (1 hour)
+  });
+
+  // Grant permissions to create and connect to the video room
+  const videoGrant = new VideoGrant({
+    room: roomName, // Specify the room name
+  });
+  token.addGrant(videoGrant);
+
+  try {
+    // For a streamer, you might want to ensure the room is of a specific type,
+    // or even create it here if it doesn't exist, though `twilio-video.js`
+    // with `connect()` will create a 'group' room by default if it doesn't exist.
+    // If you need specific room types like 'go' or advanced creation logic,
+    // you'd use the Twilio REST API here.
+    // For simplicity, we assume the room will be created on connect if not existing.
+
+    res.status(200).json({ token: token.toJwt() });
+  } catch (error) {
+    console.error('Error generating Twilio token for streamer:', error);
+    res.status(500).json({ message: 'Failed to generate token', error: error.message });
+  }
+}
+4.2. API Route for Viewer TokenThis endpoint generates a token for viewers, granting them permission to join a specific room and subscribe to tracks (but not publish).Create pages/api/twilio/viewer-token.js:// pages/api/twilio/viewer-token.js
+import Twilio from 'twilio';
+
+const { AccessToken } = Twilio.jwt;
+const { VideoGrant } = AccessToken;
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'Method Not Allowed' });
+  }
+
+  const { identity, roomName } = req.body;
+
+  if (!identity || !roomName) {
+    return res.status(400).json({ message: 'Missing identity or roomName for viewer' });
+  }
+
+  const apiKey = process.env.TWILIO_API_KEY_SID;
+  const apiSecret = process.env.TWILIO_API_KEY_SECRET;
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+
+  if (!apiKey || !apiSecret || !accountSid) {
+    console.error("Twilio credentials missing in environment variables.");
+    return res.status(500).json({ message: 'Server configuration error.' });
+  }
+
+  // Create an Access Token for the viewer
+  const token = new AccessToken(accountSid, apiKey, apiSecret, {
+    identity: identity,
+    ttl: 3600, // Token Time-To-Live
+  });
+
+  // Grant permissions to connect to the specific video room
+  // Viewers typically do not get publishing rights.
+  const videoGrant = new VideoGrant({
+    room: roomName, // Viewer must join the specific room
+  });
+  token.addGrant(videoGrant);
+
+  try {
+    res.status(200).json({ token: token.toJwt() });
+  } catch (error) {
+    console.error('Error generating Twilio token for viewer:', error);
+    res.status(500).json({ message: 'Failed to generate token', error: error.message });
+  }
+}
+5. Streamer's Side Implementation (Frontend)The streamer needs a UI to start and stop their broadcast.5.1. Streamer ComponentCreate a React component for the streamer, e.g., components/Streamer.js.// components/Streamer.js
+import React, { useState, useEffect, useRef } from 'react';
+import Video from 'twilio-video';
+
+const Streamer = ({ roomName }) => {
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState(null);
+  const [localStream, setLocalStream] = useState(null);
+  const videoRef = useRef(null);
+  const roomRef = useRef(null); // To keep track of the connected room
+
+  // Function to get local media (camera and microphone)
+  const getLocalMedia = async () => {
+    try {
+      const stream = await Video.createLocalVideoTrack({
+        width: 1280, // Specify resolution if needed
+        height: 720,
+        frameRate: 24,
+      });
+      const audioStream = await Video.createLocalAudioTrack();
+      setLocalStream([stream, audioStream]);
+
+      if (videoRef.current) {
+        stream.attach(videoRef.current);
+      }
+      return [stream, audioStream];
+    } catch (err) {
+      console.error('Error accessing local media:', err);
+      setError(`Error accessing media devices: ${err.message}. Please check permissions.`);
+      return null;
+    }
+  };
+
+  // Function to start the stream
+  const startStream = async () => {
+    setError(null);
+    if (!roomName) {
+      setError("Room name is required to start streaming.");
+      return;
+    }
+
+    const identity = `streamer_${Date.now()}`; // Unique identity for the streamer
+
+    try {
+      // 1. Fetch access token for the streamer
+      const response = await fetch('/api/twilio/streamer-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identity, roomName }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch streamer token');
+      }
+      const data = await response.json();
+      const token = data.token;
+
+      // 2. Get local media tracks
+      const tracks = await getLocalMedia();
+      if (!tracks) return; // Error handled in getLocalMedia
+
+      // 3. Connect to Twilio room and publish tracks
+      const room = await Video.connect(token, {
+        name: roomName,
+        tracks: tracks,
+        // dominantSpeaker: true, // Optional: for speaker detection
+        // video: { width: 1280, height: 720 } // Can specify preferred video constraints
+      });
+
+      roomRef.current = room; // Store room object
+      setIsStreaming(true);
+      console.log(`Successfully joined room ${room.name} as streamer`);
+
+      // Handle streamer disconnecting (e.g., browser close)
+      room.on('disconnected', () => {
+        console.log('Disconnected from room (streamer)');
+        setIsStreaming(false);
+        if (localStream) {
+            localStream.forEach(track => {
+                track.stop();
+                if (track.element && track.element.parentNode) {
+                    track.element.parentNode.removeChild(track.element);
+                }
+            });
+            setLocalStream(null);
+        }
+        if (videoRef.current && videoRef.current.srcObject) {
+            videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+            videoRef.current.srcObject = null;
+        }
+      });
+
+      // Optional: Handle other participants (though for streamer, usually not needed)
+      // room.participants.forEach(participant => console.log(`Participant "${participant.identity}" is in the room`));
+      // room.on('participantConnected', participant => console.log(`Participant "${participant.identity}" connected`));
+      // room.on('participantDisconnected', participant => console.log(`Participant "${participant.identity}" disconnected`));
+
+
+    } catch (err) {
+      console.error('Error starting stream:', err);
+      setError(`Failed to start stream: ${err.message}`);
+      setIsStreaming(false);
+    }
+  };
+
+  // Function to stop the stream
+  const stopStream = () => {
+    if (roomRef.current) {
+      roomRef.current.disconnect(); // Disconnect from the room
+      roomRef.current = null;
+    }
+    if (localStream) {
+        localStream.forEach(track => {
+            track.stop(); // Stop media tracks
+            if (track.element && videoRef.current && videoRef.current.contains(track.element)) {
+                track.detach(videoRef.current); // Detach from video element
+            }
+        });
+        setLocalStream(null);
+    }
+    if (videoRef.current && videoRef.current.srcObject) {
+        // Fallback to clear srcObject if tracks are already stopped
+        const tracks = videoRef.current.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+    }
+    if (videoRef.current && videoRef.current.firstChild) {
+        // Clean up any attached elements by twilio-video
+        while (videoRef.current.firstChild) {
+            videoRef.current.removeChild(videoRef.current.firstChild);
+        }
+    }
+    setIsStreaming(false);
+    console.log('Stream stopped and disconnected.');
+  };
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      if (roomRef.current) {
+        stopStream();
+      } else if (localStream) { // Ensure media is released if stream wasn't started but media was acquired
+        localStream.forEach(track => track.stop());
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localStream]); // Re-run if localStream changes to ensure cleanup
+
+  return (
+    <div>
+      <h2>Streamer Controls</h2>
+      <p>Room: {roomName}</p>
+      <video ref={videoRef} autoPlay muted playsInline style={{ width: '640px', height: '480px', border: '1px solid black' }} />
+      <div>
+        {!isStreaming ? (
+          <button onClick={startStream}>Start Stream</button>
+        ) : (
+          <button onClick={stopStream}>Stop Stream</button>
+        )}
+      </div>
+      {error && <p style={{ color: 'red' }}>Error: {error}</p>}
+    </div>
+  );
+};
+
+export default Streamer;
+5.2. Streamer PageCreate a page for the streamer, e.g., pages/broadcast.js.// pages/broadcast.js
+import React, { useState } from 'react';
+import Streamer from '../components/Streamer'; // Adjust path as needed
+
+export default function BroadcastPage() {
+  const [roomNameInput, setRoomNameInput] = useState(`stream_${Date.now().toString().slice(-6)}`); // Default unique room name
+  const [currentRoom, setCurrentRoom] = useState('');
+  const [showStreamer, setShowStreamer] = useState(false);
+
+  const handleJoinRoom = () => {
+    if (roomNameInput.trim()) {
+      setCurrentRoom(roomNameInput.trim());
+      setShowStreamer(true);
+    } else {
+      alert("Please enter a room name.");
+    }
+  };
+
+  if (showStreamer) {
+    return <Streamer roomName={currentRoom} />;
+  }
+
+  return (
+    <div>
+      <h1>Start Your Live Stream</h1>
+      <input
+        type="text"
+        value={roomNameInput}
+        onChange={(e) => setRoomNameInput(e.target.value)}
+        placeholder="Enter Room Name"
+      />
+      <button onClick={handleJoinRoom}>Prepare Stream</button>
+      <p>Use a unique room name for your stream. Viewers will use this name to join.</p>
+    </div>
+  );
+}
+6. Viewer's Side Implementation (Frontend)Viewers need a way to join the stream and watch the video.6.1. Viewer ComponentCreate a React component for the viewer, e.g., components/Viewer.js.// components/Viewer.js
+import React, { useState, useEffect, useRef } from 'react';
+import Video from 'twilio-video';
+
+const Viewer = ({ roomName }) => {
+  const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState(null);
+  const [streamerVideoTrack, setStreamerVideoTrack] = useState(null);
+  const [streamerAudioTrack, setStreamerAudioTrack] = useState(null);
+  const videoRef = useRef(null);
+  const audioRef = useRef(null); // For audio playback
+  const roomRef = useRef(null);
+
+  useEffect(() => {
+    if (!roomName) {
+      setError("Room name is required to view the stream.");
+      return;
+    }
+
+    const identity = `viewer_${Date.now()}`; // Unique identity for the viewer
+
+    const connectToStream = async () => {
+      setError(null);
+      try {
+        // 1. Fetch access token for the viewer
+        const response = await fetch('/api/twilio/viewer-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identity, roomName }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to fetch viewer token');
+        }
+        const data = await response.json();
+        const token = data.token;
+
+        // 2. Connect to the Twilio room
+        const room = await Video.connect(token, {
+          name: roomName,
+          tracks: [], // Viewers usually don't publish their own tracks
+          // dominantSpeaker: true, // Optional
+        });
+
+        roomRef.current = room;
+        setIsConnected(true);
+        console.log(`Successfully joined room ${room.name} as viewer`);
+
+        // 3. Handle existing participants (the streamer)
+        room.participants.forEach(participant => {
+          console.log(`Participant "${participant.identity}" is in the room.`);
+          handleParticipantTracks(participant);
+        });
+
+        // 4. Handle new participants connecting (if streamer joins after viewer)
+        room.on('participantConnected', participant => {
+          console.log(`Participant "${participant.identity}" connected.`);
+          handleParticipantTracks(participant);
+        });
+
+        // 5. Handle participant disconnecting (streamer leaves)
+        room.on('participantDisconnected', participant => {
+          console.log(`Participant "${participant.identity}" disconnected.`);
+          // Assuming one streamer, clear tracks
+          if (videoRef.current) videoRef.current.srcObject = null;
+          if (audioRef.current) audioRef.current.srcObject = null;
+          setStreamerVideoTrack(null);
+          setStreamerAudioTrack(null);
+          setError("Streamer has left the room.");
+        });
+
+        // Handle viewer disconnecting
+        room.on('disconnected', () => {
+          console.log('Disconnected from room (viewer)');
+          setIsConnected(false);
+          if (videoRef.current) videoRef.current.srcObject = null;
+          if (audioRef.current) audioRef.current.srcObject = null;
+          setStreamerVideoTrack(null);
+          setStreamerAudioTrack(null);
+        });
+
+      } catch (err) {
+        console.error('Error connecting to stream:', err);
+        setError(`Failed to connect to stream: ${err.message}. The room may not exist or the stream hasn't started.`);
+        setIsConnected(false);
+      }
+    };
+
+    const handleParticipantTracks = (participant) => {
+      participant.on('trackSubscribed', track => {
+        console.log(`Subscribed to ${track.kind} track from ${participant.identity}`);
+        if (track.kind === 'video') {
+          setStreamerVideoTrack(track);
+        } else if (track.kind === 'audio') {
+          setStreamerAudioTrack(track);
+        }
+      });
+
+      participant.on('trackUnsubscribed', track => {
+        console.log(`Unsubscribed from ${track.kind} track from ${participant.identity}`);
+        if (track.kind === 'video') {
+          if (videoRef.current) videoRef.current.srcObject = null;
+          setStreamerVideoTrack(null);
+        } else if (track.kind === 'audio') {
+          if (audioRef.current) audioRef.current.srcObject = null;
+          setStreamerAudioTrack(null);
+        }
+      });
+    };
+
+    connectToStream();
+
+    // Cleanup on component unmount
+    return () => {
+      if (roomRef.current) {
+        roomRef.current.disconnect();
+        roomRef.current = null;
+      }
+    };
+  }, [roomName]);
+
+  // Effect to attach video track to video element
+  useEffect(() => {
+    if (videoRef.current && streamerVideoTrack) {
+      // Clear previous tracks if any
+      while (videoRef.current.firstChild) {
+        videoRef.current.removeChild(videoRef.current.firstChild);
+      }
+      const videoElement = streamerVideoTrack.attach();
+      videoRef.current.appendChild(videoElement);
+      console.log("Attached video track");
+    } else if (videoRef.current && !streamerVideoTrack) {
+        // Clean up if track is removed
+        while (videoRef.current.firstChild) {
+            videoRef.current.removeChild(videoRef.current.firstChild);
+        }
+    }
+    // Detach logic is handled by track.on('unsubscribed') or room disconnect.
+  }, [streamerVideoTrack]);
+
+  // Effect to attach audio track to audio element
+  useEffect(() => {
+    if (audioRef.current && streamerAudioTrack) {
+      // Clear previous tracks if any
+      while (audioRef.current.firstChild) {
+        audioRef.current.removeChild(audioRef.current.firstChild);
+      }
+      const audioElement = streamerAudioTrack.attach();
+      audioRef.current.appendChild(audioElement);
+      console.log("Attached audio track");
+    } else if (audioRef.current && !streamerAudioTrack) {
+        // Clean up if track is removed
+        while (audioRef.current.firstChild) {
+            audioRef.current.removeChild(audioRef.current.firstChild);
+        }
+    }
+    // Detach logic is handled by track.on('unsubscribed') or room disconnect.
+  }, [streamerAudioTrack]);
+
+
+  return (
+    <div>
+      <h2>Viewing Stream: {roomName}</h2>
+      <div ref={videoRef} style={{ width: '100%', maxWidth: '800px', border: '1px solid black', backgroundColor: '#333' }}>
+        {/* Video track will be attached here by twilio-video */}
+        {!isConnected && !error && <p>Connecting to stream...</p>}
+        {isConnected && !streamerVideoTrack && <p>Waiting for streamer's video...</p>}
+      </div>
+      <div ref={audioRef}>
+        {/* Audio track will be attached here by twilio-video */}
+      </div>
+      {error && <p style={{ color: 'red' }}>Error: {error}</p>}
+      {!isConnected && error && <button onClick={() => window.location.reload()}>Try Reconnecting</button>}
+    </div>
+  );
+};
+
+export default Viewer;
+6.2. Viewer Page (Dynamic Route)Create a dynamic page for viewers to join a specific room, e.g., pages/stream/[roomName].js.// pages/stream/[roomName].js
+import React from 'react';
+import { useRouter } from 'next/router';
+import Viewer from '../../components/Viewer'; // Adjust path as needed
+
+export default function StreamPage() {
+  const router = useRouter();
+  const { roomName } = router.query; // Get roomName from URL parameter
+
+  if (!roomName) {
+    return <p>Loading room information...</p>;
+  }
+
+  return (
+    <div>
+      <h1>Live Stream</h1>
+      <Viewer roomName={Array.isArray(roomName) ? roomName[0] : roomName} />
+    </div>
+  );
+}
+To use this page, a viewer would navigate to a URL like http://localhost:3000/stream/myCoolStreamRoom.7. How the Streamer Allows Viewers to SeeThe control mechanism for allowing viewers to see the stream is managed through:Stream Initiation by Streamer:The streamer decides to start a stream and uses a specific roomName.Their client requests a streamer-token from your API, which grants them rights to publish media to this roomName.When the streamer connects to the Twilio room using this token and publishes their media, the stream becomes "live" in that room.Viewer Access via Tokens:A viewer wanting to watch the stream must know the correct roomName.The viewer's client requests a viewer-token from your API, providing this roomName.The API generates a token that only grants access to subscribe to media within that specific roomName. Viewers are not given publishing rights.Room Uniqueness and Discovery:The roomName acts as the key. If a viewer has a token for RoomA, they cannot access RoomB.How viewers discover the roomName is up to your application's design:Streamer shares a direct link (e.g., your-app.com/stream/streamersRoom123).You could build a lobby/listing page that shows active streams (this requires additional backend logic to track active rooms, perhaps using Twilio's REST API or a database). For this guide, we assume the roomName is known.Stopping the Stream:When the streamer stops their broadcast and disconnects from the room, their media tracks are removed.Viewers will no longer receive new media.Twilio rooms typically have a Time-To-Live (TTL) and will automatically close after the last participant leaves (configurable in Twilio Console or via REST API for specific room types).In summary: The streamer "allows" viewing by starting a stream in a room, and your backend "allows" specific viewers by issuing them tokens valid only for that room.8. Important ConsiderationsError Handling: The provided code includes basic error handling. Robust applications should have more comprehensive error feedback for users (e.g., specific messages for camera/mic permission denial, network issues, invalid room names).UI/UX:Provide clear loading states (e.g., "Connecting...", "Starting camera...").Show clear indicators of stream status (live, offline, connecting).Handle UI updates gracefully when participants join/leave or tracks are added/removed.Security:Keep your Twilio API Key Secret and Account SID secure in environment variables.The token server (API routes) should be protected if necessary (e.g., rate limiting, authentication if only logged-in users can stream/view).Scalability: Twilio Video is designed to scale. For very large audiences (thousands of viewers), you might explore Twilio Live, which is optimized for one-to-many streaming. However, Twilio Video with Group Rooms can support a significant number of viewers (check Twilio's documentation for current limits).Room Management:Consider how room names are generated and managed to avoid collisions.Twilio rooms can be 'group' (default, supports up to 50 participants), 'group-small' (fewer participants, lower latency), or 'go' (P2P, for 2 participants). For streaming, 'group' is common. You can set the room type during connection or via the REST API.Cost: Be aware of Twilio's pricing for Video (per participant minute). Monitor your usage in the Twilio Console.9. DeploymentWhen deploying your Next.js application (e.g., to Vercel, Netlify, or your own server):Ensure your environment variables (TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET) are correctly set in the deployment environment.Your API routes will function as serverless functions on platforms like Vercel/Netlify.10. TestingOpen two browser windows/tabs.In one, navigate to /broadcast, enter a room name, and start the stream. You should see your local video.In the other, navigate to /stream/[your-chosen-room-name]. You should see the streamer's video.Test microphone and camera permissions.Test stopping the stream and how the viewer side responds.11. Conclusion and Next StepsYou now have a foundational live streaming setup in your Next.js application using Twilio Video! From here, you could extend it with features like:Chat: Add real-time chat alongside the video.Screen Sharing: Allow streamers to share their screen.Recording: Implement stream recording using Twilio's APIs.Streamer/Viewer Counts: Display how many viewers are watching.Private Streams: Add authentication to control who can stream or view.Dynamic Room Listings: Create a page showing all currently active streams.This guide provides the core building blocks. Refer to the official Twilio Video documentation for more in-depth information and advanced features.

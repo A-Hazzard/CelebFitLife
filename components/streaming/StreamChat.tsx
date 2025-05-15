@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { StreamChatProps } from "@/lib/types/streaming.types";
+import { StreamChatProps, ChatMessage } from "@/lib/types/streaming.types";
 
 const StreamChat: React.FC<StreamChatProps> = ({
   streamId,
@@ -92,7 +92,7 @@ const StreamChat: React.FC<StreamChatProps> = ({
             No messages yet. Be the first to send a message!
           </div>
         ) : (
-          messages.map((message) => (
+          messages.map((message: ChatMessage) => (
             <div key={message.id} className="flex flex-col">
               <div className="flex items-baseline gap-2">
                 <span

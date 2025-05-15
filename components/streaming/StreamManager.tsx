@@ -409,17 +409,49 @@ const StreamManager = forwardRef<
         return;
       }
 
-      // Get tracks from the media stream
+      // Get tracks from the media stream properly
       const videoTracks = localStreamRef.current.getVideoTracks();
       const audioTracks = localStreamRef.current.getAudioTracks();
 
       if (videoTracks.length === 0) {
-        console.warn("[StreamManager] No video tracks found");
+        console.warn("[StreamManager] No video tracks found in media stream");
+      } else {
+        console.log(
+          `[TRACK PUBLISH] Found ${videoTracks.length} video tracks to publish`
+        );
+        // Apply proper settings to MediaStreamTracks
+        videoTracks.forEach((track) => {
+          console.log(
+            `[TRACK PUBLISH] Video track ready: ${track.id}, enabled: ${track.enabled}`
+          );
+          if (!track.enabled) {
+            track.enabled = true;
+            console.log(`[TRACK PUBLISH] Enabled video track`);
+          }
+        });
       }
 
       if (audioTracks.length === 0) {
-        console.warn("[StreamManager] No audio tracks found");
+        console.warn("[StreamManager] No audio tracks found in media stream");
+      } else {
+        console.log(
+          `[TRACK PUBLISH] Found ${audioTracks.length} audio tracks to publish`
+        );
+        // Apply proper settings to MediaStreamTracks
+        audioTracks.forEach((track) => {
+          console.log(
+            `[TRACK PUBLISH] Audio track ready: ${track.id}, enabled: ${track.enabled}`
+          );
+          if (!track.enabled) {
+            track.enabled = true;
+            console.log(`[TRACK PUBLISH] Enabled audio track`);
+          }
+        });
       }
+
+      console.log(
+        `[StreamManager] Connecting with ${videoTracks.length} video tracks and ${audioTracks.length} audio tracks`
+      );
 
       // Connect to Twilio
       try {
@@ -432,10 +464,10 @@ const StreamManager = forwardRef<
         // Get token and connect
         const token = await clientTwilioService.getToken(stream.slug, identity);
 
-        // Connect to Twilio room with robust error handling
+        // Connect to Twilio using the raw MediaStreamTracks
         const room = await connect(token, {
           name: stream.slug,
-          tracks: [...videoTracks, ...audioTracks],
+          tracks: [...videoTracks, ...audioTracks], // These are MediaStreamTrack[] which is correct
           networkQuality: true,
           dominantSpeaker: true,
           maxAudioBitrate: 16000,
@@ -533,6 +565,79 @@ const StreamManager = forwardRef<
         }
 
         setIsStreaming(true);
+
+        // After connecting to the room, verify track publication
+        console.log("[TRACK PUBLISH] Verifying publications in Twilio room");
+
+        // Work with the publications from the room
+        const publishedVideoTracks = Array.from(
+          room.localParticipant.videoTracks.values()
+        );
+        const publishedAudioTracks = Array.from(
+          room.localParticipant.audioTracks.values()
+        );
+
+        console.log(
+          `[TRACK PUBLISH] Found ${publishedVideoTracks.length} published video tracks and ${publishedAudioTracks.length} published audio tracks`
+        );
+
+        // For each video track, ensure it has the right name and is enabled correctly
+        publishedVideoTracks.forEach((publication) => {
+          if (publication.track) {
+            console.log(
+              `[TRACK PUBLISH] Video publication: ${
+                publication.trackName
+              }, enabled: ${publication.track.isEnabled ? "yes" : "no"}`
+            );
+
+            // Set a good track name for viewers to identify
+            if (!publication.trackName) {
+              publication.trackName = "streamer-video";
+            }
+
+            // Make sure video is enabled correctly
+            if (isVideoEnabled && !publication.track.isEnabled) {
+              console.log(
+                "[TRACK PUBLISH] Enabling video track that should be enabled"
+              );
+              publication.track.enable();
+            } else if (!isVideoEnabled && publication.track.isEnabled) {
+              console.log(
+                "[TRACK PUBLISH] Disabling video track that should be disabled"
+              );
+              publication.track.disable();
+            }
+          }
+        });
+
+        // For each audio track, ensure it has the right name and is enabled correctly
+        publishedAudioTracks.forEach((publication) => {
+          if (publication.track) {
+            console.log(
+              `[TRACK PUBLISH] Audio publication: ${
+                publication.trackName
+              }, enabled: ${publication.track.isEnabled ? "yes" : "no"}`
+            );
+
+            // Set a good track name for viewers to identify
+            if (!publication.trackName) {
+              publication.trackName = "streamer-audio";
+            }
+
+            // Make sure audio is enabled correctly
+            if (isMicEnabled && !publication.track.isEnabled) {
+              console.log(
+                "[TRACK PUBLISH] Enabling audio track that should be enabled"
+              );
+              publication.track.enable();
+            } else if (!isMicEnabled && publication.track.isEnabled) {
+              console.log(
+                "[TRACK PUBLISH] Disabling audio track that should be disabled"
+              );
+              publication.track.disable();
+            }
+          }
+        });
       } catch (twilioError) {
         console.error(
           "[StreamManager] Error connecting to Twilio:",
@@ -544,23 +649,23 @@ const StreamManager = forwardRef<
         );
         setIsConnecting(false);
         setConnectionStatus("disconnected");
-      }
 
-      // Add retry logic if a connection error occurs
-      if (connectionStatus !== "connected" && retryCount < maxRetries) {
-        const newRetryCount = retryCount + 1;
-        setRetryCount(newRetryCount);
-        console.log(
-          `[StreamManager] Connection failed, retry ${newRetryCount}/${maxRetries}`
-        );
+        // Add retry logic if a connection error occurs
+        if (connectionStatus !== "connected" && retryCount < maxRetries) {
+          const newRetryCount = retryCount + 1;
+          setRetryCount(newRetryCount);
+          console.log(
+            `[StreamManager] Connection failed, retry ${newRetryCount}/${maxRetries}`
+          );
 
-        // Implement retry with exponential backoff
-        const delay = Math.min(2000 * Math.pow(2, newRetryCount - 1), 10000);
-        setTimeout(() => {
-          if (isStreaming) {
-            handleRetry(newRetryCount);
-          }
-        }, delay);
+          // Implement retry with exponential backoff
+          const delay = Math.min(2000 * Math.pow(2, newRetryCount - 1), 10000);
+          setTimeout(() => {
+            if (isStreaming) {
+              handleRetry(newRetryCount);
+            }
+          }, delay);
+        }
       }
     } catch (error) {
       console.error("[StreamManager] Unexpected error in startStream:", error);
@@ -839,6 +944,33 @@ const StreamManager = forwardRef<
           toast.error("Failed to update audio status");
         });
       }
+
+      if (twilioRoomRef.current) {
+        const audioTracks = Array.from(
+          twilioRoomRef.current.localParticipant.audioTracks.values()
+        );
+        console.log(
+          `[TRACK PUBLISH] Toggling ${audioTracks.length} audio tracks to ${
+            !newMicState ? "muted" : "unmuted"
+          }`
+        );
+
+        audioTracks.forEach((publication) => {
+          if (publication.track) {
+            if (!newMicState) {
+              publication.track.disable();
+              console.log(
+                `[TRACK PUBLISH] Disabled audio track: ${publication.trackSid}`
+              );
+            } else {
+              publication.track.enable();
+              console.log(
+                `[TRACK PUBLISH] Enabled audio track: ${publication.trackSid}`
+              );
+            }
+          }
+        });
+      }
     } catch (error) {
       console.error("Error toggling microphone:", error);
       toast.error("Failed to toggle microphone. Please try again.");
@@ -876,6 +1008,33 @@ const StreamManager = forwardRef<
         }).catch((error) => {
           console.error("Error updating video status:", error);
           toast.error("Failed to update video status");
+        });
+      }
+
+      if (twilioRoomRef.current) {
+        const videoTracks = Array.from(
+          twilioRoomRef.current.localParticipant.videoTracks.values()
+        );
+        console.log(
+          `[TRACK PUBLISH] Toggling ${videoTracks.length} video tracks to ${
+            !newVideoState ? "hidden" : "visible"
+          }`
+        );
+
+        videoTracks.forEach((publication) => {
+          if (publication.track) {
+            if (!newVideoState) {
+              publication.track.disable();
+              console.log(
+                `[TRACK PUBLISH] Disabled video track: ${publication.trackSid}`
+              );
+            } else {
+              publication.track.enable();
+              console.log(
+                `[TRACK PUBLISH] Enabled video track: ${publication.trackSid}`
+              );
+            }
+          }
         });
       }
     } catch (error) {
@@ -964,18 +1123,28 @@ const StreamManager = forwardRef<
           autoPlay
           playsInline
           muted
-          className="w-full h-full object-cover"
+          className={`w-full h-full object-cover transition-opacity duration-300 ${
+            !isVideoEnabled ? "opacity-0" : "opacity-100"
+          }`}
         />
 
-        {!isStreaming && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+        {/* Show dimmed camera preview if camera is on and available, otherwise black overlay */}
+        {!isStreaming && isVideoEnabled && localStreamRef.current && (
+          <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center pointer-events-none">
+            <div className="text-brandWhite text-center z-10">
+              <VideoOff size={48} className="mx-auto mb-2 opacity-0" />
+              <p className="opacity-0">Stream Offline</p>
+            </div>
+          </div>
+        )}
+        {!isStreaming && (!isVideoEnabled || !localStreamRef.current) && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-90">
             <div className="text-brandWhite text-center">
               <VideoOff size={48} className="mx-auto mb-2" />
               <p>Stream Offline</p>
             </div>
           </div>
         )}
-
         {isStreaming && !isVideoEnabled && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
             <div className="text-brandWhite text-center">
@@ -984,7 +1153,6 @@ const StreamManager = forwardRef<
             </div>
           </div>
         )}
-
         {connectionStatus === "connecting" && !connectionError && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
             <div className="text-brandWhite text-center">
@@ -993,8 +1161,6 @@ const StreamManager = forwardRef<
             </div>
           </div>
         )}
-
-        {/* Connection Error Display */}
         {connectionError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 p-4">
             <div className="text-red-500 text-center max-w-md">

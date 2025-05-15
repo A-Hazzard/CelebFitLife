@@ -41,8 +41,8 @@ const StreamerCard: React.FC<{ streamer: EnrichedStreamer }> = ({
 
       {/* Tags */}
       <div className="flex flex-wrap gap-2 mb-4">
-        {streamer.tagNames?.length > 0 ? (
-          streamer.tagNames?.map((tag: string, i: number) => (
+        {streamer.tagNames && streamer.tagNames.length > 0 ? (
+          streamer.tagNames.map((tag: string, i: number) => (
             <span
               key={i}
               className="bg-blue-900 border border-brandOrange/30 text-xs px-2 py-1 rounded-full text-brandOrange"

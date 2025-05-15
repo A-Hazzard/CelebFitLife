@@ -12,6 +12,7 @@ import {
   onSnapshot,
   collection,
   addDoc,
+  Timestamp,
 } from "firebase/firestore";
 // Use the client service, not direct server imports
 import StreamManager from "@/components/streaming/StreamManager";
@@ -1341,10 +1342,21 @@ export default function ManageStreamPage() {
                     )}
 
                     {isStreamScheduled && stream.scheduledAt && (
-                      <div className="flex justify-between">
+                      <div className="flex flex-col gap-1">
                         <span className="text-gray-400">Scheduled For</span>
                         <span className="font-medium">
-                          {stream.scheduledAt.toDate().toLocaleString()}
+                          {stream.scheduledAt
+                            ? typeof stream.scheduledAt === "object" &&
+                              "toDate" in stream.scheduledAt
+                              ? (stream.scheduledAt as Timestamp)
+                                  .toDate()
+                                  .toLocaleString()
+                              : typeof stream.scheduledAt === "string"
+                              ? new Date(stream.scheduledAt).toLocaleString()
+                              : stream.scheduledAt instanceof Date
+                              ? stream.scheduledAt.toLocaleString()
+                              : "Not scheduled"
+                            : "Not scheduled"}
                         </span>
                       </div>
                     )}
