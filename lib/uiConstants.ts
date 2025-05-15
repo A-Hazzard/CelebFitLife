@@ -1,27 +1,56 @@
 export const SLIDER_SETTINGS = {
+  dots: true,
   infinite: true,
   speed: 500,
   slidesToShow: 3,
   slidesToScroll: 1,
-  centerMode: true,
-  focusOnSelect: true,
+  arrows: true,
+  autoplay: false,
+  swipeToSlide: true,
+  centerMode: false,
   responsive: [
     {
-      breakpoint: 1024,
+      breakpoint: 1536, // 2XL screens
+      settings: {
+        slidesToShow: 3,
+        slidesToScroll: 1,
+      },
+    },
+    {
+      breakpoint: 1280, // XL screens
       settings: {
         slidesToShow: 2,
         slidesToScroll: 1,
       },
     },
     {
-      breakpoint: 600,
+      breakpoint: 1024, // LG screens
+      settings: {
+        slidesToShow: 2,
+        slidesToScroll: 1,
+      },
+    },
+    {
+      breakpoint: 768, // MD screens (tablets)
       settings: {
         slidesToShow: 1,
         slidesToScroll: 1,
+        centerMode: true,
+        centerPadding: "40px", // lil padding left/right
+      },
+    },
+    {
+      breakpoint: 480, // Phones
+      settings: {
+        slidesToShow: 1,
+        slidesToScroll: 1,
+        centerMode: true,
+        centerPadding: "20px", // more tight for small phones
       },
     },
   ],
 };
+
 
 // Dashboard metrics data for the analytics cards
 export const ANALYTICS_METRICS_DATA = [

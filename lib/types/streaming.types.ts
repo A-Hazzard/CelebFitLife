@@ -121,14 +121,17 @@ export type ApiStreamCreateDTO = {
   scheduledAt?: string | number | Date;
   [key: string]: unknown;
 };
+
 export type ApiStreamUpdateDTO = {
   scheduledAt?: string | number | Date;
   [key: string]: unknown;
 };
+
 export type StreamApiUpdateData = {
   scheduledAt?: string | number | Date;
   [key: string]: unknown;
 };
+
 export type StreamUpdateData = {
   title?: string;
   description?: string;
@@ -138,26 +141,38 @@ export type StreamUpdateData = {
   tags?: string[];
   status?: StreamStatus;
 };
+
 export type StreamWithDetails = Stream & {
   streamerName?: string;
   streamerAvatar?: string;
   scheduledFor?: string;
 };
+
+/**
+ * Streamer with associated streams from the API
+ */
 export type StreamerWithStreams = {
-  id?: string;
-  name?: string;
-  avatarUrl?: string;
+  id: string;
+  name: string;
   username?: string;
-  Tags?: string[];
+  avatarUrl?: string;
+  bio?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  thumbnail?: string;
   Category?: string;
+  Tags?: string[];
   streams?: Stream[];
   [key: string]: unknown;
 };
+
 export type TokenRequestBody = {
   roomName: string;
   identity: string;
   [key: string]: unknown;
 };
+
 export type TokenResponseSuccess = { token: string; [key: string]: unknown };
 export type TokenResponseError = { error: string; [key: string]: unknown };
 export type StreamDoc = Stream;

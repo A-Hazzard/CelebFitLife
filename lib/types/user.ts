@@ -36,6 +36,22 @@ export type User = {
     status: string;
   };
   myStreamers?: string[];
+  /**
+   * List of streamer IDs the user has already previewed (1-minute preview)
+   */
+  previewedStreamers?: string[];
+  /**
+   * Number of streamer changes this month
+   */
+  streamerChangeCount?: number;
+  /**
+   * Max allowed streamer changes per month
+   */
+  streamerChangeLimit?: number;
+  /**
+   * Timestamp for next reset of streamer change count
+   */
+  streamerChangeReset?: string | Date;
 };
 
 /**
@@ -65,6 +81,23 @@ export type UserRegistrationData = {
     streamer: boolean;
     viewer: boolean;
   }>;
+  myStreamers?: string[];
+  acceptedTnC?: boolean;
+  plan?: string;
+  selectedPlan?: string;
+  planDetails?: {
+    price: number;
+    maxStreamers: number | string;
+  };
+  paymentInfo?: {
+    paymentMethodId: string;
+    amount: number;
+    status: string;
+  };
+  previewedStreamers?: string[];
+  streamerChangeCount?: number;
+  streamerChangeLimit?: number;
+  streamerChangeReset?: string | Date;
 };
 
 /**
