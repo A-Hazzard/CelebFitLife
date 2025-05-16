@@ -196,6 +196,63 @@ export default function UserDashboard() {
               MY STREAMERS
             </h2>
             <div className="w-full relative group">
+              <style jsx global>{`
+                .slick-prev,
+                .slick-next {
+                  width: 40px;
+                  height: 40px;
+                  background: rgba(0, 0, 0, 0.5);
+                  border-radius: 50%;
+                  z-index: 10;
+                  transition: all 0.2s;
+                }
+                .slick-prev:hover,
+                .slick-next:hover {
+                  background: rgba(0, 0, 0, 0.8);
+                }
+                .slick-prev {
+                  left: 1px;
+                }
+                .slick-next {
+                  right: 1px;
+                }
+                .slick-prev:before,
+                .slick-next:before {
+                  font-size: 20px;
+                  opacity: 1;
+                  color: white;
+                }
+                @media (max-width: 320px) {
+                  .slick-prev,
+                  .slick-next {
+                    top: 40%;
+                  }
+                }
+                @media (min-width: 425px) {
+                  .slick-prev,
+                  .slick-next {
+                    top: 30%;
+                  }
+                }
+                @media (min-width: 768px) {
+                  .slick-prev,
+                  .slick-next {
+                    top: 15%;
+                  }
+                }
+                @media (min-width: 1024px) {
+                  .slick-prev,
+                  .slick-next {
+                    top: 25%;
+                  }
+                }
+                  @media (min-width: 1600px) {
+                  .slick-prev,
+                  .slick-next {
+                    top: 20%;
+                  }
+                }
+              `}</style>
               <Slider {...{
                 ...SLIDER_SETTINGS,
                 dots: false,
@@ -385,24 +442,24 @@ export default function UserDashboard() {
 
           {/* Locked Streamer Modal */}
           <Dialog open={!!showLockedModal} onOpenChange={() => setShowLockedModal(null)}>
-            <DialogContent className="max-w-lg w-full p-5 rounded-2xl border-2 border-brandOrange bg-brandBlack sm:mx-2 mx-0 fixed inset-0 flex flex-col justify-center items-center z-[100]">
+            <DialogContent className="sm:max-w-lg w-[95%] p-6 sm:p-8 rounded-2xl border-2 border-brandOrange bg-brandBlack absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-h-[90vh] overflow-y-auto overflow-x-hidden">
               <DialogHeader>
                 <div className="flex flex-col items-center gap-4">
-                  <span className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brandOrange/10 mb-2">
-                    <Lock className="w-10 h-10 text-brandOrange" />
+                  <span className="inline-flex items-center justify-center w-12 sm:w-16 h-12 sm:h-16 rounded-full bg-brandOrange/10 mb-2">
+                    <Lock className="w-8 h-8 sm:w-10 sm:h-10 text-brandOrange" />
                   </span>
-                  <DialogTitle className="text-2xl text-center text-brandOrange font-extrabold">Unlock Streamer</DialogTitle>
-                  <DialogDescription className="text-base text-center text-brandGray mt-2">
+                  <DialogTitle className="text-xl sm:text-2xl text-center text-brandOrange font-extrabold">Unlock Streamer</DialogTitle>
+                  <DialogDescription className="text-sm sm:text-base text-center text-brandGray mt-2">
                     This streamer is locked. Buy another streamer or preview for 1 minute.
                   </DialogDescription>
                 </div>
               </DialogHeader>
-              <div className="my-6 border-t border-brandOrange/20 w-full" />
+              <div className="my-4 sm:my-6 border-t border-brandOrange/20" />
               {showLockedModal && (
                 <div className="flex flex-col sm:flex-row gap-4 justify-center w-full">
                   <Button
                     variant="default"
-                    className="bg-brandOrange text-brandBlack font-bold px-6 py-3 rounded-full text-lg shadow-md hover:scale-105 transition-transform w-full sm:w-auto"
+                    className="bg-brandOrange text-brandBlack font-bold px-4 sm:px-6 py-2 sm:py-3 rounded-full text-base sm:text-lg shadow-md hover:scale-105 transition-transform w-full sm:w-auto"
                     onClick={() => {
                       setShowLockedModal(null);
                       // TODO: Implement buy logic
@@ -413,7 +470,7 @@ export default function UserDashboard() {
                   {showLockedModal && (
                     <Button
                       variant="outline"
-                      className="border-2 border-brandOrange text-brandOrange font-bold px-6 py-3 rounded-full text-lg shadow-md hover:bg-brandOrange/10 hover:scale-105 transition-transform w-full sm:w-auto"
+                      className="border-2 border-brandOrange text-brandOrange font-bold px-4 sm:px-6 py-2 sm:py-3 rounded-full text-base sm:text-lg shadow-md hover:bg-brandOrange/10 hover:scale-105 transition-transform w-full sm:w-auto"
                       onClick={() => {
                         setShowLockedModal(null);
                         handlePreview(showLockedModal);
@@ -425,9 +482,7 @@ export default function UserDashboard() {
                 </div>
               )}
               <DialogClose asChild>
-                <button className="absolute top-4 right-4 text-brandOrange hover:text-brandWhite transition-colors">
-                  <span className="sr-only">Close</span>
-                </button>
+               
               </DialogClose>
             </DialogContent>
           </Dialog>
