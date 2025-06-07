@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/client";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { Stream, StreamerWithStreams } from "@/lib/types/streaming.types";
+import { StreamData, StreamerWithStreams } from "@/lib/types/streaming.types";
 
 export const fetchStreamersWithStreams = async () => {
   const streamerCol = collection(db, "streamer");
@@ -35,7 +35,7 @@ export const fetchStreamersWithStreams = async () => {
     const streams = streamSnap.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
-    })) as Stream[];
+    })) as StreamData[];
 
     streamerData.push({ ...streamer, streams });
   }

@@ -9,14 +9,16 @@
  */
 
 import { createLogger } from "./logger";
-import {
-  Stream,
-  StreamStatus,
-  StreamUpdateData,
-  StreamWithDetails,
-  StreamerWithStreams,
-} from "@/lib/types/streaming.types";
+import { StreamData, StreamerWithStreams } from "@/lib/types/streaming.types";
 import { toStreamingError } from "@/lib/utils/errorHandler";
+
+// Define legacy types for backward compatibility
+type StreamStatus = "idle" | "active" | "disabled" | "live" | "scheduled";
+type StreamUpdateData = Partial<StreamData>;
+type StreamWithDetails = StreamData & {
+  status: StreamStatus;
+  scheduledFor?: string | Date | null;
+};
 
 // Create context-specific logger
 const streamLogger = createLogger("Streaming");
@@ -166,7 +168,7 @@ export function isStreamUpcomingSoon(
  */
 export async function prepareStreamToStart(
   streamId: string
-): Promise<Stream | null> {
+): Promise<StreamData | null> {
   try {
     const response = await fetch(`/api/streams/${streamId}/prepare`, {
       method: "PUT",
@@ -199,7 +201,7 @@ export async function prepareStreamToStart(
 export async function updateStream(
   streamId: string,
   updateData: StreamUpdateData
-): Promise<Stream | null> {
+): Promise<StreamData | null> {
   try {
     const response = await fetch(`/api/streams/${streamId}`, {
       method: "PUT",
@@ -236,7 +238,7 @@ export async function createStream(streamData: {
   thumbnailUrl?: string;
   isScheduled?: boolean;
   scheduledFor?: string | Date | null;
-}): Promise<{ stream: Stream; success: boolean }> {
+}): Promise<{ stream: StreamData; success: boolean }> {
   try {
     const response = await fetch("/api/streams", {
       method: "POST",
@@ -250,7 +252,7 @@ export async function createStream(streamData: {
       const errorData = await response.json();
       streamLogger.error("Failed to create stream:", errorData);
       return {
-        stream: null as unknown as Stream,
+        stream: null as unknown as StreamData,
         success: false,
       };
     }
@@ -261,7 +263,7 @@ export async function createStream(streamData: {
   } catch (error) {
     streamLogger.error("Error creating stream:", toStreamingError(error));
     return {
-      stream: null as unknown as Stream,
+      stream: null as unknown as StreamData,
       success: false,
     };
   }
@@ -272,7 +274,7 @@ export async function createStream(streamData: {
  */
 export async function fetchStreamById(
   streamId: string
-): Promise<Stream | null> {
+): Promise<StreamData | null> {
   try {
     const response = await fetch(`/api/streams/${streamId}`);
 
@@ -296,7 +298,9 @@ export async function fetchStreamById(
 /**
  * Fetches streams for a given user
  */
-export async function fetchStreamsForUser(userId: string): Promise<Stream[]> {
+export async function fetchStreamsForUser(
+  userId: string
+): Promise<StreamData[]> {
   try {
     const response = await fetch(`/api/users/${userId}/streams`);
 
@@ -326,7 +330,7 @@ export async function fetchStreamsForUser(userId: string): Promise<Stream[]> {
 export async function updateStreamStatus(
   streamId: string,
   status: StreamStatus
-): Promise<Stream | null> {
+): Promise<StreamData | null> {
   try {
     const response = await fetch(`/api/streams/${streamId}/status`, {
       method: "PUT",

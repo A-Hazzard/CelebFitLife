@@ -4,7 +4,6 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import Image from "next/image";
-import { StreamStatusOverlayProps } from "@/lib/types/streaming.types";
 
 export const StreamStatusOverlay = ({
   status,
@@ -15,7 +14,16 @@ export const StreamStatusOverlay = ({
   maxConnectionAttempts = 5,
   thumbnail,
   streamTitle,
-}: StreamStatusOverlayProps) => {
+}: {
+  status: string;
+  error?: string;
+  isRetrying: boolean;
+  onRetry?: () => void;
+  connectionAttempts?: number;
+  maxConnectionAttempts?: number;
+  thumbnail?: string;
+  streamTitle?: string;
+}) => {
   const getStatusMessage = (): {
     title: string;
     subtitle: string;

@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { ActivityItem } from "@/lib/types/ui";
-import { StreamDoc } from "@/lib/types/streaming.types";
+import { StreamData } from "@/lib/types/streaming.types";
 
 /**
  * Fetches live streams for the specified user
@@ -21,7 +21,7 @@ import { StreamDoc } from "@/lib/types/streaming.types";
  */
 export const fetchLiveStreams = async (
   userId: string
-): Promise<StreamDoc[]> => {
+): Promise<StreamData[]> => {
   if (!userId) {
     throw new Error("User ID is required to fetch live streams");
   }
@@ -39,7 +39,7 @@ export const fetchLiveStreams = async (
       ({
         id: doc.id,
         ...doc.data(),
-      } as StreamDoc)
+      } as StreamData)
   );
 };
 
@@ -50,7 +50,7 @@ export const fetchLiveStreams = async (
  */
 export const fetchUpcomingStreams = async (
   userId: string
-): Promise<StreamDoc[]> => {
+): Promise<StreamData[]> => {
   if (!userId) {
     throw new Error("User ID is required to fetch upcoming streams");
   }
@@ -70,7 +70,7 @@ export const fetchUpcomingStreams = async (
       ({
         id: doc.id,
         ...doc.data(),
-      } as StreamDoc)
+      } as StreamData)
   );
 };
 
@@ -83,7 +83,7 @@ export const fetchUpcomingStreams = async (
 export const fetchPastStreams = async (
   userId: string,
   limitCount: number = 10
-): Promise<StreamDoc[]> => {
+): Promise<StreamData[]> => {
   if (!userId) {
     throw new Error("User ID is required to fetch past streams");
   }
@@ -106,23 +106,13 @@ export const fetchPastStreams = async (
           ({
             id: doc.id,
             ...doc.data(),
-          } as StreamDoc)
+          } as StreamData)
       )
       .sort((a, b) => {
-        // Sort by endedAt date, most recent first
-        const aDate = a.endedAt
-          ? typeof a.endedAt === "string"
-            ? new Date(a.endedAt)
-            : a.endedAt.toDate()
-          : new Date(0);
-
-        const bDate = b.endedAt
-          ? typeof b.endedAt === "string"
-            ? new Date(b.endedAt)
-            : b.endedAt.toDate()
-          : new Date(0);
-
-        return bDate.getTime() - aDate.getTime();
+        // Sort by updatedAt date, most recent first
+        const aDate = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const bDate = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return bDate - aDate;
       })
       .slice(0, limitCount);
 

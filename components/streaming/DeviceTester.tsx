@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import AudioLevelMeter from "./AudioLevelMeter";
 import { toast } from "sonner";
 import { createLogger } from "@/lib/utils/logger";
-import { DeviceTesterProps } from "@/lib/types/streaming.types";
 
 // --- Constants ---
 const VERBOSE_LOGGING = false;
@@ -34,7 +33,19 @@ export default function DeviceTester({
   setCurrentMicId,
   setCurrentSpeakerId,
   loadingDevices,
-}: Omit<DeviceTesterProps, "className" | "mediaDeviceError">) {
+}: {
+  onComplete: () => void;
+  cameraDevices: MediaDeviceInfo[];
+  micDevices: MediaDeviceInfo[];
+  speakerDevices: MediaDeviceInfo[];
+  currentCameraId?: string;
+  currentMicId?: string;
+  currentSpeakerId?: string;
+  setCurrentCameraId: (id: string) => void;
+  setCurrentMicId: (id: string) => void;
+  setCurrentSpeakerId: (id: string) => void;
+  loadingDevices: boolean;
+}) {
   // --- UI state ---
   const [isTesting, setIsTesting] = useState<boolean>(false);
   const [testType, setTestType] = useState<"mic" | "speaker" | "camera" | null>(

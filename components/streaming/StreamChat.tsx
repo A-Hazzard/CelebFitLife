@@ -4,7 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { StreamChatProps } from "@/lib/types/streaming.types";
+
+// Define StreamChatProps locally
+interface StreamChatProps {
+  streamId: string;
+  className?: string;
+  onUserClick?: (username: string, userId: string) => void;
+}
+
+// Define Message type based on usage
+interface Message {
+  id: string;
+  username: string;
+  userId: string;
+  content: string;
+  timestamp: string | number | Date;
+  isHost?: boolean;
+}
 
 const StreamChat: React.FC<StreamChatProps> = ({
   streamId,
@@ -30,7 +46,7 @@ const StreamChat: React.FC<StreamChatProps> = ({
   }, [messages]);
 
   // Helper to format time - consider moving to a utils file if used elsewhere
-  const formatTime = (timestamp: string) => {
+  const formatTime = (timestamp: string | number | Date) => {
     try {
       const date = new Date(timestamp);
       return formatDistanceToNow(date, { addSuffix: true });
@@ -92,7 +108,7 @@ const StreamChat: React.FC<StreamChatProps> = ({
             No messages yet. Be the first to send a message!
           </div>
         ) : (
-          messages.map((message) => (
+          messages.map((message: Message) => (
             <div key={message.id} className="flex flex-col">
               <div className="flex items-baseline gap-2">
                 <span
@@ -100,10 +116,10 @@ const StreamChat: React.FC<StreamChatProps> = ({
                     message.isHost ? "text-brandOrange" : "text-brandWhite"
                   } ${onUserClick ? "cursor-pointer hover:underline" : ""}`}
                   onClick={() =>
-                    onUserClick && onUserClick(message.sender, message.id)
+                    onUserClick && onUserClick(message.username, message.id)
                   }
                 >
-                  {message.sender}
+                  {message.username}
                   {message.isHost && (
                     <span className="ml-1 text-xs bg-brandOrange bg-opacity-20 text-brandOrange px-1 py-0.5 rounded">
                       Host
@@ -111,10 +127,10 @@ const StreamChat: React.FC<StreamChatProps> = ({
                   )}
                 </span>
                 <span className="text-xs text-gray-500">
-                  {formatTime(message.createdAt)}
+                  {formatTime(message.timestamp)}
                 </span>
               </div>
-              <p className="text-gray-300">{message.message}</p>
+              <p className="text-gray-300">{message.content}</p>
             </div>
           ))
         )}

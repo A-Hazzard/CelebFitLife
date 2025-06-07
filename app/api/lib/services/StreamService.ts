@@ -1,9 +1,7 @@
 import { adminDb, convertDocToObj } from "@/lib/firebase/admin"; // Correct path
 import {
-  Stream,
-  ApiStreamCreateDTO,
-  ApiStreamUpdateDTO,
-  StreamApiUpdateData,
+  StreamData,
+  CreateStreamRequestBody,
 } from "@/lib/types/streaming.types"; // Import from consolidated types
 import { NotFoundError, InvalidDataError } from "../errors/apiErrors"; // Use API errors
 import { nanoid } from "nanoid";
@@ -17,13 +15,13 @@ export class StreamService {
   /**
    * Find stream by ID
    */
-  async findById(id: string): Promise<Stream | null> {
+  async findById(id: string): Promise<StreamData | null> {
     try {
       const doc = await this.streamsCollection.doc(id).get();
       if (!doc.exists) {
         return null;
       }
-      return convertDocToObj<Stream>(doc);
+      return convertDocToObj<StreamData>(doc);
     } catch (error) {
       console.error("[API StreamService] Error finding stream by ID:", error);
       // Throw generic error for internal DB issues
@@ -34,7 +32,7 @@ export class StreamService {
   /**
    * Find stream by slug
    */
-  async findBySlug(slug: string): Promise<Stream | null> {
+  async findBySlug(slug: string): Promise<StreamData | null> {
     try {
       const snapshot = await this.streamsCollection
         .where("slug", "==", slug)
@@ -43,7 +41,7 @@ export class StreamService {
       if (snapshot.empty) {
         return null;
       }
-      return convertDocToObj<Stream>(snapshot.docs[0]);
+      return convertDocToObj<StreamData>(snapshot.docs[0]);
     } catch (error) {
       console.error("[API StreamService] Error finding stream by slug:", error);
       throw new Error("Database error finding stream by slug.");
@@ -53,14 +51,14 @@ export class StreamService {
   /**
    * List streams for a user
    */
-  async findByUser(userId: string): Promise<Stream[]> {
+  async findByUser(userId: string): Promise<StreamData[]> {
     try {
       const snapshot = await this.streamsCollection
-        .where("createdBy", "==", userId)
+        .where("streamerId", "==", userId)
         .get();
       return snapshot.docs
-        .map((doc) => convertDocToObj<Stream>(doc))
-        .filter((stream): stream is Stream => stream !== null);
+        .map((doc) => convertDocToObj<StreamData>(doc))
+        .filter((stream): stream is StreamData => stream !== null);
     } catch (error) {
       console.error(
         "[API StreamService] Error finding streams by user ID:",
@@ -73,15 +71,14 @@ export class StreamService {
   /**
    * List all active streams
    */
-  async findActiveStreams(): Promise<Stream[]> {
+  async findActiveStreams(): Promise<StreamData[]> {
     try {
       const snapshot = await this.streamsCollection
-        .where("hasStarted", "==", true)
-        .where("hasEnded", "==", false)
+        .where("isLive", "==", true)
         .get();
       return snapshot.docs
-        .map((doc) => convertDocToObj<Stream>(doc))
-        .filter((stream): stream is Stream => stream !== null);
+        .map((doc) => convertDocToObj<StreamData>(doc))
+        .filter((stream): stream is StreamData => stream !== null);
     } catch (error) {
       console.error("[API StreamService] Error finding active streams:", error);
       throw new Error("Database error finding active streams.");
@@ -91,56 +88,61 @@ export class StreamService {
   /**
    * Create a new stream
    */
-  async create(streamData: ApiStreamCreateDTO): Promise<Stream> {
+  async create(
+    streamData: CreateStreamRequestBody & { streamerId: string }
+  ): Promise<StreamData> {
     try {
-      if (!streamData.createdBy) {
+      if (!streamData.streamerId) {
         throw new InvalidDataError(
-          "createdBy field (user ID) is required to create a stream."
+          "streamerId field (user ID) is required to create a stream."
         );
       }
-      const slug = await this.generateUniqueSlug();
 
-      // Create stream object without scheduledAt first
-      const newStream = {
+      const slug = await this.generateUniqueSlug();
+      const now = new Date().toISOString();
+
+      const newStream: Omit<StreamData, "id"> = {
         slug,
-        createdBy: streamData.createdBy,
-        createdAt: new Date().toISOString(),
+        streamerId: streamData.streamerId,
+        streamerName: "", // Will be populated from user data
         title: streamData.title || "Untitled Stream",
         description: streamData.description || "",
+        isLive: false,
+        createdAt: now,
+        updatedAt: now,
+        scheduledAt: streamData.scheduledAt || null,
+        tags: streamData.tags || [],
+        category: streamData.category || "Fitness",
+        viewerCount: 0,
         hasStarted: false,
         hasEnded: false,
-        audioMuted: false,
-        cameraOff: false,
-        isCameraOff: false, // Legacy field
-        isMuted: false, // Legacy field
-        lastUpdated: new Date().toISOString(),
+        isPrivate: streamData.isPrivate || false,
+        requiresSubscription: streamData.requiresSubscription || false,
+        language: streamData.language || "en",
+        commentCount: 0,
+        likeCount: 0,
+        thumbnail: streamData.thumbnail || "",
+        userId: streamData.userId || streamData.streamerId,
+        userPhotoURL: streamData.userPhotoURL || "",
+        username: streamData.username || "",
       };
 
-      // Add scheduledAt field with the correct type for Firestore
-      // Firestore will convert this to a Timestamp object
-      const streamToCreate = {
-        ...newStream,
-        scheduledAt: streamData.scheduledAt
-          ? new Date(streamData.scheduledAt)
-          : new Date(),
-      };
-
-      const docRef = await this.streamsCollection.add(streamToCreate);
+      const docRef = await this.streamsCollection.add(newStream);
       const doc = await docRef.get();
-      const result = convertDocToObj<Stream>(doc);
+      const result = convertDocToObj<StreamData>(doc);
+
       if (!result) {
-        // This indicates an internal issue, post-creation retrieval failed
         throw new Error(
           "Failed to retrieve created stream data after creation."
         );
       }
+
       return result;
     } catch (error) {
       console.error("[API StreamService] Error creating stream:", error);
       if (error instanceof InvalidDataError) {
-        throw error; // Re-throw specific validation errors
+        throw error;
       }
-      // Throw generic error for other internal issues
       throw new Error("Failed to create stream due to a database error.");
     }
   }
@@ -148,121 +150,58 @@ export class StreamService {
   /**
    * Update a stream
    */
-  async update(id: string, streamData: ApiStreamUpdateDTO): Promise<Stream> {
-    const docRef = this.streamsCollection.doc(id);
-    const doc = await docRef.get();
+  async update(
+    id: string,
+    updateData: Partial<StreamData>
+  ): Promise<StreamData> {
+    try {
+      const docRef = this.streamsCollection.doc(id);
+      const doc = await docRef.get();
 
-    if (!doc.exists) {
-      throw new NotFoundError("Stream not found for update");
+      if (!doc.exists) {
+        throw new NotFoundError("Stream not found for update");
+      }
+
+      const dataToUpdate = {
+        ...updateData,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await docRef.update(dataToUpdate);
+
+      const updatedDoc = await docRef.get();
+      const updatedStream = convertDocToObj<StreamData>(updatedDoc);
+
+      if (!updatedStream) {
+        throw new Error("Failed to convert updated stream document to object");
+      }
+
+      return updatedStream;
+    } catch (error) {
+      console.error("[API StreamService] Error updating stream:", error);
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+      throw new Error("Failed to update stream due to a database error.");
     }
-
-    // Ensure sensitive/immutable fields are not updated accidentally
-    const safeUpdateData = streamData as StreamApiUpdateData;
-    if (Object.keys(safeUpdateData).length === 0) {
-      throw new InvalidDataError("No valid fields provided for update.");
-    }
-
-    // Convert scheduledAt to Date if it exists
-    const dataToUpdate = {
-      ...safeUpdateData,
-      lastUpdated: new Date().toISOString(),
-    };
-
-    if (dataToUpdate.scheduledAt) {
-      dataToUpdate.scheduledAt = new Date(dataToUpdate.scheduledAt);
-    }
-
-    await docRef.update(dataToUpdate);
-
-    const updatedDoc = await docRef.get();
-    if (!updatedDoc.exists) {
-      // Should exist, but safety check
-      throw new Error("Failed to retrieve updated stream data after update.");
-    }
-
-    const updatedStream = convertDocToObj<Stream>(updatedDoc);
-    if (!updatedStream) {
-      throw new Error("Failed to convert updated stream document to object");
-    }
-
-    return updatedStream;
   }
 
   /**
    * Start a stream
    */
-  async startStream(id: string): Promise<Stream> {
-    try {
-      const docRef = this.streamsCollection.doc(id);
-      const doc = await docRef.get();
-      if (!doc.exists) {
-        throw new NotFoundError("Stream not found to start");
-      }
-
-      await docRef.update({
-        hasStarted: true,
-        hasEnded: false,
-        startedAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-      });
-
-      const updatedDoc = await docRef.get();
-      if (!updatedDoc.exists) {
-        // Should exist, but safety check
-        throw new Error("Failed to retrieve stream data after starting.");
-      }
-
-      const startedStream = convertDocToObj<Stream>(updatedDoc);
-      if (!startedStream) {
-        throw new Error("Failed to convert started stream document to object");
-      }
-
-      return startedStream;
-    } catch (error) {
-      console.error("[API StreamService] Error starting stream:", error);
-      if (error instanceof NotFoundError) {
-        throw error; // Re-throw specific handled errors
-      }
-      throw new Error("Failed to start stream due to a database error.");
-    }
+  async startStream(id: string): Promise<StreamData> {
+    return this.update(id, {
+      isLive: true,
+    });
   }
 
   /**
    * End a stream
    */
-  async endStream(id: string): Promise<Stream> {
-    try {
-      const docRef = this.streamsCollection.doc(id);
-      const doc = await docRef.get();
-      if (!doc.exists) {
-        throw new NotFoundError("Stream not found to end");
-      }
-
-      await docRef.update({
-        hasEnded: true,
-        endedAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-      });
-
-      const updatedDoc = await docRef.get();
-      if (!updatedDoc.exists) {
-        // Should exist, but safety check
-        throw new Error("Failed to retrieve stream data after ending.");
-      }
-
-      const endedStream = convertDocToObj<Stream>(updatedDoc);
-      if (!endedStream) {
-        throw new Error("Failed to convert ended stream document to object");
-      }
-
-      return endedStream;
-    } catch (error) {
-      console.error("[API StreamService] Error ending stream:", error);
-      if (error instanceof NotFoundError) {
-        throw error; // Re-throw specific handled errors
-      }
-      throw new Error("Failed to end stream due to a database error.");
-    }
+  async endStream(id: string): Promise<StreamData> {
+    return this.update(id, {
+      isLive: false,
+    });
   }
 
   /**
@@ -272,6 +211,7 @@ export class StreamService {
     try {
       const docRef = this.streamsCollection.doc(id);
       const doc = await docRef.get();
+
       if (!doc.exists) {
         throw new NotFoundError("Stream not found for deletion");
       }
@@ -280,7 +220,7 @@ export class StreamService {
     } catch (error) {
       console.error("[API StreamService] Error deleting stream:", error);
       if (error instanceof NotFoundError) {
-        throw error; // Re-throw specific handled errors
+        throw error;
       }
       throw new Error("Failed to delete stream due to a database error.");
     }
@@ -290,23 +230,21 @@ export class StreamService {
    * Generate a unique slug for a stream
    */
   private async generateUniqueSlug(length = 8): Promise<string> {
-    let slug = nanoid(length);
     let attempts = 0;
-    const maxAttempts = 5;
+    const maxAttempts = 10;
 
     while (attempts < maxAttempts) {
-      const existing = await this.findBySlug(slug);
-      if (!existing) {
+      const slug = nanoid(length);
+      const existingStream = await this.findBySlug(slug);
+
+      if (!existingStream) {
         return slug;
       }
-      // If exists, generate a new one
-      slug = nanoid(length);
+
       attempts++;
+      length++; // Increase length if collision occurs
     }
 
-    console.error(
-      `[API StreamService] Failed to generate a unique slug after ${maxAttempts} attempts.`
-    );
-    throw new Error("Failed to generate a unique stream identifier.");
+    throw new Error("Failed to generate unique slug after maximum attempts");
   }
 }

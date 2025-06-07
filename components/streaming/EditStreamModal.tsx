@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { EditStreamFormData } from "@/lib/types/ui";
-import { Stream } from "@/lib/types/streaming.types";
+import { StreamData } from "@/lib/types/streaming.types";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import {
@@ -35,7 +35,7 @@ import Image from "next/image";
 type EditStreamModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  stream: Stream;
+  stream: StreamData;
   onSuccess?: () => void;
 };
 

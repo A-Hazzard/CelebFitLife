@@ -10,7 +10,7 @@ import { StreamerCard } from "@/components/streaming/StreamerCard";
 import ActivityLog from "@/components/dashboard/ActivityLog";
 import StreamStats from "@/components/dashboard/StreamStats";
 import { fetchAllUserStreams } from "@/lib/helpers/dashboard";
-import { StreamDoc } from "@/lib/types/streaming.types";
+import { StreamData } from "@/lib/types/streaming.types";
 import {
   Activity,
   ChevronRight,
@@ -29,8 +29,8 @@ import { getStreamThumbnail } from "@/components/layout/Header";
 
 export default function DashboardPage() {
   // Add states for dropdowns
-  const [liveStreams, setLiveStreams] = useState<StreamDoc[]>([]);
-  const [pastStreams, setPastStreams] = useState<StreamDoc[]>([]);
+  const [liveStreams, setLiveStreams] = useState<StreamData[]>([]);
+  const [pastStreams, setPastStreams] = useState<StreamData[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isStreamerGuideOpen, setIsStreamerGuideOpen] = useState(false);
@@ -282,16 +282,12 @@ export default function DashboardPage() {
                           <span className="truncate max-w-[120px]">
                             Started{" "}
                             {stream.createdAt
-                              ? new Date(
-                                  typeof stream.createdAt === "string"
-                                    ? stream.createdAt
-                                    : stream.createdAt.toDate()
-                                ).toLocaleTimeString()
+                              ? new Date(stream.createdAt).toLocaleTimeString()
                               : "Recently"}
                           </span>
                           <div className="flex items-center">
                             <Activity className="h-3 w-3 mr-1 text-brandOrange" />
-                            {stream.viewCount || 0} viewers
+                            {stream.viewerCount || 0} viewers
                           </div>
                         </div>
                       </div>
@@ -376,14 +372,10 @@ export default function DashboardPage() {
                           {stream.title}
                         </h4>
                         <div className="text-xs sm:text-sm text-brandGray truncate">
-                          {stream.endedAt
-                            ? new Date(
-                                typeof stream.endedAt === "string"
-                                  ? stream.endedAt
-                                  : stream.endedAt.toDate()
-                              ).toLocaleDateString()
+                          {stream.updatedAt
+                            ? new Date(stream.updatedAt).toLocaleDateString()
                             : "N/A"}{" "}
-                          • {stream.viewCount || 0} views
+                          • {stream.viewerCount || 0} views
                         </div>
                       </div>
                       <Button

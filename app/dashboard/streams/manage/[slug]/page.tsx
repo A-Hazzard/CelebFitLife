@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 // Import regular Firebase client for client components
 import { db } from "@/lib/firebase/client";
 import {
@@ -63,7 +63,7 @@ import {
   Speech,
 } from "lucide-react";
 // Import Stream type from the models
-import { Stream } from "@/lib/types/streaming.types";
+import { StreamData, StreamingErrorUnion } from "@/lib/types/streaming.types";
 import { toast } from "sonner";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import ActivityLog from "@/components/streaming/ActivityLog";
@@ -83,6 +83,8 @@ import {
 } from "@/components/ui/dialog";
 import Image from "next/image";
 import { useMediaDevices } from "@/lib/hooks/useMediaDevices";
+import { getUserRoles } from "@/lib/utils/userUtils";
+// import { ClientMuxService } from "@/lib/services/ClientMuxService";
 
 // Mock data for analytics (would be replaced with real data in production)
 const mockAnalytics = {
@@ -683,8 +685,9 @@ export default function ManageStreamPage() {
   const pathname = usePathname();
   const slug = pathname?.split("/").pop() || "";
   const { currentUser } = useAuthStore();
+  const router = useRouter();
 
-  const [stream, setStream] = useState<Stream | null>(null);
+  const [streamData, setStreamData] = useState<StreamData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDeviceTesterModal, setShowDeviceTesterModal] = useState(false);
   const [shouldStartStreamAfterTest, setShouldStartStreamAfterTest] =
@@ -704,11 +707,28 @@ export default function ManageStreamPage() {
 
   const streamManagerRef = useRef<{
     startStream: () => Promise<void>;
-    disconnect: () => Promise<void>;
+    endStream: () => Promise<void>;
+    toggleMic: () => void;
+    toggleCamera: () => void;
+    isStreaming: () => boolean;
   } | null>(null);
+
+  // Mux service can be created when needed
+  // const muxServiceRef = useRef(new ClientMuxService());
 
   // Call useMediaDevices hook here
   const mediaDeviceProps = useMediaDevices();
+
+  // Redirect viewers to the live stream page
+  useEffect(() => {
+    if (currentUser) {
+      const { isViewer, isStreamer, isAdmin } = getUserRoles(currentUser);
+      if (isViewer && !isStreamer && !isAdmin) {
+        // Only viewer, not streamer or admin
+        router.replace(`/streaming/live/${slug}`);
+      }
+    }
+  }, [currentUser, slug, router]);
 
   // Use currentUser to avoid lint error
   useEffect(() => {
@@ -726,12 +746,12 @@ export default function ManageStreamPage() {
 
       if (!streamSnapshot.exists()) {
         setError("Stream not found");
-        setStream(null);
+        setStreamData(null);
       } else {
-        setStream({
+        setStreamData({
           id: streamSnapshot.id,
           ...streamSnapshot.data(),
-        } as Stream);
+        } as StreamData);
       }
     } catch (err) {
       console.error("Error fetching stream:", err);
@@ -749,10 +769,10 @@ export default function ManageStreamPage() {
     const streamDocRef = doc(db, "streams", slug);
     const unsubscribe = onSnapshot(streamDocRef, (snapshot) => {
       if (snapshot.exists()) {
-        setStream({
+        setStreamData({
           id: snapshot.id,
           ...snapshot.data(),
-        } as Stream);
+        } as StreamData);
       }
     });
 
@@ -776,22 +796,18 @@ export default function ManageStreamPage() {
 
   const startStream = async () => {
     try {
-      if (!stream?.id) return;
+      if (!streamData?.id) return;
 
       console.log(
         "[StreamManager] Starting stream, updating Firestore document"
       );
-      const streamDocRef = doc(db, "streams", stream.id);
+      const streamDocRef = doc(db, "streams", streamData.id);
 
-      // Update stream document with explicit hasEnded: false
+      // Update stream document
       await updateDoc(streamDocRef, {
-        hasStarted: true,
-        hasEnded: false,
+        isLive: true,
         startedAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
-        status: "live", // Ensure status is explicitly set to "live"
-        audioMuted: false,
-        cameraOff: false,
       });
 
       // Call the internal startStream method of StreamManager
@@ -802,9 +818,7 @@ export default function ManageStreamPage() {
         await streamManagerRef.current.startStream();
       }
 
-      setStream((prev) =>
-        prev ? { ...prev, hasStarted: true, hasEnded: false } : null
-      );
+      setStreamData((prev) => (prev ? { ...prev, isLive: true } : null));
       toast.success("Stream started successfully!");
       setConnectionError(null);
     } catch (error) {
@@ -820,39 +834,26 @@ export default function ManageStreamPage() {
     }
 
     try {
-      if (!stream?.id) return;
+      if (!streamData?.id) return;
 
       console.log("[StreamManager] Ending stream, updating Firestore document");
-      const streamDocRef = doc(db, "streams", stream.id);
+      const streamDocRef = doc(db, "streams", streamData.id);
       await updateDoc(streamDocRef, {
-        hasEnded: true,
-        hasStarted: false, // Reset hasStarted to ensure it's not in an ambiguous state
+        isLive: false,
         endedAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
-        status: "ended", // Explicitly set status to ended
       });
 
-      // Disconnect from Twilio if connected
+      // End the stream via StreamManager
       if (
         streamManagerRef.current &&
-        typeof streamManagerRef.current.disconnect === "function"
+        typeof streamManagerRef.current.endStream === "function"
       ) {
-        console.log(
-          "[StreamManager] Calling StreamManager.disconnect() method"
-        );
-        await streamManagerRef.current.disconnect();
+        console.log("[StreamManager] Calling StreamManager.endStream() method");
+        await streamManagerRef.current.endStream();
       }
 
-      setStream((prev) =>
-        prev
-          ? {
-              ...prev,
-              hasEnded: true,
-              hasStarted: false,
-              status: "ended",
-            }
-          : null
-      );
+      setStreamData((prev) => (prev ? { ...prev, isLive: false } : null));
 
       toast.success("Stream ended successfully!");
     } catch (error) {
@@ -928,7 +929,7 @@ export default function ManageStreamPage() {
     );
   }
 
-  if (!stream) {
+  if (!streamData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-brandBlack text-brandWhite">
         <div className="text-center p-8">
@@ -949,9 +950,9 @@ export default function ManageStreamPage() {
     );
   }
 
-  const isStreamLive = stream.hasStarted && !stream.hasEnded;
-  const isStreamScheduled = !stream.hasStarted && stream.scheduledAt;
-  const isStreamEnded = stream.hasEnded;
+  const isStreamLive = streamData?.isLive;
+  const isStreamScheduled = streamData?.scheduledAt && !streamData?.isLive;
+  const isStreamEnded = !isStreamLive && !isStreamScheduled;
 
   return (
     <div className="min-h-screen bg-brandBlack text-brandWhite">
@@ -969,7 +970,7 @@ export default function ManageStreamPage() {
               <span className="text-gray-600">/</span>
               <span>Stream Manager</span>
             </div>
-            <h1 className="text-2xl font-bold">{stream.title}</h1>
+            <h1 className="text-2xl font-bold">{streamData?.title}</h1>
             <div className="flex items-center mt-1">
               {isStreamLive ? (
                 <span className="bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full text-xs flex items-center">
@@ -994,7 +995,7 @@ export default function ManageStreamPage() {
               )}
               {isStreamLive && (
                 <div className="ml-4 text-sm flex items-center">
-                  <StreamDuration startTime={stream.startedAt || null} />
+                  <StreamDuration startTime={streamData?.createdAt || null} />
                 </div>
               )}
             </div>
@@ -1056,7 +1057,19 @@ export default function ManageStreamPage() {
               <div className="relative">
                 <StreamManager
                   ref={streamManagerRef}
-                  stream={stream}
+                  streamData={streamData}
+                  onStreamStart={(streamId) => {
+                    console.log("Stream started:", streamId);
+                  }}
+                  onStreamEnd={(streamId) => {
+                    console.log("Stream ended:", streamId);
+                  }}
+                  onError={(error: StreamingErrorUnion) => {
+                    console.error("Stream error:", error);
+                    setConnectionError(
+                      "error" in error ? error.error : error.message
+                    );
+                  }}
                   className="min-h-[500px]"
                 />
 
@@ -1192,18 +1205,18 @@ export default function ManageStreamPage() {
                     <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                       <div className="flex-1">
                         <h2 className="text-xl font-bold text-white">
-                          {stream.title}
+                          {streamData?.title}
                         </h2>
                         <p className="text-gray-400 text-sm mt-1">
-                          {stream.description || "No description set"}
+                          {streamData?.description || "No description set"}
                         </p>
                         <div className="mt-3">
                           <div className="text-gray-400 text-sm mb-1">
-                            Category: {stream.category || "Not set"}
+                            Category: {streamData?.category || "Not set"}
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {stream.tags && stream.tags.length > 0 ? (
-                              stream.tags.map((tag, index) => (
+                            {streamData?.tags && streamData.tags.length > 0 ? (
+                              streamData.tags.map((tag, index) => (
                                 <span
                                   key={index}
                                   className="bg-gray-800 text-gray-300 px-2 py-1 rounded text-xs"
@@ -1224,7 +1237,7 @@ export default function ManageStreamPage() {
                           variant="outline"
                           className="text-sm bg-transparent border-gray-700 hover:bg-gray-800"
                           onClick={handleEditStream}
-                          disabled={stream.hasEnded}
+                          disabled={isStreamEnded}
                         >
                           <PenSquare className="w-4 h-4 mr-2" />
                           Update Stream Info
@@ -1263,7 +1276,7 @@ export default function ManageStreamPage() {
               {activeTab === "chat" && (
                 <div className="h-[400px]">
                   <StreamChat
-                    streamId={stream.id}
+                    streamId={streamData?.id || ""}
                     className="h-full"
                     onUserClick={handleChatUserClick}
                   />
@@ -1276,7 +1289,7 @@ export default function ManageStreamPage() {
                     <h3 className="font-medium">Activity Log</h3>
                   </div>
                   <ActivityLog
-                    streamId={stream.id}
+                    streamId={streamData?.id || ""}
                     className="h-[400px] overflow-y-auto"
                     maxItems={20}
                   />
@@ -1297,12 +1310,18 @@ export default function ManageStreamPage() {
                       Create Poll
                     </Button>
                   </div>
-                  <PollDisplay streamId={stream.id} isStreamer={true} />
+                  <PollDisplay
+                    streamId={streamData?.id || ""}
+                    isStreamer={true}
+                  />
                 </div>
               )}
 
               {activeTab === "questions" && (
-                <HighlightedQuestions streamId={stream.id} isStreamer={true} />
+                <HighlightedQuestions
+                  streamId={streamData?.id || ""}
+                  isStreamer={true}
+                />
               )}
             </div>
           </div>
@@ -1334,35 +1353,35 @@ export default function ManageStreamPage() {
                         <span className="text-gray-400">Duration</span>
                         <span className="font-medium">
                           <StreamDuration
-                            startTime={stream.startedAt || null}
+                            startTime={streamData?.createdAt || null}
                           />
                         </span>
                       </div>
                     )}
 
-                    {isStreamScheduled && stream.scheduledAt && (
+                    {isStreamScheduled && streamData?.scheduledAt && (
                       <div className="flex justify-between">
                         <span className="text-gray-400">Scheduled For</span>
                         <span className="font-medium">
-                          {stream.scheduledAt.toDate().toLocaleString()}
+                          {new Date(streamData.scheduledAt).toLocaleString()}
                         </span>
                       </div>
                     )}
 
-                    {stream.startedAt && (
+                    {streamData?.createdAt && (
                       <div className="flex justify-between">
                         <span className="text-gray-400">Started At</span>
                         <span className="font-medium">
-                          {formatTimestamp(stream.startedAt)}
+                          {formatTimestamp(streamData.createdAt)}
                         </span>
                       </div>
                     )}
 
-                    {isStreamEnded && stream.endedAt && (
+                    {isStreamEnded && streamData?.updatedAt && (
                       <div className="flex justify-between">
                         <span className="text-gray-400">Ended At</span>
                         <span className="font-medium">
-                          {formatTimestamp(stream.endedAt)}
+                          {formatTimestamp(streamData.updatedAt)}
                         </span>
                       </div>
                     )}
@@ -1395,7 +1414,7 @@ export default function ManageStreamPage() {
                       className="w-full bg-transparent border-gray-700 text-gray-300 hover:bg-gray-800 justify-start"
                       onClick={() => {
                         navigator.clipboard.writeText(
-                          `https://celebfitlife.com/streaming/live/${stream.slug}`
+                          `https://celebfitlife.com/streaming/live/${streamData?.slug}`
                         );
                         toast.success("Stream URL copied to clipboard");
                       }}
@@ -1405,7 +1424,7 @@ export default function ManageStreamPage() {
                     </Button>
 
                     <Link
-                      href={`/streaming/live/${stream.slug}`}
+                      href={`/streaming/live/${streamData?.slug}`}
                       target="_blank"
                       className="w-full"
                     >
@@ -1427,7 +1446,7 @@ export default function ManageStreamPage() {
                 <h3 className="font-medium">Live Chat</h3>
               </div>
               <StreamChat
-                streamId={stream.id}
+                streamId={streamData?.id || ""}
                 className="h-[calc(100%-44px)]"
                 onUserClick={handleChatUserClick}
               />
@@ -1440,14 +1459,14 @@ export default function ManageStreamPage() {
       <EditStreamModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        stream={stream}
+        stream={streamData}
         onSuccess={fetchStream}
       />
 
       <PollModal
         isOpen={isPollModalOpen}
         onClose={() => setIsPollModalOpen(false)}
-        stream={stream}
+        stream={streamData}
       />
 
       {moderationTarget && (
@@ -1456,7 +1475,7 @@ export default function ManageStreamPage() {
           onClose={() => setModerationTarget(null)}
           username={moderationTarget.username}
           userId={moderationTarget.userId}
-          streamId={stream.id}
+          streamId={streamData?.id || ""}
         />
       )}
 

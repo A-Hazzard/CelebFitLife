@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { doc, updateDoc, arrayUnion, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
+import { StreamData } from "@/lib/types/streaming.types";
 
 export default function UserDashboard() {
   const [visibleDiscoverStreamers, setVisibleDiscoverStreamers] = useState(6);
@@ -36,9 +37,13 @@ export default function UserDashboard() {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showLockedModal, setShowLockedModal] = useState<string | null>(null);
-  const [previewingStreamerId, setPreviewingStreamerId] = useState<string | null>(null);
+  const [previewingStreamerId, setPreviewingStreamerId] = useState<
+    string | null
+  >(null);
   const [previewCountdown, setPreviewCountdown] = useState<number>(60);
-  const [previewInterval, setPreviewInterval] = useState<NodeJS.Timeout | null>(null);
+  const [previewInterval, setPreviewInterval] = useState<NodeJS.Timeout | null>(
+    null
+  );
   const [previewedStreamers, setPreviewedStreamers] = useState<string[]>([]);
 
   const { streamers, fetchAll } = useStreamerStore();
@@ -138,9 +143,9 @@ export default function UserDashboard() {
     }
 
     // Find the streamer's active stream
-    const streamer = streamers.find(s => s.id === streamerId);
+    const streamer = streamers.find((s) => s.id === streamerId);
     const liveStream = streamer?.streams?.find(
-      (s) => s.hasStarted === true && s.hasEnded !== true
+      (s: StreamData) => s.hasStarted === true && s.hasEnded !== true
     );
 
     if (!liveStream) {
@@ -152,7 +157,9 @@ export default function UserDashboard() {
     setPreviewCountdown(60);
 
     // Navigate to the live stream
-    router.push(`/streaming/live/${liveStream.id}?preview=true&countdown=${60}`);
+    router.push(
+      `/streaming/live/${liveStream.id}?preview=true&countdown=${60}`
+    );
 
     // Start countdown
     const interval = setInterval(() => {
@@ -246,50 +253,53 @@ export default function UserDashboard() {
                     top: 25%;
                   }
                 }
-                  @media (min-width: 1600px) {
+                @media (min-width: 1600px) {
                   .slick-prev,
                   .slick-next {
                     top: 20%;
                   }
                 }
               `}</style>
-              <Slider {...{
-                ...SLIDER_SETTINGS,
-                dots: false,
-                infinite: true,
-                speed: 500,
-                slidesToShow: 3,
-                slidesToScroll: 1,
-                arrows: true,
-                autoplay: false,
-                responsive: [
-                  {
-                    breakpoint: 1536,
-                    settings: {
-                      slidesToShow: 3,
-                      slidesToScroll: 1,
-                    }
-                  },
-                  {
-                    breakpoint: 1280,
-                    settings: {
-                      slidesToShow: 2,
-                      slidesToScroll: 1,
-                    }
-                  },
-                  {
-                    breakpoint: 768,
-                    settings: {
-                      slidesToShow: 1,
-                      slidesToScroll: 1,
-                    }
-                  }
-                ],
-                className: "w-full",
-              }}>
+              <Slider
+                {...{
+                  ...SLIDER_SETTINGS,
+                  dots: false,
+                  infinite: true,
+                  speed: 500,
+                  slidesToShow: 3,
+                  slidesToScroll: 1,
+                  arrows: true,
+                  autoplay: false,
+                  responsive: [
+                    {
+                      breakpoint: 1536,
+                      settings: {
+                        slidesToShow: 3,
+                        slidesToScroll: 1,
+                      },
+                    },
+                    {
+                      breakpoint: 1280,
+                      settings: {
+                        slidesToShow: 2,
+                        slidesToScroll: 1,
+                      },
+                    },
+                    {
+                      breakpoint: 768,
+                      settings: {
+                        slidesToShow: 1,
+                        slidesToScroll: 1,
+                      },
+                    },
+                  ],
+                  className: "w-full",
+                }}
+              >
                 {uniqueStreamers.slice(0, 3).map((streamer, index) => {
                   const liveStream = streamer.streams?.find(
-                    (s) => s.hasStarted === true && s.hasEnded !== true
+                    (s: StreamData) =>
+                      s.hasStarted === true && s.hasEnded !== true
                   );
                   return (
                     <div
@@ -311,7 +321,7 @@ export default function UserDashboard() {
                             username: streamer.username || streamer.name,
                             bio: streamer.bio || "",
                             streams:
-                              streamer.streams?.map((stream) => ({
+                              streamer.streams?.map((stream: StreamData) => ({
                                 ...stream,
                                 thumbnail: streamer.thumbnail || "/favicon.ico",
                                 hasEnded: stream.hasEnded || false,
@@ -412,10 +422,7 @@ export default function UserDashboard() {
               .map((streamer, index) => {
                 const isLocked = !myStreamers.includes(streamer.id);
                 return (
-                  <div
-                    key={index}
-                    className="aspect-[4/3]"
-                  >
+                  <div key={index} className="aspect-[4/3]">
                     <div className="h-full">
                       <StreamerCard
                         streamer={{
@@ -424,15 +431,19 @@ export default function UserDashboard() {
                           username: streamer.username || streamer.name,
                           bio: streamer.bio || "",
                           streams:
-                            streamer.streams?.map((stream) => ({
+                            streamer.streams?.map((stream: StreamData) => ({
                               ...stream,
-                              thumbnail: stream.thumbnail || "/favicon.ico",
+                              thumbnail: streamer.thumbnail || "/favicon.ico",
                               hasEnded: stream.hasEnded || false,
                               title: stream.title || "Untitled Stream",
                             })) || [],
                         }}
                         isLocked={isLocked}
-                        onLockedClick={isLocked ? () => setShowLockedModal(streamer.id) : undefined}
+                        onLockedClick={
+                          isLocked
+                            ? () => setShowLockedModal(streamer.id)
+                            : undefined
+                        }
                       />
                     </div>
                   </div>
@@ -441,16 +452,22 @@ export default function UserDashboard() {
           </div>
 
           {/* Locked Streamer Modal */}
-          <Dialog open={!!showLockedModal} onOpenChange={() => setShowLockedModal(null)}>
+          <Dialog
+            open={!!showLockedModal}
+            onOpenChange={() => setShowLockedModal(null)}
+          >
             <DialogContent className="sm:max-w-lg w-[95%] p-6 sm:p-8 rounded-2xl border-2 border-brandOrange bg-brandBlack absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-h-[90vh] overflow-y-auto overflow-x-hidden">
               <DialogHeader>
                 <div className="flex flex-col items-center gap-4">
                   <span className="inline-flex items-center justify-center w-12 sm:w-16 h-12 sm:h-16 rounded-full bg-brandOrange/10 mb-2">
                     <Lock className="w-8 h-8 sm:w-10 sm:h-10 text-brandOrange" />
                   </span>
-                  <DialogTitle className="text-xl sm:text-2xl text-center text-brandOrange font-extrabold">Unlock Streamer</DialogTitle>
+                  <DialogTitle className="text-xl sm:text-2xl text-center text-brandOrange font-extrabold">
+                    Unlock Streamer
+                  </DialogTitle>
                   <DialogDescription className="text-sm sm:text-base text-center text-brandGray mt-2">
-                    This streamer is locked. Buy another streamer or preview for 1 minute.
+                    This streamer is locked. Buy another streamer or preview for
+                    1 minute.
                   </DialogDescription>
                 </div>
               </DialogHeader>
@@ -481,9 +498,7 @@ export default function UserDashboard() {
                   )}
                 </div>
               )}
-              <DialogClose asChild>
-               
-              </DialogClose>
+              <DialogClose asChild></DialogClose>
             </DialogContent>
           </Dialog>
 
@@ -491,8 +506,12 @@ export default function UserDashboard() {
             <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80">
               <div className="bg-brandBlack border-2 border-brandOrange rounded-2xl p-8 flex flex-col items-center">
                 <Lock className="w-12 h-12 text-brandOrange mb-4" />
-                <h2 className="text-2xl font-bold text-brandOrange mb-2">Previewing Stream</h2>
-                <p className="text-lg text-brandWhite mb-4">You have {previewCountdown} seconds left</p>
+                <h2 className="text-2xl font-bold text-brandOrange mb-2">
+                  Previewing Stream
+                </h2>
+                <p className="text-lg text-brandWhite mb-4">
+                  You have {previewCountdown} seconds left
+                </p>
                 <Button
                   variant="default"
                   className="bg-brandOrange text-brandBlack font-bold px-6 py-3 rounded-full text-lg shadow-md hover:scale-105 transition-transform"

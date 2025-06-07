@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { doc, onSnapshot, Unsubscribe } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import { Stream } from "@/lib/types/streaming.types";
+import { StreamData } from "@/lib/types/streaming.types";
 import { useRouter } from "next/navigation";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -16,7 +16,9 @@ const logger = createLogger("StreamData");
  * @returns An object containing the stream data, loading status, and any error encountered.
  */
 export const useStreamData = (slug: string) => {
-  const [streamData, setStreamData] = useState<Partial<Stream> | null>(null);
+  const [streamData, setStreamData] = useState<Partial<StreamData> | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -38,17 +40,13 @@ export const useStreamData = (slug: string) => {
       streamDocRef,
       (snapshot) => {
         if (snapshot.exists()) {
-          const data = snapshot.data() as Stream; // Assume it fits Stream
+          const data = snapshot.data() as StreamData; // Assume it fits StreamData
           logger.debug(`Received stream data update for: ${slug}`);
           setStreamData({
             ...data,
-            // Provide defaults for potentially missing fields if needed
-            title: data.title || "",
             thumbnail:
               data.thumbnail ||
               "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg",
-            audioMuted: data.audioMuted ?? false,
-            cameraOff: data.cameraOff ?? false,
           });
 
           // Handle stream ending

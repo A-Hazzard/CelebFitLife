@@ -25,14 +25,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/lib/store/useAuthStore";
-import type { StreamDoc } from "@/lib/types/streaming.types";
+import type { StreamData } from "@/lib/types/streaming.types";
 
 /**
  * Returns a thumbnail URL for a given stream, using a static Unsplash image if none is provided.
  * @param stream - The stream object (StreamDoc)
  * @returns The thumbnail URL string
  */
-export function getStreamThumbnail(stream: StreamDoc): string {
+export function getStreamThumbnail(stream: StreamData): string {
   if (stream.thumbnail) return stream.thumbnail;
   const thumbnailImages = {
     fitness:

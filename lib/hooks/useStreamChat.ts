@@ -11,7 +11,20 @@ import {
 } from "firebase/firestore";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { toast } from "sonner";
-import { ChatMessage, StreamChatHookResult } from "@/lib/types/streaming.types";
+import { ChatMessage } from "@/lib/types/streaming.types";
+
+// Define StreamChatHookResult type locally
+export type StreamChatHookResult = {
+  messages: ChatMessage[];
+  newMessage: string;
+  setNewMessage: (msg: string) => void;
+  isLoading: boolean;
+  sendMessage: () => Promise<void>;
+  error: string | null;
+  handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  handleKeyPress: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  retryConnection: () => void;
+};
 
 /**
  * Custom hook to manage chat functionality for streams.
@@ -29,7 +42,6 @@ export const useStreamChat = (streamId: string): StreamChatHookResult => {
   const retryCount = useRef(0);
   const maxRetries = 3;
   const unsubscribeRef = useRef<(() => void) | null>(null); // Ref to hold unsubscribe function
-  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Define fetchInitialMessages outside useEffect but use useCallback if needed elsewhere
   const fetchInitialMessages = useCallback(async () => {
@@ -50,11 +62,12 @@ export const useStreamChat = (streamId: string): StreamChatHookResult => {
           const data = doc.data();
           chatMessages.push({
             id: doc.id,
-            createdAt: data.createdAt?.toDate?.()
+            userId: data.senderId || "",
+            username: data.senderName || "Anonymous",
+            content: data.message || "",
+            timestamp: data.createdAt?.toDate?.()
               ? data.createdAt.toDate().toISOString()
               : new Date().toISOString(),
-            sender: data.senderName || "Anonymous",
-            message: data.message || "",
             isHost: data.isHost || false,
           });
         });
@@ -102,11 +115,12 @@ export const useStreamChat = (streamId: string): StreamChatHookResult => {
           const data = doc.data();
           chatMessages.push({
             id: doc.id,
-            createdAt: data.createdAt?.toDate?.()
+            userId: data.senderId || "",
+            username: data.senderName || "Anonymous",
+            content: data.message || "",
+            timestamp: data.createdAt?.toDate?.()
               ? data.createdAt.toDate().toISOString()
               : new Date().toISOString(),
-            sender: data.senderName || "Anonymous",
-            message: data.message || "",
             isHost: data.isHost || false,
           });
         });
@@ -279,13 +293,6 @@ export const useStreamChat = (streamId: string): StreamChatHookResult => {
     [sendMessage]
   );
 
-  // Add an effect to scroll to bottom when messages change
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages.length]);
-
   return {
     messages,
     newMessage,
@@ -296,6 +303,5 @@ export const useStreamChat = (streamId: string): StreamChatHookResult => {
     isLoading,
     error,
     retryConnection,
-    scrollRef,
   };
 };

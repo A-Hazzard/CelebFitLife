@@ -1,9 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import {
-  AudioSourceType,
-  AudioTrack,
-  AudioLevelMeterHookResult,
-} from "@/lib/types/audio";
 
 /**
  * Create a logger for debugging
@@ -29,10 +24,10 @@ const logger = createLogger("AudioLevelMeter");
  * @returns An object with the current audio level and control functions
  */
 export const useAudioLevelMeter = (
-  sourceType: AudioSourceType,
+  sourceType: string,
   stream: MediaStream | null = null,
   audioElement: HTMLAudioElement | null = null
-): AudioLevelMeterHookResult => {
+) => {
   const [level, setLevel] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
@@ -164,16 +159,10 @@ export const useAudioLevelMeter = (
     }
   }, [stream, audioElement, isAnalyzing, stopAnalyzing, startAnalyzing]);
 
-  // Utility function to handle Twilio audio tracks
-  const handleAudioTrack = (track: AudioTrack): HTMLMediaElement[] => {
-    return track.detach();
-  };
-
   return {
     level,
     isAnalyzing,
     startAnalyzing,
     stopAnalyzing,
-    handleAudioTrack,
   };
 };

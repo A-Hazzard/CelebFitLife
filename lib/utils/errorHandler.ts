@@ -1,132 +1,202 @@
-import { NextResponse } from "next/server";
-import { TwilioError } from "twilio-video";
+/**
+ * STREAMING ERROR HANDLER
+ *
+ * This file contains utilities for handling various error types including Mux errors,
+ * standard errors, and custom errors in a consistent way across the application.
+ */
+
 import {
-  StreamingErrorType,
-  UnknownError,
-  TwilioStreamingError,
-  NetworkError,
+  StreamingError,
+  MuxStreamingError,
+  StreamingErrorUnion,
 } from "@/lib/types/streaming.types";
 
-export class ApiError extends Error {
-  statusCode: number;
-
-  constructor(message: string, statusCode: number = 500) {
-    super(message);
-    this.statusCode = statusCode;
-    this.name = "ApiError";
-  }
+/**
+ * Creates a standardized streaming error object
+ */
+export function createStreamingError(
+  code: string,
+  message: string,
+  isRecoverable: boolean = true,
+  context?: Record<string, unknown>
+): StreamingError {
+  return {
+    code,
+    message,
+    isRecoverable,
+    context,
+  };
 }
 
-export function handleApiError(error: unknown) {
-  console.error("API Error:", error);
+/**
+ * Creates a Mux-specific streaming error
+ */
+export function createMuxError(
+  code: string,
+  message: string,
+  muxErrorCode?: string,
+  isRecoverable: boolean = true,
+  context?: Record<string, unknown>
+): MuxStreamingError {
+  return {
+    code,
+    message,
+    isRecoverable,
+    context,
+    muxError: true,
+    muxErrorCode,
+  };
+}
 
-  if (error instanceof ApiError) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.statusCode }
+/**
+ * Handles various error types including Mux errors, standard errors, and custom errors
+ *
+ * @param error - The error to handle (can be various types)
+ * @returns A standardized streaming error object
+ */
+export function handleStreamingError(error: unknown): StreamingErrorUnion {
+  console.error("[ErrorHandler] Processing error:", error);
+
+  // Handle null/undefined errors
+  if (!error) {
+    return createStreamingError(
+      "UNKNOWN_ERROR",
+      "An unknown error occurred",
+      false
     );
   }
 
-  const message =
-    error instanceof Error ? error.message : "An unknown error occurred";
-  return NextResponse.json({ error: message }, { status: 500 });
-}
-
-export const ErrorTypes = {
-  NOT_FOUND: (resource: string) => new ApiError(`${resource} not found`, 404),
-  UNAUTHORIZED: (message = "Unauthorized access") => new ApiError(message, 401),
-  FORBIDDEN: (message = "Forbidden") => new ApiError(message, 403),
-  BAD_REQUEST: (message: string) => new ApiError(message, 400),
-  CONFLICT: (message: string) => new ApiError(message, 409),
-  INTERNAL_SERVER: (message = "Internal server error") =>
-    new ApiError(message, 500),
-  VALIDATION: (message: string) => new ApiError(message, 422),
-};
-
-/**
- * Converts an unknown error to a StreamingErrorType
- * Handles various error types including Twilio errors, standard errors, and custom errors
- */
-export function toStreamingError(error: unknown): StreamingErrorType {
-  if (!error) {
-    return {
-      name: "UnknownError",
-      message: "An unknown error occurred",
-      unknownError: true,
-    };
-  }
-
-  // Return as is if it's already a StreamingError
+  // Check if it's already a streaming error
   if (
     typeof error === "object" &&
-    error !== null &&
-    "name" in error &&
-    "message" in error
+    "code" in error &&
+    "message" in error &&
+    "isRecoverable" in error
   ) {
-    // Check if it's already one of our specific error types
-    if (
-      "twilioError" in error ||
-      "domError" in error ||
-      "deviceError" in error ||
-      "trackError" in error ||
-      "networkError" in error ||
-      "firestoreError" in error
-    ) {
-      return error as StreamingErrorType;
-    }
-
-    // If it's a TwilioError, convert it
-    if (error instanceof TwilioError) {
-      const twilioStreamingError: TwilioStreamingError = {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-        code: error.code,
-        twilioError: true,
-      };
-      return twilioStreamingError;
-    }
-
-    // For standard Error objects
-    if (error instanceof Error) {
-      const unknownError: UnknownError = {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-        unknownError: true,
-      };
-
-      // Check for network errors
-      if (
-        error.message.includes("network") ||
-        error.message.includes("connection") ||
-        error.message.includes("offline") ||
-        error.message.includes("internet")
-      ) {
-        const networkError: NetworkError = {
-          ...unknownError,
-          networkError: true,
-        };
-        return networkError;
-      }
-
-      return unknownError;
-    }
+    return error as StreamingErrorUnion;
   }
 
-  // For string errors
+  // Handle standard Error objects
+  if (error instanceof Error) {
+    // Check for specific error patterns
+    if (
+      error.message.includes("permission") ||
+      error.message.includes("Permission")
+    ) {
+      return createStreamingError(
+        "MEDIA_PERMISSION_DENIED",
+        "Permission denied to access camera or microphone. Please check your browser settings.",
+        true,
+        { originalError: error.message }
+      );
+    }
+
+    if (
+      error.message.includes("network") ||
+      error.message.includes("Network")
+    ) {
+      return createStreamingError(
+        "NETWORK_ERROR",
+        "Network connection issue. Please check your internet connection.",
+        true,
+        { originalError: error.message }
+      );
+    }
+
+    if (error.message.includes("mux") || error.message.includes("Mux")) {
+      return createMuxError("MUX_ERROR", error.message, undefined, true, {
+        originalError: error.message,
+      });
+    }
+
+    // Generic error
+    return createStreamingError("GENERIC_ERROR", error.message, true, {
+      originalError: error.message,
+    });
+  }
+
+  // Handle string errors
   if (typeof error === "string") {
+    return createStreamingError("STRING_ERROR", error, true);
+  }
+
+  // Handle objects with error property
+  if (typeof error === "object" && "error" in error) {
+    const errorObj = error as { error: string; details?: string };
     return {
-      name: "StringError",
-      message: error,
-      unknownError: true,
+      error: errorObj.error,
+      details: errorObj.details,
     };
   }
 
-  // Fallback for truly unknown errors
-  return {
-    name: "UnknownError",
-    message: "Unknown error type: " + typeof error,
-    unknownError: true,
-  };
+  // Fallback for unknown error types
+  return createStreamingError(
+    "UNKNOWN_ERROR",
+    "An unexpected error occurred",
+    false,
+    { originalError: error }
+  );
 }
+
+/**
+ * Converts error codes into user-friendly messages
+ */
+export function getErrorMessage(error: StreamingErrorUnion): string {
+  if ("error" in error) {
+    return error.error;
+  }
+
+  if ("message" in error) {
+    return error.message;
+  }
+
+  return "An unknown error occurred";
+}
+
+/**
+ * Determines if an error is recoverable
+ */
+export function isRecoverableError(error: StreamingErrorUnion): boolean {
+  if ("isRecoverable" in error) {
+    return error.isRecoverable;
+  }
+
+  // Assume recoverable for simple error objects
+  return true;
+}
+
+/**
+ * Gets error context for debugging
+ */
+export function getErrorContext(
+  error: StreamingErrorUnion
+): Record<string, unknown> | undefined {
+  if ("context" in error) {
+    return error.context;
+  }
+
+  return undefined;
+}
+
+/**
+ * Formats error for logging
+ */
+export function formatErrorForLogging(error: StreamingErrorUnion): string {
+  const message = getErrorMessage(error);
+  const recoverable = isRecoverableError(error);
+  const context = getErrorContext(error);
+
+  let logMessage = `Error: ${message} (Recoverable: ${recoverable})`;
+
+  if (context) {
+    logMessage += ` Context: ${JSON.stringify(context)}`;
+  }
+
+  return logMessage;
+}
+
+/**
+ * Legacy function name for backward compatibility
+ * @deprecated Use handleStreamingError instead
+ */
+export const toStreamingError = handleStreamingError;

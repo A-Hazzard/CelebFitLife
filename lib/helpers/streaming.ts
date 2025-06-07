@@ -1,20 +1,14 @@
 import { doc, setDoc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase/client";
 import { v4 as uuidv4 } from "uuid";
-import {
-  StreamingProfileData,
-  StreamDoc,
-  StreamUpdateObject,
-  Stream,
-} from "@/lib/types/streaming.types";
-import { Room, LocalAudioTrack, LocalVideoTrack } from "twilio-video";
+import { StreamData } from "@/lib/types/streaming.types";
 import { createLogger } from "@/lib/utils/logger";
 import { collection, addDoc, deleteDoc, increment } from "firebase/firestore";
 import { toStreamingError } from "@/lib/utils/errorHandler";
+import { LogData } from "@/lib/types/utils";
 
 // Create context-specific loggers
 const streamLogger = createLogger("Streaming");
-const trackLogger = streamLogger.withContext("Track");
 
 /**
  * Generates a URL-friendly slug from a title
@@ -102,13 +96,11 @@ export const createStream = async (
     // Prepare stream document data using proper type
     const now = Timestamp.now();
 
-    const streamDoc: StreamDoc = {
+    const streamDoc: StreamData = {
       id: streamId,
       title: title.trim(),
       description: description.trim(),
-      thumbnail:
-        validatedThumbnail ||
-        "https://1.bp.blogspot.com/-Rsu_fHvj-IA/YH0ohFqGK_I/AAAAAAAAm7o/dOKXFVif7hYDymAsCNZRe4MK3p7ihTGmgCLcBGAsYHQ/s2362/Stream.jpg",
+      thumbnail: validatedThumbnail,
       userId,
       username: "", // This will be set by the UI
       userPhotoURL: "", // This will be set by the UI
@@ -119,14 +111,16 @@ export const createStream = async (
       hasEnded: false,
       isPrivate: false,
       requiresSubscription: false,
-      viewCount: 0,
+      viewerCount: 0,
       likeCount: 0,
       commentCount: 0,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: now.toDate().toISOString(),
+      updatedAt: now.toDate().toISOString(),
       slug: generateSlug(title),
-      isScheduled: Boolean(scheduledTime),
-      scheduledAt: scheduledTime ? Timestamp.fromDate(scheduledTime) : null,
+      scheduledAt: scheduledTime ? scheduledTime.toISOString() : null,
+      streamerId: userId,
+      streamerName: "", // Set if available
+      isLive: false,
     };
 
     // Use the streamId as document ID, not the slug
@@ -139,7 +133,15 @@ export const createStream = async (
     streamLogger.error("Error creating stream:", error);
     return {
       success: false,
-      error: error.message,
+      error:
+        typeof error === "object" && error !== null && "message" in error
+          ? (error as { message: string }).message
+          : typeof error === "object" &&
+            error !== null &&
+            "error" in error &&
+            typeof (error as { error: unknown }).error === "string"
+          ? (error as { error: string }).error
+          : "Unknown error",
     };
   }
 };
@@ -151,19 +153,28 @@ export const createStream = async (
  * @returns A promise resolving to an object indicating success or failure.
  */
 export const createStreamProfile = async (
-  streamProfile: StreamingProfileData
+  // TODO: Define a proper type for streamProfile if/when implemented
+  streamProfile: unknown
 ): Promise<{ success: boolean; error?: string }> => {
   try {
     // This is a placeholder for future implementation
     // In a real application, this would save the profile to Firestore
-    streamLogger.info("Stream Profile Submitted:", streamProfile);
+    streamLogger.info("Stream Profile Submitted:", streamProfile as LogData);
     return { success: true };
   } catch (err) {
     const error = toStreamingError(err);
     streamLogger.error("Error creating stream profile:", error);
     return {
       success: false,
-      error: error.message,
+      error:
+        typeof error === "object" && error !== null && "message" in error
+          ? (error as { message: string }).message
+          : typeof error === "object" &&
+            error !== null &&
+            "error" in error &&
+            typeof (error as { error: unknown }).error === "string"
+          ? (error as { error: string }).error
+          : "Unknown error",
     };
   }
 };
@@ -178,7 +189,7 @@ export const fetchStreamInfo = async (
   slug: string
 ): Promise<{
   success: boolean;
-  data?: Partial<Stream>;
+  data?: Partial<StreamData>;
   error?: string;
 }> => {
   if (!slug) return { success: false, error: "Slug is required" };
@@ -189,7 +200,7 @@ export const fetchStreamInfo = async (
     if (streamSnapshot.exists()) {
       return {
         success: true,
-        data: streamSnapshot.data() as Partial<Stream>,
+        data: streamSnapshot.data() as Partial<StreamData>,
       };
     } else {
       return { success: false, error: "Stream not found" };
@@ -199,7 +210,15 @@ export const fetchStreamInfo = async (
     streamLogger.error("Error fetching stream info:", error);
     return {
       success: false,
-      error: error.message,
+      error:
+        typeof error === "object" && error !== null && "message" in error
+          ? (error as { message: string }).message
+          : typeof error === "object" &&
+            error !== null &&
+            "error" in error &&
+            typeof (error as { error: unknown }).error === "string"
+          ? (error as { error: string }).error
+          : "Unknown error",
     };
   }
 };
@@ -229,7 +248,15 @@ export const updateStreamInfo = async (
     streamLogger.error("Error updating stream info:", error);
     return {
       success: false,
-      error: error.message,
+      error:
+        typeof error === "object" && error !== null && "message" in error
+          ? (error as { message: string }).message
+          : typeof error === "object" &&
+            error !== null &&
+            "error" in error &&
+            typeof (error as { error: unknown }).error === "string"
+          ? (error as { error: string }).error
+          : "Unknown error",
     };
   }
 };
@@ -287,229 +314,58 @@ export const prepareStreamStart = async (
     console.error("Error preparing stream start:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error:
+        typeof error === "object" && error !== null && "message" in error
+          ? (error as { message: string }).message
+          : typeof error === "object" &&
+            error !== null &&
+            "error" in error &&
+            typeof (error as { error: unknown }).error === "string"
+          ? (error as { error: string }).error
+          : "Unknown error",
     };
   }
 };
 
 /**
- * Safely detaches a track and removes its associated elements from the DOM.
- * @param track The track to detach.
- */
-export const safelyDetachTrack = (track: LocalVideoTrack | LocalAudioTrack) => {
-  const logger = streamLogger.withContext("SafelyDetachTrack");
-  if (!track) {
-    logger.warn("Attempted to detach a null track.");
-    return;
-  }
-
-  logger.info(`Detaching track: ${track.kind} - ${track.id}`);
-  try {
-    // Stop the track first to release resources
-    track.stop();
-    logger.debug(`Track stopped: ${track.id}`);
-
-    // Detach the track from all elements it's attached to
-    const detachedElements = track.detach();
-    logger.debug(
-      `Track detached from ${detachedElements.length} elements: ${track.id}`
-    );
-
-    // Remove detached elements from the DOM safely
-    detachedElements.forEach((element) => {
-      if (element && element.parentNode) {
-        try {
-          // Check if parentNode is an Element before accessing tagName
-          const parentTagName =
-            element.parentNode instanceof Element
-              ? element.parentNode.tagName
-              : "unknown";
-          logger.debug(
-            `Removing detached element ${element.tagName} from parent ${parentTagName}`
-          );
-          element.parentNode.removeChild(element);
-        } catch (removeError: unknown) {
-          // Gracefully handle the error if the node is already removed
-          if (
-            removeError instanceof DOMException &&
-            removeError.name === "NotFoundError"
-          ) {
-            logger.warn(
-              `Failed to remove element ${element.tagName}: Node was not found in parent. Already removed?`
-            );
-          } else {
-            // Log other unexpected errors during removal
-            const error = toStreamingError(removeError);
-            logger.error(
-              `Unexpected error removing element ${element.tagName}:`,
-              error
-            );
-          }
-        }
-      } else if (element) {
-        logger.warn(
-          `Detached element ${element.tagName} has no parentNode, cannot remove.`
-        );
-      }
-    });
-    logger.info(`Finished detaching and cleaning up track: ${track.id}`);
-  } catch (detachError: unknown) {
-    const error = toStreamingError(detachError);
-    logger.error(`Error during track detachment for ${track.id}:`, error);
-    // Log specific error details if available
-    if ("cause" in error && error.cause) {
-      logger.error(`Underlying cause:`, error.cause as Record<string, unknown>);
-    }
-    // Attempt to stop again as a fallback
-    try {
-      track.stop();
-    } catch {
-      /* ignore secondary error */
-    }
-  }
-};
-
-/**
- * Handles cleanup when a component using Twilio is unmounting.
- * Performs safely detaching tracks and disconnecting the room if needed.
- * @param room - The Twilio Room object to clean up
- * @param videoTrack - Optional local video track to clean up
- * @param audioTrack - Optional local audio track to clean up
- */
-export const handleStreamCleanup = async (
-  room: Room | null,
-  videoTrack: LocalVideoTrack | null,
-  audioTrack: LocalAudioTrack | null
-): Promise<void> => {
-  const logger = streamLogger.withContext("Cleanup");
-  logger.info(`Performing stream cleanup`);
-
-  try {
-    // First, safely handle local tracks
-    if (videoTrack) {
-      logger.debug(`Cleaning up local video track (ID: ${videoTrack.id})`);
-      try {
-        safelyDetachTrack(videoTrack);
-        videoTrack.stop();
-        logger.debug(`Successfully cleaned up video track`);
-      } catch (cleanupError: unknown) {
-        const error = toStreamingError(cleanupError);
-        logger.error(`Error cleaning up video track:`, error);
-        // Continue with other cleanup
-      }
-    }
-
-    if (audioTrack) {
-      logger.debug(`Cleaning up local audio track`);
-      try {
-        safelyDetachTrack(audioTrack);
-        audioTrack.stop();
-        logger.debug(`Successfully cleaned up audio track`);
-      } catch (cleanupError: unknown) {
-        const error = toStreamingError(cleanupError);
-        logger.error(`Error cleaning up audio track:`, error);
-        // Continue with other cleanup
-      }
-    }
-
-    // Then handle the room
-    if (room) {
-      logger.debug(`Disconnecting from Twilio room: ${room.sid}`);
-      room.disconnect();
-      logger.info(`Successfully disconnected from Twilio room`);
-    } else {
-      logger.debug(`No active Twilio room to disconnect`);
-    }
-  } catch (error: unknown) {
-    const streamingError = toStreamingError(error);
-    logger.error(`Unexpected error during cleanup:`, streamingError);
-    logger.trace(`Cleanup error stack trace`);
-  }
-};
-
-/**
- * Handles stopping a track safely with error handling and logging.
- * @param track - The track to stop.
- */
-export const safelyStopTrack = (
-  track: LocalVideoTrack | LocalAudioTrack | null
-): void => {
-  if (!track) return;
-
-  const logger = trackLogger.withContext("Stop");
-  logger.debug(`Stopping ${track.kind} track (ID: ${track.id})`);
-
-  try {
-    // Detach first, then stop
-    safelyDetachTrack(track);
-    track.stop();
-    logger.debug(`Successfully stopped ${track.kind} track`);
-  } catch (stopError: unknown) {
-    const error = toStreamingError(stopError);
-    logger.error(`Error stopping ${track.kind} track:`, error);
-  }
-};
-
-// Final catch block:
-export const stopAllTracks = (
-  tracks: (LocalVideoTrack | LocalAudioTrack)[]
-): void => {
-  if (!tracks || !tracks.length) return;
-
-  const logger = trackLogger.withContext("StopAll");
-  logger.debug(`Stopping ${tracks.length} tracks`);
-
-  tracks.forEach((track, i) => {
-    try {
-      safelyStopTrack(track);
-    } catch (error: unknown) {
-      const stopError = toStreamingError(error);
-      logger.error(
-        `Error stopping track ${i + 1}/${tracks.length}:`,
-        stopError
-      );
-    }
-  });
-};
-
-/**
- * Ends the stream by updating its status in Firestore and disconnecting the Twilio room.
+ * Ends the stream by updating its status in Firestore.
  * @param slug - The unique slug identifier of the stream.
- * @param room - The Twilio Room object to disconnect (can be null).
  * @returns Promise resolving to a success/error status object.
  */
 export const endStream = async (
-  slug: string,
-  room: Room | null
+  slug: string
 ): Promise<{ success: boolean; error?: string }> => {
   const logger = streamLogger.withContext("EndStream");
   logger.info(`Ending stream: ${slug}`);
 
   try {
-    // 1. Update Firestore first
+    // Update Firestore first
     logger.debug(`Updating Firestore stream status to ended`);
     const streamDocRef = doc(db, "streams", slug);
     await updateDoc(streamDocRef, {
       hasEnded: true,
       hasStarted: false,
-      endedAt: Timestamp.now(),
+      updatedAt: Timestamp.now().toDate().toISOString(),
     });
     logger.info(`Stream marked as ended in Firestore`);
-
-    // 2. Disconnect from Twilio room if connected
-    if (room) {
-      logger.debug(`Disconnecting from Twilio room: ${room.sid}`);
-      room.disconnect();
-      logger.info(`Successfully disconnected from Twilio room`);
-    } else {
-      logger.debug(`No active Twilio room to disconnect`);
-    }
-
     return { success: true };
   } catch (error: unknown) {
     const streamingError = toStreamingError(error);
     logger.error(`Error ending stream:`, streamingError);
-    return { success: false, error: streamingError.message };
+    return {
+      success: false,
+      error:
+        typeof streamingError === "object" &&
+        streamingError !== null &&
+        "message" in streamingError
+          ? (streamingError as { message: string }).message
+          : typeof streamingError === "object" &&
+            streamingError !== null &&
+            "error" in streamingError &&
+            typeof (streamingError as { error: unknown }).error === "string"
+          ? (streamingError as { error: string }).error
+          : "Unknown error",
+    };
   }
 };
 
@@ -546,7 +402,15 @@ export const updateStreamDeviceStatus = async (
     logger.trace(`Device status update error stack trace`);
     return {
       success: false,
-      error: error.message,
+      error:
+        typeof error === "object" && error !== null && "message" in error
+          ? (error as { message: string }).message
+          : typeof error === "object" &&
+            error !== null &&
+            "error" in error &&
+            typeof (error as { error: unknown }).error === "string"
+          ? (error as { error: string }).error
+          : "Unknown error",
     };
   }
 };
@@ -583,7 +447,7 @@ export const createStreamFirebase = async (streamData: {
     // Prepare stream document data
     const now = Timestamp.now();
 
-    const streamDoc: StreamDoc = {
+    const streamDoc: StreamData = {
       id: streamId,
       title: streamData.title,
       description: streamData.description || "",
@@ -598,21 +462,19 @@ export const createStreamFirebase = async (streamData: {
       hasEnded: false,
       isPrivate: streamData.isPrivate || false,
       requiresSubscription: streamData.requiresSubscription || false,
-      viewCount: 0,
+      viewerCount: 0,
       likeCount: 0,
       commentCount: 0,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: now.toDate().toISOString(),
+      updatedAt: now.toDate().toISOString(),
       slug: generateSlug(streamData.title),
-      isScheduled: false,
-      scheduledAt: null,
+      scheduledAt: streamData.scheduledFor
+        ? streamData.scheduledFor.toISOString()
+        : null,
+      streamerId: userId,
+      streamerName: "", // Set if available
+      isLive: false,
     };
-
-    // Add scheduled metadata if applicable
-    if (streamData.isScheduled && streamData.scheduledFor) {
-      streamDoc.isScheduled = true;
-      streamDoc.scheduledAt = Timestamp.fromDate(streamData.scheduledFor);
-    }
 
     // Create the document with the specified ID
     await setDoc(doc(db, "streams", streamId), streamDoc);
@@ -654,7 +516,6 @@ export const updateStreamFirebase = async (
     language: string;
     isPrivate: boolean;
     requiresSubscription: boolean;
-    isScheduled: boolean;
     scheduledFor: Date | null;
   }>
 ): Promise<boolean> => {
@@ -680,15 +541,15 @@ export const updateStreamFirebase = async (
     }
 
     // Use the proper StreamUpdateObject type
-    const updateObj: StreamUpdateObject = {
+    const updateObj: Partial<StreamData> = {
       ...updateData,
-      updatedAt: Timestamp.now(),
+      updatedAt: Timestamp.now().toDate().toISOString(),
     };
 
     // Handle scheduled time if provided
-    if (updateData.isScheduled && updateData.scheduledFor) {
-      updateObj.scheduledAt = Timestamp.fromDate(updateData.scheduledFor);
-    } else if (updateData.isScheduled === false) {
+    if (updateData.scheduledFor) {
+      updateObj.scheduledAt = updateData.scheduledFor.toISOString();
+    } else if (updateData.scheduledFor === null) {
       updateObj.scheduledAt = null;
     }
 
