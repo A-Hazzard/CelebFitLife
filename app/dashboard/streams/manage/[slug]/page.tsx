@@ -73,14 +73,7 @@ import PollModal from "@/components/streaming/PollModal";
 import EditStreamModal from "@/components/streaming/EditStreamModal";
 import { StreamDuration } from "@/components/streaming/StreamDuration";
 import Link from "next/link";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
+
 import Image from "next/image";
 import { useMediaDevices } from "@/lib/hooks/useMediaDevices";
 import { getUserRoles } from "@/lib/utils/userUtils";
@@ -1002,17 +995,16 @@ export default function ManageStreamPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              className="bg-transparent border-gray-700 text-gray-300 hover:bg-gray-800"
+              onClick={() => setShowDeviceTesterModal(true)}
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Device Settings
+            </Button>
             {!isStreamEnded && (
               <>
-                <Button
-                  variant="outline"
-                  className="bg-transparent border-gray-700 text-gray-300 hover:bg-gray-800"
-                  onClick={() => setShowDeviceTesterModal(true)}
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  Device Settings
-                </Button>
-
                 <Button
                   variant="outline"
                   className="bg-transparent border-gray-700 text-gray-300 hover:bg-gray-800"
@@ -1053,56 +1045,84 @@ export default function ManageStreamPage() {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left column - Stream preview and controls */}
           <div className="lg:w-2/3">
-            <div className="bg-gray-900 rounded-lg overflow-hidden mb-6">
-              <div className="relative">
-                <StreamManager
-                  ref={streamManagerRef}
-                  streamData={streamData}
-                  onStreamStart={(streamId) => {
-                    console.log("Stream started:", streamId);
-                  }}
-                  onStreamEnd={(streamId) => {
-                    console.log("Stream ended:", streamId);
-                  }}
-                  onError={(error: StreamingErrorUnion) => {
-                    console.error("Stream error:", error);
-                    setConnectionError(
-                      "error" in error ? error.error : error.message
-                    );
-                  }}
-                  className="min-h-[500px]"
+            {/* Show DeviceTester directly on the page when modal flag is true */}
+            {showDeviceTesterModal ? (
+              <div className="bg-gray-900 rounded-lg p-6 mb-6">
+                <div className="mb-4">
+                  <h2 className="text-xl text-brandOrange font-bold">
+                    Device Settings & Test
+                  </h2>
+                  <p className="text-gray-400 text-sm mt-1">
+                    Test your microphone, speakers, and camera. Adjust settings
+                    and save them for your stream.
+                  </p>
+                </div>
+                <DeviceTester
+                  onComplete={handleDeviceTestComplete}
+                  cameraDevices={mediaDeviceProps.cameraDevices}
+                  micDevices={mediaDeviceProps.micDevices}
+                  speakerDevices={mediaDeviceProps.speakerDevices}
+                  currentCameraId={mediaDeviceProps.currentCameraId}
+                  currentMicId={mediaDeviceProps.currentMicId}
+                  currentSpeakerId={mediaDeviceProps.currentSpeakerId}
+                  setCurrentCameraId={mediaDeviceProps.setCurrentCameraId}
+                  setCurrentMicId={mediaDeviceProps.setCurrentMicId}
+                  setCurrentSpeakerId={mediaDeviceProps.setCurrentSpeakerId}
+                  loadingDevices={mediaDeviceProps.loadingDevices}
                 />
-
-                {/* Connection error overlay */}
-                {connectionError && (
-                  <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center z-10">
-                    <div className="w-16 h-16 rounded-full bg-gray-800 mb-6 mx-auto flex items-center justify-center">
-                      <AlertCircle className="w-8 h-8 text-red-500" />
-                    </div>
-                    <div className="text-xl font-bold mb-4 text-red-500">
-                      Connection Error
-                    </div>
-                    <div className="text-gray-300 text-center max-w-md mb-6">
-                      {connectionError}
-                    </div>
-                    <Button
-                      onClick={handleRetryConnection}
-                      className="flex items-center gap-2"
-                      disabled={isRetrying}
-                    >
-                      {isRetrying ? (
-                        "Retrying..."
-                      ) : (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Retry Connection
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
               </div>
-            </div>
+            ) : (
+              <div className="bg-gray-900 rounded-lg overflow-hidden mb-6">
+                <div className="relative">
+                  <StreamManager
+                    ref={streamManagerRef}
+                    streamData={streamData}
+                    onStreamStart={(streamId) => {
+                      console.log("Stream started:", streamId);
+                    }}
+                    onStreamEnd={(streamId) => {
+                      console.log("Stream ended:", streamId);
+                    }}
+                    onError={(error: StreamingErrorUnion) => {
+                      console.error("Stream error:", error);
+                      setConnectionError(
+                        "error" in error ? error.error : error.message
+                      );
+                    }}
+                    className="min-h-[500px]"
+                  />
+
+                  {/* Connection error overlay */}
+                  {connectionError && (
+                    <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center z-10">
+                      <div className="w-16 h-16 rounded-full bg-gray-800 mb-6 mx-auto flex items-center justify-center">
+                        <AlertCircle className="w-8 h-8 text-red-500" />
+                      </div>
+                      <div className="text-xl font-bold mb-4 text-red-500">
+                        Connection Error
+                      </div>
+                      <div className="text-gray-300 text-center max-w-md mb-6">
+                        {connectionError}
+                      </div>
+                      <Button
+                        onClick={handleRetryConnection}
+                        className="flex items-center gap-2"
+                        disabled={isRetrying}
+                      >
+                        {isRetrying ? (
+                          "Retrying..."
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Retry Connection
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {!showDeviceTesterModal && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1478,37 +1498,6 @@ export default function ManageStreamPage() {
           streamId={streamData?.id || ""}
         />
       )}
-
-      {/* Device Tester Modal */}
-      <Dialog
-        open={showDeviceTesterModal}
-        onOpenChange={setShowDeviceTesterModal}
-      >
-        <DialogContent className="bg-brandBlack border-gray-800 text-brandWhite max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl text-brandOrange font-bold">
-              Device Settings & Test
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Test your microphone, speakers, and camera. Adjust settings and
-              save them for your stream.
-            </DialogDescription>
-          </DialogHeader>
-          <DeviceTester
-            onComplete={handleDeviceTestComplete}
-            cameraDevices={mediaDeviceProps.cameraDevices}
-            micDevices={mediaDeviceProps.micDevices}
-            speakerDevices={mediaDeviceProps.speakerDevices}
-            currentCameraId={mediaDeviceProps.currentCameraId}
-            currentMicId={mediaDeviceProps.currentMicId}
-            currentSpeakerId={mediaDeviceProps.currentSpeakerId}
-            setCurrentCameraId={mediaDeviceProps.setCurrentCameraId}
-            setCurrentMicId={mediaDeviceProps.setCurrentMicId}
-            setCurrentSpeakerId={mediaDeviceProps.setCurrentSpeakerId}
-            loadingDevices={mediaDeviceProps.loadingDevices}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

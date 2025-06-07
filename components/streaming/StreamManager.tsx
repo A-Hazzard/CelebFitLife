@@ -19,7 +19,7 @@ const StreamManager = forwardRef<StreamManagerHandles, StreamManagerProps>(
     const [isStreaming, setIsStreaming] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
     const [isCameraOff, setIsCameraOff] = useState(false);
-    const [isConnecting, setIsConnecting] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
     // Remove unused localStream state
     // const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [muxLiveStream, setMuxLiveStream] = useState<MuxLiveStream | null>(
@@ -32,12 +32,12 @@ const StreamManager = forwardRef<StreamManagerHandles, StreamManagerProps>(
     const streamRef = useRef<MediaStream | null>(null);
 
     // Initialize local media on mount
-    useEffect(() => {
+  useEffect(() => {
       const initMedia = async () => {
         await initializeLocalMedia();
       };
       initMedia();
-      return () => {
+    return () => {
         cleanup();
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -173,21 +173,21 @@ const StreamManager = forwardRef<StreamManagerHandles, StreamManagerProps>(
           isRecoverable: false,
           context: { error },
         });
-      }
-    };
+    }
+  };
 
-    // Toggle microphone
-    const toggleMic = () => {
+  // Toggle microphone
+  const toggleMic = () => {
       if (streamRef.current) {
         const audioTracks = streamRef.current.getAudioTracks();
         audioTracks.forEach((track) => {
           track.enabled = isMuted;
         });
         setIsMuted(!isMuted);
-      }
-    };
+    }
+  };
 
-    // Toggle camera
+  // Toggle camera
     const toggleCamera = () => {
       if (streamRef.current) {
         const videoTracks = streamRef.current.getVideoTracks();
@@ -218,17 +218,17 @@ const StreamManager = forwardRef<StreamManagerHandles, StreamManagerProps>(
       isStreaming: () => isStreaming,
     }));
 
-    return (
+  return (
       <div className={`space-y-4 ${className || ""}`}>
         {/* Local Video Preview */}
         <div className="relative w-full aspect-video bg-gray-900 rounded-lg overflow-hidden">
-          <video
+        <video
             ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover"
-          />
+          autoPlay
+          playsInline
+          muted
+          className="w-full h-full object-cover"
+        />
 
           {/* Stream Status Overlay */}
           <div className="absolute top-4 left-4 flex items-center space-x-2">
@@ -236,13 +236,13 @@ const StreamManager = forwardRef<StreamManagerHandles, StreamManagerProps>(
               <div className="flex items-center space-x-2 bg-red-600 text-white px-3 py-1 rounded-full text-sm">
                 <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
                 <span>LIVE</span>
-              </div>
-            )}
+          </div>
+        )}
             {isConnecting && (
               <div className="bg-yellow-600 text-white px-3 py-1 rounded-full text-sm">
                 Connecting...
-              </div>
-            )}
+          </div>
+        )}
           </div>
 
           {/* Control Overlay */}
@@ -268,29 +268,29 @@ const StreamManager = forwardRef<StreamManagerHandles, StreamManagerProps>(
             </Button>
 
             {/* Start/Stop Stream Button */}
-            <Button
+              <Button
               variant={isStreaming ? "destructive" : "default"}
               size="sm"
               onClick={isStreaming ? endStream : startStream}
-              disabled={isConnecting}
+                disabled={isConnecting}
               className="px-6"
-            >
-              {isConnecting ? (
+              >
+                {isConnecting ? (
                 "Connecting..."
               ) : isStreaming ? (
-                <>
+                  <>
                   <Square size={16} className="mr-2" />
                   Stop Stream
-                </>
-              ) : (
-                <>
+                  </>
+                ) : (
+                  <>
                   <Play size={16} className="mr-2" />
                   Start Stream
-                </>
-              )}
-            </Button>
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
-        </div>
 
         {/* Stream Information */}
         {isStreaming && muxLiveStream && (
@@ -329,7 +329,7 @@ const StreamManager = forwardRef<StreamManagerHandles, StreamManagerProps>(
                     {streamKey}
                   </code>
                 </div>
-              </div>
+          </div>
             </div>
           </div>
         )}

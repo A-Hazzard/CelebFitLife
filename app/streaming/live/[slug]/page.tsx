@@ -24,7 +24,7 @@ export default function LiveViewPage() {
 
   // Simple hydration check
   useEffect(() => {
-    setHasHydrated(true);
+      setHasHydrated(true);
   }, []);
 
   // State management
@@ -44,14 +44,14 @@ export default function LiveViewPage() {
         setError(null);
 
         // Get stream data from Firestore
-        const streamRef = doc(db, "streams", slug);
-        const streamDoc = await getDoc(streamRef);
+      const streamRef = doc(db, "streams", slug);
+      const streamDoc = await getDoc(streamRef);
 
-        if (!streamDoc.exists()) {
-          setIsAuthorized(false);
-          setShowLockModal(true);
-          return;
-        }
+      if (!streamDoc.exists()) {
+        setIsAuthorized(false);
+        setShowLockModal(true);
+        return;
+      }
 
         const data = streamDoc.data() as StreamData;
         setStreamData(data);
@@ -125,18 +125,18 @@ export default function LiveViewPage() {
             <DialogDescription>
               The stream you&apos;re trying to access doesn&apos;t exist or has
               been removed.
-            </DialogDescription>
+              </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end space-x-2 mt-4">
             <Button variant="outline" onClick={() => window.history.back()}>
               Go Back
             </Button>
-            <Button
+              <Button
               onClick={() => (window.location.href = "/dashboard")}
               className="bg-brandOrange hover:bg-brandOrange/90"
-            >
+              >
               Go to Dashboard
-            </Button>
+              </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -145,7 +145,7 @@ export default function LiveViewPage() {
 
   // Show stream not live message
   if (streamData && !streamData.isLive && !streamData.muxPlaybackId) {
-    return (
+  return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-white text-center">
           <h2 className="text-2xl mb-4">{streamData.title}</h2>
@@ -155,7 +155,7 @@ export default function LiveViewPage() {
           <p className="text-sm text-gray-500">
             Check back later or follow the streamer for updates
           </p>
-        </div>
+          </div>
       </div>
     );
   }
@@ -247,8 +247,8 @@ export default function LiveViewPage() {
                         {tag}
                       </span>
                     ))}
-                  </div>
-                </div>
+          </div>
+        </div>
               )}
             </div>
           </div>
