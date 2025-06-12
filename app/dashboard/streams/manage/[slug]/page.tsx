@@ -19,6 +19,13 @@ import StreamChat from "@/components/streaming/StreamChat";
 import DeviceTester from "@/components/streaming/DeviceTester";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Settings,
   RefreshCw,
   AlertCircle,

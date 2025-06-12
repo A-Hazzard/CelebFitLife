@@ -12,6 +12,7 @@ import {
   CreateStreamResponseError,
 } from "@/lib/types/streaming.types";
 import { handleStreamingError } from "@/lib/utils/errorHandler";
+import { muxConfig } from "@/lib/config/mux.config";
 
 export class ClientMuxService {
   private cache: Map<string, { data: unknown; expiry: number }> = new Map();
@@ -24,12 +25,19 @@ export class ClientMuxService {
     streamData: CreateStreamRequestBody
   ): Promise<MuxLiveStream> {
     try {
-      const response = await fetch("/api/mux/streams", {
+      // Add Mux-specific options to the request
+      const muxStreamData = {
+        ...streamData,
+        playbackPolicy: "public",
+        recordingEnabled: true,
+      };
+
+      const response = await fetch(`${muxConfig.serverUrl}/api/streams`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(streamData),
+        body: JSON.stringify(muxStreamData),
       });
 
       const result: CreateStreamResponseSuccess | CreateStreamResponseError =
@@ -58,7 +66,7 @@ export class ClientMuxService {
         return cached;
       }
 
-      const response = await fetch(`/api/mux/streams?streamId=${streamId}`, {
+      const response = await fetch(`${muxConfig.serverUrl}/api/streams?streamId=${streamId}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -95,7 +103,7 @@ export class ClientMuxService {
         return cached;
       }
 
-      const response = await fetch("/api/mux/streams", {
+      const response = await fetch(`${muxConfig.serverUrl}/api/streams`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -118,6 +126,66 @@ export class ClientMuxService {
   }
 
   /**
+   * Enable a live stream
+   */
+  async enableLiveStream(streamId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${muxConfig.serverUrl}/api/streams/${streamId}/enable`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const result = await response.json();
+      return result.success || false;
+    } catch (error) {
+      console.error("[ClientMuxService] Error enabling live stream:", error);
+      throw handleStreamingError(error);
+    }
+  }
+
+  /**
+   * Disable a live stream
+   */
+  async disableLiveStream(streamId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${muxConfig.serverUrl}/api/streams/${streamId}/disable`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const result = await response.json();
+      return result.success || false;
+    } catch (error) {
+      console.error("[ClientMuxService] Error disabling live stream:", error);
+      throw handleStreamingError(error);
+    }
+  }
+
+  /**
+   * Delete a live stream
+   */
+  async deleteLiveStream(streamId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${muxConfig.serverUrl}/api/streams/${streamId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const result = await response.json();
+      return result.success || false;
+    } catch (error) {
+      console.error("[ClientMuxService] Error deleting live stream:", error);
+      throw handleStreamingError(error);
+    }
+  }
+
+  /**
    * Check if a playback ID is valid and live
    */
   async checkPlaybackStatus(playbackId: string): Promise<{
@@ -126,30 +194,16 @@ export class ClientMuxService {
     error?: string;
   }> {
     try {
-      // This is a lightweight check that can be implemented
-      // You might want to add a specific endpoint for this
-      const response = await fetch(
-        `/api/mux/playback-status?playbackId=${playbackId}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        return {
-          isValid: false,
-          isLive: false,
-          error: "Failed to check playback status",
-        };
-      }
-
-      const result = await response.json();
+      // TODO: Implement actual playback status check
+      // This would require adding a new endpoint to the Mux server:
+      // GET /api/streams/playback-status/:playbackId
+      console.log(`Checking playback status for: ${playbackId}`);
+      
+      // For now, return mock data
       return {
-        isValid: result.isValid || false,
-        isLive: result.isLive || false,
+        isValid: true,
+        isLive: false,
+        error: undefined,
       };
     } catch (error) {
       console.error(
