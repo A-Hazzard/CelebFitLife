@@ -356,8 +356,8 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
             />
             {!thumbnailValid && thumbnailTouched && (
               <div className="text-red-400 text-xs mt-1">
-                Invalid image URL. Please enter a valid image link (http/https,
-                ends with .jpg, .png, etc.).
+                Invalid image URL. Please enter a valid HTTP or HTTPS image
+                link.
               </div>
             )}
             {thumbnail && thumbnailValid && (
@@ -367,8 +367,8 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
                   id="thumbnail-fallback"
                 >
                   <span className="text-sm text-gray-400">
-                    Couldn&apos;t load image from URL. Make sure it&apos;s a
-                    valid image URL.
+                    Couldn&apos;t load image from URL. The URL might be invalid
+                    or the image might not be accessible.
                   </span>
                 </div>
                 <Image
@@ -384,7 +384,7 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
                       );
                     if (fallback) fallback.classList.remove("hidden");
                     toast.error(
-                      "Couldn&apos;t load image from URL. Make sure it&apos;s a valid image URL."
+                      "Couldn&apos;t load image from URL. The URL might be invalid or the image might not be accessible."
                     );
                   }}
                 />

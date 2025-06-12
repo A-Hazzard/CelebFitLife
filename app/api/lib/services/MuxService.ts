@@ -20,27 +20,38 @@ export interface MuxAsset {
  * Service for managing Mux Video live streams and assets
  */
 export class MuxService {
-  private mux: Mux;
+  private mux: Mux | null = null;
 
   constructor() {
-    // Load and validate environment variables
-    const accessTokenId = process.env.MUX_ACCESS_TOKEN_ID;
-    const secretKey = process.env.MUX_SECRET_KEY;
+    // Lazy initialization to avoid build-time errors
+  }
 
-    if (!accessTokenId || !secretKey) {
-      const missing = [];
-      if (!accessTokenId) missing.push("MUX_ACCESS_TOKEN_ID");
-      if (!secretKey) missing.push("MUX_SECRET_KEY");
+  /**
+   * Get or initialize the Mux client
+   */
+  private getMuxClient(): Mux {
+    if (!this.mux) {
+      // Load and validate environment variables
+      const accessTokenId = process.env.MUX_ACCESS_TOKEN_ID;
+      const secretKey = process.env.MUX_SECRET_KEY;
 
-      throw new ValidationError(
-        `Missing required Mux configuration: ${missing.join(", ")}`
-      );
+      if (!accessTokenId || !secretKey) {
+        const missing = [];
+        if (!accessTokenId) missing.push("MUX_ACCESS_TOKEN_ID");
+        if (!secretKey) missing.push("MUX_SECRET_KEY");
+
+        throw new ValidationError(
+          `Missing required Mux configuration: ${missing.join(", ")}`
+        );
+      }
+
+      this.mux = new Mux({
+        tokenId: accessTokenId,
+        tokenSecret: secretKey,
+      });
     }
 
-    this.mux = new Mux({
-      tokenId: accessTokenId,
-      tokenSecret: secretKey,
-    });
+    return this.mux;
   }
 
   /**
@@ -55,7 +66,8 @@ export class MuxService {
     } = {}
   ): Promise<MuxLiveStream> {
     try {
-      const liveStream = await this.mux.video.liveStreams.create({
+      const mux = this.getMuxClient();
+      const liveStream = await mux.video.liveStreams.create({
         playback_policy: [options.playbackPolicy || "public"],
         new_asset_settings: {
           playback_policy: [
@@ -82,7 +94,8 @@ export class MuxService {
    */
   async getLiveStream(streamId: string): Promise<MuxLiveStream | null> {
     try {
-      const liveStream = await this.mux.video.liveStreams.retrieve(streamId);
+      const mux = this.getMuxClient();
+      const liveStream = await mux.video.liveStreams.retrieve(streamId);
 
       return {
         id: liveStream.id,
@@ -91,7 +104,12 @@ export class MuxService {
         status: liveStream.status as "idle" | "active" | "disabled",
         createdAt: liveStream.created_at || "",
       };
-    } catch (error) {
+    } catch (error: any) {
+      // Only log if not a 404
+      if (typeof error === "object" && error !== null && error.status === 404) {
+        // Suppress noisy log for not found
+        return null;
+      }
       console.error("[MuxService] Error retrieving live stream:", error);
       return null;
     }
@@ -102,7 +120,8 @@ export class MuxService {
    */
   async deleteLiveStream(streamId: string): Promise<boolean> {
     try {
-      await this.mux.video.liveStreams.delete(streamId);
+      const mux = this.getMuxClient();
+      await mux.video.liveStreams.delete(streamId);
       return true;
     } catch (error) {
       console.error("[MuxService] Error deleting live stream:", error);
@@ -115,7 +134,8 @@ export class MuxService {
    */
   async enableLiveStream(streamId: string): Promise<boolean> {
     try {
-      await this.mux.video.liveStreams.enable(streamId);
+      const mux = this.getMuxClient();
+      await mux.video.liveStreams.enable(streamId);
       return true;
     } catch (error) {
       console.error("[MuxService] Error enabling live stream:", error);
@@ -128,7 +148,8 @@ export class MuxService {
    */
   async disableLiveStream(streamId: string): Promise<boolean> {
     try {
-      await this.mux.video.liveStreams.disable(streamId);
+      const mux = this.getMuxClient();
+      await mux.video.liveStreams.disable(streamId);
       return true;
     } catch (error) {
       console.error("[MuxService] Error disabling live stream:", error);
@@ -163,7 +184,8 @@ export class MuxService {
    */
   async getAssets(limit: number = 25): Promise<MuxAsset[]> {
     try {
-      const response = await this.mux.video.assets.list({ limit });
+      const mux = this.getMuxClient();
+      const response = await mux.video.assets.list({ limit });
 
       return response.data.map((asset) => ({
         id: asset.id,

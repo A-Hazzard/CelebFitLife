@@ -28,7 +28,7 @@ export type StreamInfo = {
   slug: string;
   isLive: boolean;
   hasStarted: boolean;
-  hasEnded: boolean;
+  hasEnded?: boolean; // Optional since it's only set when stream actually ends
   isPrivate: boolean;
   requiresSubscription: boolean;
   language: string;

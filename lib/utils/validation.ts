@@ -263,32 +263,28 @@ export function validateChatMessage(data: ChatMessageData): string | null {
 }
 
 /**
- * Validates if a string is a valid image URL (http/https, ends with image extension)
- * For localhost URLs, allows any extension for dev convenience.
- * For all other hosts, allows .co as a valid image extension in addition to standard ones.
+ * Validates if a string is a valid image URL (http/https from any domain)
+ * Now accepts any valid HTTP/HTTPS URL to allow for dynamic image services,
+ * CDNs, and image URLs that don't end with traditional file extensions.
  * Always returns false gracefully if the URL is malformed or incomplete.
  * @param url - The URL string to validate
- * @returns true if valid image URL, false otherwise
+ * @returns true if valid HTTP/HTTPS URL, false otherwise
  */
 export const validateImageUrl = (url: string): boolean => {
   if (!url) return false;
   try {
     const parsed = new URL(url);
     const isHttp = parsed.protocol === "http:" || parsed.protocol === "https:";
-    // Allow any extension for localhost (dev)
-    if (
-      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") &&
-      (parsed.port === "3000" || !parsed.port)
-    ) {
-      return isHttp;
-    }
-    // Require image extension for all other hosts, allow .co as well
-    const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg|co)$/i.test(
-      parsed.pathname
-    );
-    return isHttp && isImage;
+
+    // Allow any valid HTTP/HTTPS URL from any domain
+    // This supports:
+    // - Traditional image URLs (example.com/image.jpg)
+    // - CDN URLs (cdn.example.com/abc123)
+    // - Dynamic image services (bing.com/th/id/...)
+    // - Image hosting services (imgur, cloudinary, etc.)
+    return isHttp;
   } catch {
-    // Always fail gracefully
+    // Always fail gracefully for malformed URLs
     return false;
   }
 };

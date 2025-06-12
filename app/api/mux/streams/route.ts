@@ -88,6 +88,7 @@ export async function GET(req: Request) {
       const liveStream = await muxService.getLiveStream(streamId);
 
       if (!liveStream) {
+        // Do not log error for not found
         return NextResponse.json(
           {
             success: false,

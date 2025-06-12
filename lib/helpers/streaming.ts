@@ -108,7 +108,7 @@ export const createStream = async (
       tags,
       language: "en",
       hasStarted: false,
-      hasEnded: false,
+      // Don't set hasEnded initially - only set when stream is actually ended
       isPrivate: false,
       requiresSubscription: false,
       viewerCount: 0,

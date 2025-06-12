@@ -24,7 +24,7 @@ export default function LiveViewPage() {
 
   // Simple hydration check
   useEffect(() => {
-      setHasHydrated(true);
+    setHasHydrated(true);
   }, []);
 
   // State management
@@ -44,14 +44,14 @@ export default function LiveViewPage() {
         setError(null);
 
         // Get stream data from Firestore
-      const streamRef = doc(db, "streams", slug);
-      const streamDoc = await getDoc(streamRef);
+        const streamRef = doc(db, "streams", slug);
+        const streamDoc = await getDoc(streamRef);
 
-      if (!streamDoc.exists()) {
-        setIsAuthorized(false);
-        setShowLockModal(true);
-        return;
-      }
+        if (!streamDoc.exists()) {
+          setIsAuthorized(false);
+          setShowLockModal(true);
+          return;
+        }
 
         const data = streamDoc.data() as StreamData;
         setStreamData(data);
@@ -125,37 +125,52 @@ export default function LiveViewPage() {
             <DialogDescription>
               The stream you&apos;re trying to access doesn&apos;t exist or has
               been removed.
-              </DialogDescription>
+            </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end space-x-2 mt-4">
             <Button variant="outline" onClick={() => window.history.back()}>
               Go Back
             </Button>
-              <Button
+            <Button
               onClick={() => (window.location.href = "/dashboard")}
               className="bg-brandOrange hover:bg-brandOrange/90"
-              >
+            >
               Go to Dashboard
-              </Button>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
     );
   }
 
-  // Show stream not live message
-  if (streamData && !streamData.isLive && !streamData.muxPlaybackId) {
-  return (
+  // Show stream not live message if stream hasn't started, has ended, or no playback ID available
+  if (
+    streamData &&
+    ((!streamData.hasStarted && !streamData.isLive) ||
+      streamData.hasEnded ||
+      !streamData.muxPlaybackId)
+  ) {
+    return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-white text-center">
           <h2 className="text-2xl mb-4">{streamData.title}</h2>
           <p className="text-gray-400 mb-4">
-            This stream is not currently live
+            {streamData.hasEnded
+              ? "This stream has ended"
+              : "This stream is not currently live"}
           </p>
           <p className="text-sm text-gray-500">
             Check back later or follow the streamer for updates
           </p>
-          </div>
+          {/* Debug info for development */}
+          {process.env.NODE_ENV === "development" && (
+            <div className="mt-4 text-xs text-gray-600 bg-gray-800 p-2 rounded">
+              Debug: hasStarted={String(streamData.hasStarted)}, hasEnded=
+              {String(streamData.hasEnded)}, isLive={String(streamData.isLive)},
+              muxPlaybackId={streamData.muxPlaybackId || "none"}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -177,7 +192,7 @@ export default function LiveViewPage() {
               <span className="text-gray-500">
                 Streamer: {streamData.streamerName || "Unknown"}
               </span>
-              {streamData.isLive && (
+              {streamData.hasStarted && !streamData.hasEnded && (
                 <span className="flex items-center space-x-1 text-red-500">
                   <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                   <span>LIVE</span>
@@ -197,7 +212,7 @@ export default function LiveViewPage() {
           {streamData?.muxPlaybackId ? (
             <VideoContainer
               playbackId={streamData.muxPlaybackId}
-              isLive={streamData.isLive}
+              isLive={streamData.isLive || streamData.hasStarted}
               autoplay={true}
               muted={false}
               accentColor="#FF3E00"
@@ -209,8 +224,103 @@ export default function LiveViewPage() {
               <div className="text-center">
                 <h3 className="text-xl mb-2">Stream Unavailable</h3>
                 <p className="text-gray-400">
-                  The stream is not currently available for viewing
+                  {streamData?.hasStarted
+                    ? "Waiting for stream to become available..."
+                    : "The stream is not currently available for viewing"}
                 </p>
+                {/* Debug info for development */}
+                {process.env.NODE_ENV === "development" && streamData && (
+                  <div className="mt-4 text-xs text-gray-600 bg-gray-800 p-2 rounded">
+                    Debug: hasStarted={String(streamData.hasStarted)}, isLive=
+                    {String(streamData.isLive)}, muxPlaybackId=
+                    {streamData.muxPlaybackId || "none"}, muxStatus=
+                    {streamData.muxStatus || "unknown"}
+                    {/* Add debug controls for stream management */}
+                    <div className="mt-2 space-y-2">
+                      <div className="text-yellow-400">
+                        Stream Status: {streamData.muxStatus || "unknown"}
+                      </div>
+                      {streamData.muxStreamId && (
+                        <div className="space-x-2">
+                          <button
+                            onClick={async () => {
+                              try {
+                                const response = await fetch(
+                                  `/api/mux/streams/enable?streamId=${streamData.muxStreamId}`,
+                                  {
+                                    method: "POST",
+                                  }
+                                );
+                                const result = await response.json();
+                                console.log("Enable stream result:", result);
+                                alert(
+                                  `Enable stream: ${
+                                    result.success ? "Success" : result.error
+                                  }`
+                                );
+                              } catch (error) {
+                                console.error("Error enabling stream:", error);
+                                alert("Error enabling stream");
+                              }
+                            }}
+                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs"
+                          >
+                            Enable Stream
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const response = await fetch(
+                                  `/api/mux/streams?streamId=${streamData.muxStreamId}`
+                                );
+                                const result = await response.json();
+                                console.log("Stream status:", result);
+                                alert(
+                                  `Stream status: ${
+                                    result.liveStream?.status || "unknown"
+                                  }`
+                                );
+                              } catch (error) {
+                                console.error("Error checking stream:", error);
+                                alert("Error checking stream");
+                              }
+                            }}
+                            className="px-2 py-1 bg-green-600 text-white rounded text-xs"
+                          >
+                            Check Status
+                          </button>
+                          {streamData.muxStreamKey && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(
+                                    `/api/streaming/rtmp-bridge?streamKey=${streamData.muxStreamKey}`
+                                  );
+                                  const result = await response.json();
+                                  console.log("RTMP bridge status:", result);
+                                  alert(
+                                    `RTMP bridge active: ${
+                                      result.isActive ? "Yes" : "No"
+                                    }`
+                                  );
+                                } catch (error) {
+                                  console.error(
+                                    "Error checking RTMP bridge:",
+                                    error
+                                  );
+                                  alert("Error checking RTMP bridge");
+                                }
+                              }}
+                              className="px-2 py-1 bg-purple-600 text-white rounded text-xs"
+                            >
+                              Check RTMP
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -226,7 +336,11 @@ export default function LiveViewPage() {
               <div>
                 <span className="text-gray-400">Status:</span>
                 <span className="ml-2 text-white">
-                  {streamData.isLive ? "Live" : "Offline"}
+                  {streamData.hasStarted && !streamData.hasEnded
+                    ? "Live"
+                    : streamData.hasEnded
+                    ? "Ended"
+                    : "Offline"}
                 </span>
               </div>
               <div>
@@ -247,8 +361,8 @@ export default function LiveViewPage() {
                         {tag}
                       </span>
                     ))}
-          </div>
-        </div>
+                  </div>
+                </div>
               )}
             </div>
           </div>

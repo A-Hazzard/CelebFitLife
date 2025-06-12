@@ -7,17 +7,24 @@ import { db } from "@/lib/firebase/client";
 import {
   doc,
   getDoc,
-  updateDoc,
-  serverTimestamp,
   onSnapshot,
   collection,
   addDoc,
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 // Use the client service, not direct server imports
 import StreamManager from "@/components/streaming/StreamManager";
 import StreamChat from "@/components/streaming/StreamChat";
 import DeviceTester from "@/components/streaming/DeviceTester";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Settings,
   RefreshCw,
@@ -697,6 +704,7 @@ export default function ManageStreamPage() {
     username: string;
     userId: string;
   } | null>(null);
+  const [muxStreamNotFound, setMuxStreamNotFound] = useState(false);
 
   const streamManagerRef = useRef<{
     startStream: () => Promise<void>;
@@ -723,56 +731,60 @@ export default function ManageStreamPage() {
     }
   }, [currentUser, slug, router]);
 
-  // Use currentUser to avoid lint error
+  // Listen for real-time stream updates
   useEffect(() => {
-    if (currentUser) {
-      console.log("Managing stream for user:", currentUser.uid);
-    }
-  }, [currentUser]);
+    if (!slug) return;
 
-  // Function to fetch stream data wrapped in useCallback
-  const fetchStream = useCallback(async () => {
-    try {
-      setLoading(true);
-      const streamDocRef = doc(db, "streams", slug);
-      const streamSnapshot = await getDoc(streamDocRef);
+    setLoading(true);
+    const streamRef = doc(db, "streams", slug);
 
-      if (!streamSnapshot.exists()) {
-        setError("Stream not found");
-        setStreamData(null);
-      } else {
-        setStreamData({
-          id: streamSnapshot.id,
-          ...streamSnapshot.data(),
-        } as StreamData);
+    const unsubscribe = onSnapshot(
+      streamRef,
+      async (streamSnapshot) => {
+        if (streamSnapshot.exists()) {
+          const data = {
+            id: streamSnapshot.id,
+            ...streamSnapshot.data(),
+          } as StreamData;
+
+          setStreamData(data);
+          setError(null);
+          setMuxStreamNotFound(false);
+
+          // If muxStreamId exists, check its status on Mux
+          if (data.muxStreamId) {
+            try {
+              const res = await fetch(
+                `/api/mux/streams?streamId=${data.muxStreamId}`
+              );
+              if (!res.ok && res.status === 404) {
+                console.warn(
+                  "Mux stream not found for this streamData. The stream may need to be reset."
+                );
+                setMuxStreamNotFound(true);
+              }
+            } catch (apiError) {
+              console.error("Failed to verify Mux stream status:", apiError);
+            }
+          }
+        } else {
+          setError(
+            "Stream not found or you do not have permission to view it."
+          );
+          setStreamData(null);
+        }
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Error with stream snapshot listener:", err);
+        setError("Error fetching stream details.");
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Error fetching stream:", err);
-      setError("Error fetching stream details");
-    } finally {
-      setLoading(false);
-    }
+    );
+
+    // Cleanup listener on unmount
+    return () => unsubscribe();
   }, [slug]);
-
-  useEffect(() => {
-    // Fetch the stream data from Firestore client-side
-    fetchStream();
-
-    // Set up real-time listener for stream updates
-    const streamDocRef = doc(db, "streams", slug);
-    const unsubscribe = onSnapshot(streamDocRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setStreamData({
-          id: snapshot.id,
-          ...snapshot.data(),
-        } as StreamData);
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [fetchStream, slug]);
 
   const handleStartStream = () => {
     // Check local storage for saved settings *before* showing the modal
@@ -791,29 +803,20 @@ export default function ManageStreamPage() {
     try {
       if (!streamData?.id) return;
 
-      console.log(
-        "[StreamManager] Starting stream, updating Firestore document"
-      );
-      const streamDocRef = doc(db, "streams", streamData.id);
-
-      // Update stream document
-      await updateDoc(streamDocRef, {
-        isLive: true,
-        startedAt: serverTimestamp(),
-        lastUpdated: serverTimestamp(),
-      });
+      console.log("[ManageStreamPage] Starting stream via StreamManager");
 
       // Call the internal startStream method of StreamManager
+      // The StreamManager will handle all Firestore updates
       if (typeof streamManagerRef.current?.startStream === "function") {
         console.log(
-          "[StreamManager] Calling StreamManager.startStream() method"
+          "[ManageStreamPage] Calling StreamManager.startStream() method"
         );
         await streamManagerRef.current.startStream();
+        toast.success("Stream started successfully!");
+        setConnectionError(null);
+      } else {
+        throw new Error("StreamManager startStream method not available");
       }
-
-      setStreamData((prev) => (prev ? { ...prev, isLive: true } : null));
-      toast.success("Stream started successfully!");
-      setConnectionError(null);
     } catch (error) {
       console.error("Error starting stream:", error);
       toast.error("Failed to start the stream. Please try again.");
@@ -829,26 +832,22 @@ export default function ManageStreamPage() {
     try {
       if (!streamData?.id) return;
 
-      console.log("[StreamManager] Ending stream, updating Firestore document");
-      const streamDocRef = doc(db, "streams", streamData.id);
-      await updateDoc(streamDocRef, {
-        isLive: false,
-        endedAt: serverTimestamp(),
-        lastUpdated: serverTimestamp(),
-      });
+      console.log("[ManageStreamPage] Ending stream via StreamManager");
 
       // End the stream via StreamManager
+      // The StreamManager will handle all Firestore updates
       if (
         streamManagerRef.current &&
         typeof streamManagerRef.current.endStream === "function"
       ) {
-        console.log("[StreamManager] Calling StreamManager.endStream() method");
+        console.log(
+          "[ManageStreamPage] Calling StreamManager.endStream() method"
+        );
         await streamManagerRef.current.endStream();
+        toast.success("Stream ended successfully!");
+      } else {
+        throw new Error("StreamManager endStream method not available");
       }
-
-      setStreamData((prev) => (prev ? { ...prev, isLive: false } : null));
-
-      toast.success("Stream ended successfully!");
     } catch (error) {
       console.error("Error ending stream:", error);
       toast.error("Failed to end the stream. Please try again.");
@@ -888,6 +887,32 @@ export default function ManageStreamPage() {
 
   const handleChatUserClick = (username: string, userId: string) => {
     setModerationTarget({ username, userId });
+  };
+
+  const handleResetStream = async () => {
+    if (!streamData) return;
+    try {
+      const { doc, updateDoc } = await import("firebase/firestore");
+      const { db } = await import("@/lib/firebase/client");
+      const streamRef = doc(db, "streams", streamData.id);
+
+      // Clear Mux-related fields from Firestore
+      await updateDoc(streamRef, {
+        muxStreamId: null,
+        muxPlaybackId: null,
+        muxStreamKey: null,
+        muxStatus: null,
+        isLive: false,
+        hasStarted: false,
+        hasEnded: false,
+      });
+
+      setMuxStreamNotFound(false);
+      toast.success("Stream has been reset. You can now start a new one.");
+    } catch (resetError) {
+      console.error("Failed to reset stream:", resetError);
+      toast.error("Failed to reset stream. Please try again.");
+    }
   };
 
   if (loading) {
@@ -944,8 +969,9 @@ export default function ManageStreamPage() {
   }
 
   const isStreamLive = streamData?.isLive;
-  const isStreamScheduled = streamData?.scheduledAt && !streamData?.isLive;
-  const isStreamEnded = !isStreamLive && !isStreamScheduled;
+  const isStreamScheduled = streamData?.scheduledAt && !streamData?.hasStarted;
+  const isStreamEnded = streamData?.hasEnded;
+  const isStreamReady = !isStreamLive && !isStreamScheduled && !isStreamEnded;
 
   return (
     <div className="min-h-screen bg-brandBlack text-brandWhite">
@@ -980,10 +1006,15 @@ export default function ManageStreamPage() {
                   <span className="w-2 h-2 rounded-full bg-gray-500 mr-1.5"></span>
                   Ended
                 </span>
-              ) : (
+              ) : isStreamReady ? (
                 <span className="bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full text-xs flex items-center">
                   <span className="w-2 h-2 rounded-full bg-yellow-500 mr-1.5"></span>
                   Ready
+                </span>
+              ) : (
+                <span className="bg-gray-500/20 text-gray-400 px-2 py-0.5 rounded-full text-xs flex items-center">
+                  <span className="w-2 h-2 rounded-full bg-gray-500 mr-1.5"></span>
+                  Idle
                 </span>
               )}
               {isStreamLive && (
@@ -1480,7 +1511,10 @@ export default function ManageStreamPage() {
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         stream={streamData}
-        onSuccess={fetchStream}
+        onSuccess={() => {
+          // Fetch the stream data again after editing
+          fetchStream();
+        }}
       />
 
       <PollModal
@@ -1497,6 +1531,28 @@ export default function ManageStreamPage() {
           userId={moderationTarget.userId}
           streamId={streamData?.id || ""}
         />
+      )}
+
+      {muxStreamNotFound && (
+        <div className="flex-1 p-8 bg-gray-50">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center py-20 bg-white rounded-lg shadow-sm border border-red-200">
+              <AlertCircle className="mx-auto h-12 w-12 text-red-400" />
+              <h3 className="mt-2 text-lg font-medium text-gray-900">
+                Mux Stream Not Found
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                The Mux stream associated with this session could not be found.
+                It may have been deleted or never created.
+              </p>
+              <div className="mt-6">
+                <Button onClick={handleResetStream}>
+                  <RefreshCw className="mr-2 h-4 w-4" /> Reset Stream
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
