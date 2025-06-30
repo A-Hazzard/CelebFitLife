@@ -1,7 +1,25 @@
 import React from "react";
-import { EnrichedStreamer } from "@/lib/types/streaming.types";
 import Image from "next/image";
 import { Lock } from "lucide-react";
+
+// Minimal types to replace deleted streaming types
+type Stream = {
+  id: string;
+  title?: string;
+  hasEnded?: boolean;
+  thumbnail?: string;
+};
+
+type EnrichedStreamer = {
+  id: string;
+  name?: string;
+  username?: string;
+  avatarUrl?: string;
+  bio?: string;
+  categoryName?: string;
+  tagNames?: string[];
+  streams?: Stream[];
+};
 
 const StreamerCard: React.FC<{
   streamer: EnrichedStreamer;

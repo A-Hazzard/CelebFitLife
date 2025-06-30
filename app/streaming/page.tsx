@@ -8,30 +8,17 @@ import React, { useEffect, useState } from "react";
 import { fetchCategoriesWithTags } from "@/lib/store/categoriesStore";
 import { Category, Tag } from "@/lib/store/categoriesStore";
 import { SLIDER_SETTINGS } from "@/lib/uiConstants";
-import { useStreamerStore } from "@/lib/store/useStreamerStore";
 import StreamerCard from "@/components/streamPage/StreamerCard";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { useRouter } from "next/navigation";
 import Header from "@/components/layout/Header";
-import { Button } from "@/components/ui/button";
 import { DialogClose, DialogDescription } from "@/components/ui/dialog";
 import { DialogTitle } from "@/components/ui/dialog";
 import { DialogHeader } from "@/components/ui/dialog";
 import { DialogContent } from "@/components/ui/dialog";
 import { Dialog } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import {
-  doc,
-  onSnapshot,
-  updateDoc,
-  arrayUnion,
-  DocumentSnapshot,
-  DocumentData,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase/client";
 
 export default function UserDashboard() {
-  const [visibleDiscoverStreamers, setVisibleDiscoverStreamers] = useState(6);
   const [isTagsOpen, setIsTagsOpen] = useState(false);
   const [categories, setCategories] = useState<(Category & { tags: Tag[] })[]>(
     []
@@ -40,16 +27,31 @@ export default function UserDashboard() {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showLockedModal, setShowLockedModal] = useState<string | null>(null);
-  const [previewingStreamerId, setPreviewingStreamerId] = useState<
-    string | null
-  >(null);
-  const [previewCountdown, setPreviewCountdown] = useState<number>(60);
-  const [previewInterval, setPreviewInterval] = useState<NodeJS.Timeout | null>(
-    null
-  );
-  const [previewedStreamers, setPreviewedStreamers] = useState<string[]>([]);
 
-  const { streamers, fetchAll } = useStreamerStore();
+  // Mock streamers data since streaming store is removed
+  const streamers = [
+    {
+      id: "1",
+      name: "FitnessPro",
+      username: "fitnesspro",
+      avatarUrl: "https://images.unsplash.com/photo-1594381898411-846e7d193883?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
+      bio: "Professional fitness trainer",
+      categoryName: "Fitness",
+      tagNames: ["workout", "fitness"],
+      streams: []
+    },
+    {
+      id: "2", 
+      name: "YogaMaster",
+      username: "yogamaster",
+      avatarUrl: "https://images.unsplash.com/photo-1552196563-55cd4e45efb3?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
+      bio: "Yoga instructor and mindfulness coach",
+      categoryName: "Yoga",
+      tagNames: ["yoga", "meditation"],
+      streams: []
+    }
+  ];
+
   const { currentUser } = useAuthStore();
   const router = useRouter();
 
@@ -65,30 +67,6 @@ export default function UserDashboard() {
       router.push("/dashboard");
     }
   }, [currentUser, router]);
-
-  // Fetch previewedStreamers from Firestore
-  useEffect(() => {
-    if (currentUser?.email) {
-      const userRef = doc(db, "users", currentUser.email);
-      const unsubscribe = onSnapshot(
-        userRef,
-        (snapshot: DocumentSnapshot<DocumentData>) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            setPreviewedStreamers(data.previewedStreamers || []);
-          }
-        }
-      );
-
-      return () => unsubscribe();
-    }
-    // Always return a cleanup function
-    return () => {};
-  }, [currentUser?.email]);
-
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
 
   useEffect(() => {
     const loadCategoriesAndTags = async () => {
@@ -108,7 +86,7 @@ export default function UserDashboard() {
     );
     setSelectedCategories((prev) =>
       prev.includes(categoryName)
-        ? prev.filter((cat) => cat !== categoryName)
+        ? prev.filter((cat: string) => cat !== categoryName)
         : [...prev, categoryName]
     );
   };
@@ -119,10 +97,6 @@ export default function UserDashboard() {
         ? prevTags.filter((tag) => tag !== tagName)
         : [...prevTags, tagName]
     );
-  };
-
-  const loadMoreStreamers = () => {
-    setVisibleDiscoverStreamers((prev) => prev + 3);
   };
 
   // Use correct property 'id' instead of non-existent 'streamID'
@@ -138,66 +112,8 @@ export default function UserDashboard() {
       (streamer.categoryName &&
         selectedCategories.includes(streamer.categoryName));
 
-    // If user has myStreamers, we could use it for additional filtering
-    // but for now we just apply category filtering
     return categoryMatches;
   });
-
-  const handlePreview = async (streamerId: string) => {
-    // Check if streamer has already been previewed
-    if (previewedStreamers.includes(streamerId)) {
-      toast.error("You have already previewed this streamer");
-      return;
-    }
-
-    // Find the streamer's active stream
-    const streamer = streamers.find((s) => s.id === streamerId);
-    const liveStream = streamer?.streams?.find((s) => {
-      // Instead of directly accessing hasStarted, check if it's live using other logic
-      return s.hasEnded !== true;
-    });
-
-    if (!liveStream) {
-      toast.error("This streamer is not currently live");
-      return;
-    }
-
-    setPreviewingStreamerId(streamerId);
-    setPreviewCountdown(60);
-
-    // Navigate to the live stream
-    router.push(
-      `/streaming/live/${liveStream.id}?preview=true&countdown=${60}`
-    );
-
-    // Start countdown
-    const interval = setInterval(() => {
-      setPreviewCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setPreviewingStreamerId(null);
-          // Update Firestore: add streamerId to previewedStreamers
-          if (currentUser && currentUser.email) {
-            const userRef = doc(db, "users", currentUser.email);
-            updateDoc(userRef, {
-              previewedStreamers: arrayUnion(streamerId),
-            });
-          }
-          // Redirect back after preview ends
-          router.push("/streaming");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    setPreviewInterval(interval);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (previewInterval) clearInterval(previewInterval);
-    };
-  }, [previewInterval]);
 
   return (
     <div className="flex flex-col min-h-screen bg-brandBlack text-brandWhite font-inter overflow-x-hidden">
@@ -223,13 +139,7 @@ export default function UserDashboard() {
                       avatarUrl: streamer.avatarUrl || "/favicon.ico",
                       username: streamer.username || streamer.name,
                       bio: streamer.bio || "",
-                      streams:
-                        streamer.streams?.map((stream) => ({
-                          ...stream,
-                          thumbnail: stream.thumbnail || "/favicon.ico",
-                          hasEnded: stream.hasEnded || false,
-                          title: stream.title || "Untitled Stream",
-                        })) || [],
+                      streams: [],
                     }}
                   />
                 </div>
@@ -318,7 +228,7 @@ export default function UserDashboard() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-6">
             {filteredStreamers
-              .slice(0, visibleDiscoverStreamers)
+              .slice(0, 6)
               .map((streamer, index) => (
                 <div
                   key={index}
@@ -330,13 +240,7 @@ export default function UserDashboard() {
                       avatarUrl: streamer.avatarUrl || "/favicon.ico",
                       username: streamer.username || streamer.name,
                       bio: streamer.bio || "",
-                      streams:
-                        streamer.streams?.map((stream) => ({
-                          ...stream,
-                          thumbnail: stream.thumbnail || "/favicon.ico",
-                          hasEnded: stream.hasEnded || false,
-                          title: stream.title || "Untitled Stream",
-                        })) || [],
+                      streams: [],
                     }}
                   />
                 </div>
@@ -355,41 +259,13 @@ export default function UserDashboard() {
                     <Lock className="w-10 h-10 text-brandOrange" />
                   </span>
                   <DialogTitle className="text-2xl text-center text-brandOrange font-extrabold">
-                    Unlock Streamer
+                    Streaming Removed
                   </DialogTitle>
                   <DialogDescription className="text-base text-center text-brandGray mt-2">
-                    This streamer is locked. Buy another streamer or preview for
-                    1 minute.
+                    Streaming functionality has been removed from this platform.
                   </DialogDescription>
                 </div>
               </DialogHeader>
-              <div className="my-6 border-t border-brandOrange/20 w-full" />
-              {showLockedModal && (
-                <div className="flex flex-col sm:flex-row gap-4 justify-center w-full">
-                  <Button
-                    variant="default"
-                    className="bg-brandOrange text-brandBlack font-bold px-6 py-3 rounded-full text-lg shadow-md hover:scale-105 transition-transform w-full sm:w-auto"
-                    onClick={() => {
-                      setShowLockedModal(null);
-                      // TODO: Implement buy logic
-                    }}
-                  >
-                    Buy Another Streamer
-                  </Button>
-                  {showLockedModal && (
-                    <Button
-                      variant="outline"
-                      className="border-2 border-brandOrange text-brandOrange font-bold px-6 py-3 rounded-full text-lg shadow-md hover:bg-brandOrange/10 hover:scale-105 transition-transform w-full sm:w-auto"
-                      onClick={() => {
-                        setShowLockedModal(null);
-                        handlePreview(showLockedModal);
-                      }}
-                    >
-                      Preview 1 min
-                    </Button>
-                  )}
-                </div>
-              )}
               <DialogClose asChild>
                 <button className="absolute top-4 right-4 text-brandOrange hover:text-brandWhite transition-colors">
                   <span className="sr-only">Close</span>
@@ -398,40 +274,9 @@ export default function UserDashboard() {
             </DialogContent>
           </Dialog>
 
-          {previewingStreamerId && (
-            <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80">
-              <div className="bg-brandBlack border-2 border-brandOrange rounded-2xl p-8 flex flex-col items-center">
-                <Lock className="w-12 h-12 text-brandOrange mb-4" />
-                <h2 className="text-2xl font-bold text-brandOrange mb-2">
-                  Previewing Stream
-                </h2>
-                <p className="text-lg text-brandWhite mb-4">
-                  You have {previewCountdown} seconds left
-                </p>
-                <Button
-                  variant="default"
-                  className="bg-brandOrange text-brandBlack font-bold px-6 py-3 rounded-full text-lg shadow-md hover:scale-105 transition-transform"
-                  onClick={() => {
-                    setPreviewingStreamerId(null);
-                    if (previewInterval) clearInterval(previewInterval);
-                  }}
-                >
-                  Stop Preview
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {visibleDiscoverStreamers < filteredStreamers.length && (
-            <div className="flex justify-center mt-6">
-              <button
-                onClick={loadMoreStreamers}
-                className="bg-brandOrange text-brandBlack px-6 py-2 rounded-full hover:opacity-80 transition-opacity text-sm md:text-base"
-              >
-                Load More
-              </button>
-            </div>
-          )}
+          <div className="text-center py-8 text-brandGray">
+            <p>Streaming features have been removed.</p>
+          </div>
         </section>
       </main>
     </div>

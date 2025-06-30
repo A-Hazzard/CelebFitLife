@@ -25,7 +25,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/lib/store/useAuthStore";
-import type { StreamDoc } from "@/lib/types/streaming.types";
+
+// Minimal type to replace deleted streaming types
+type StreamDoc = {
+  id: string;
+  title: string;
+  thumbnailUrl?: string;
+  category?: string;
+};
 
 /**
  * Utility function to get the thumbnail URL for a stream

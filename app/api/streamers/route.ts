@@ -1,6 +1,28 @@
 import { db } from "@/lib/firebase/client";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { Stream, StreamerWithStreams } from "@/lib/types/streaming.types";
+
+// Minimal types to replace deleted streaming types
+type Stream = {
+  id: string;
+  title?: string;
+  hasEnded?: boolean;
+  thumbnail?: string;
+};
+
+type StreamerWithStreams = {
+  id: string;
+  name: string;
+  username: string;
+  avatarUrl?: string;
+  bio?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  thumbnail?: string;
+  Category?: string;
+  Tags?: string[];
+  streams?: Stream[];
+};
 
 export const fetchStreamersWithStreams = async () => {
   const streamerCol = collection(db, "streamer");

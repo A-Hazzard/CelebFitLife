@@ -12,7 +12,21 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { ActivityItem } from "@/lib/types/ui";
-import { StreamDoc } from "@/lib/types/streaming.types";
+
+// Minimal Stream type to replace deleted streaming types
+type StreamDoc = {
+  id: string;
+  title: string;
+  description?: string;
+  userId: string;
+  hasStarted: boolean;
+  hasEnded: boolean;
+  scheduledAt?: Timestamp;
+  createdAt?: Timestamp;
+  endedAt?: Timestamp;
+  viewCount?: number;
+  thumbnailUrl?: string;
+};
 
 /**
  * Fetches live streams for the specified user
