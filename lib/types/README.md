@@ -4,7 +4,7 @@ This directory contains the TypeScript type definitions used throughout the Cele
 
 ## Structure
 
-- `streaming.types.ts`: Consolidated streaming-related types (combines the former `streaming.ts`, `streaming-components.ts`, `streaming-hooks.ts`, and `twilio.ts`)
+
 - `user.ts`: Core user-related types, including User types and DTOs
 - `ui.ts`: UI component props and related types
 - `dashboard.ts`: Dashboard-related types

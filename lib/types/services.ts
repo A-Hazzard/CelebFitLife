@@ -10,20 +10,6 @@ export type PaymentDetails = {
   name: string;
 };
 
-// --- Twilio Service Types ---
-export type TokenCache = {
-  [key: string]: {
-    token: string;
-    expiresAt: number; // Timestamp in milliseconds
-  };
-};
-
-export type ReconnectionHandlers = {
-  onReconnecting?: () => void;
-  onReconnected?: () => void;
-  onFailed?: (error: Error) => void;
-};
-
 // --- Authentication Types ---
 export type JwtPayload = {
   id?: string;

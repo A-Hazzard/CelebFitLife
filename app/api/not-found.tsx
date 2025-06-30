@@ -117,10 +117,8 @@ export default function ApiNotFound() {
                 </ul>
               </div>
               <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-                <h4 className="text-brandOrange font-medium mb-2">Streaming</h4>
+                <h4 className="text-brandOrange font-medium mb-2">Data</h4>
                 <ul className="text-gray-300 space-y-1">
-                  <li>• GET /api/mux/streams</li>
-                  <li>• POST /api/mux/streams</li>
                   <li>• GET /api/streamers</li>
                 </ul>
               </div>

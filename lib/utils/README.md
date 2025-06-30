@@ -1,104 +1,8 @@
 # CelebFitLife Utility Functions
 
-This directory contains utility functions used throughout the CelebFitLife application. These utilities provide common functionality for media handling, authentication, and streaming operations.
+This directory contains utility functions used throughout the CelebFitLife application. These utilities provide common functionality for media handling and authentication operations.
 
 ## Available Utilities
-
-### Streaming Utilities (`streaming.ts`)
-
-#### `setupReconnectionHandlers`
-Sets up event handlers for Twilio room reconnection events.
-```typescript
-setupReconnectionHandlers(
-  room, 
-  onReconnecting, 
-  onReconnected, 
-  onReconnectionFailed
-);
-```
-
-#### `handleAutoReconnect`
-Attempts to reconnect to a Twilio room with exponential backoff.
-```typescript
-await handleAutoReconnect(
-  slug, 
-  userName, 
-  createRoom,
-  maxAttempts, 
-  onAttempt, 
-  onSuccess, 
-  onFailure
-);
-```
-
-#### `handleMediaTrackErrors`
-Handles errors related to media tracks to provide user-friendly error messages.
-```typescript
-const errorMessage = handleMediaTrackErrors(error);
-```
-
-#### `setupLocalMediaTracks`
-Creates and configures local media tracks based on device settings and preferences.
-```typescript
-const { videoTrack, audioTrack } = await setupLocalMediaTracks(
-  cameraId, 
-  micId, 
-  { isVideoEnabled, isAudioEnabled }
-);
-```
-
-#### `formatDuration`
-Formats a duration in seconds to a human-readable string (HH:MM:SS).
-```typescript
-const formattedTime = formatDuration(durationInSeconds);
-```
-
-### Media Utilities (`media.ts`)
-
-#### `DEFAULT_STREAM_THUMBNAIL`
-A constant holding the default thumbnail URL for streams.
-
-#### `CATEGORY_THUMBNAILS`
-An object mapping fitness categories to their respective thumbnail URLs.
-
-#### `getStreamThumbnail`
-Determines the best available thumbnail URL based on provided inputs.
-```typescript
-const thumbnailUrl = getStreamThumbnail(customThumbnailUrl, category, title);
-```
-
-#### `isValidUrl`
-Checks if a given string is a properly formatted URL.
-```typescript
-if (isValidUrl(thumbnailUrl)) {
-  // Use the URL
-}
-```
-
-#### `generateVideoThumbnail`
-Generates a thumbnail from the first frame of a video element.
-```typescript
-const thumbnailDataUrl = await generateVideoThumbnail(
-  videoElement, 
-  'image/jpeg', 
-  0.8
-);
-```
-
-#### `detectMediaDeviceChanges`
-Monitors changes in media devices (camera/microphone connect/disconnect) and provides callbacks.
-```typescript
-const stopDetecting = detectMediaDeviceChanges(
-  onDevicesChanged,
-  onDevicesError
-);
-```
-
-#### `getDevicePermissionStatus`
-Checks if the user has granted camera and microphone permissions.
-```typescript
-const { camera, microphone } = await getDevicePermissionStatus();
-```
 
 ### Authentication Utilities (`auth.ts`)
 
@@ -136,12 +40,12 @@ const { shouldRetry, retryAfter, message } = handleNetworkErrors(error);
 
 ## File Structure
 
-- `streaming.ts` - Utilities for Twilio and streaming functionality
-- `media.ts` - Utilities for media operations like thumbnails
 - `auth.ts` - Authentication-related utilities
-- `errors.ts` - Error handling and parsing utilities
-- `formatting.ts` - Text and data formatting utilities
+- `errorHandler.ts` - Error handling and parsing utilities
 - `validation.ts` - Form and data validation utilities
+- `userUtils.ts` - User-related utilities
+- `paymentUtils.ts` - Payment processing utilities
+- `planUtils.ts` - Subscription plan utilities
 
 ## Best Practices
 

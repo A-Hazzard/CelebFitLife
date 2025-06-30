@@ -4,13 +4,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useAuthStore } from "@/lib/store/useAuthStore";
-import { CreateStreamModal } from "@/components/streaming/CreateStreamModal";
 import { Button } from "@/components/ui/button";
-import { StreamerCard } from "@/components/streaming/StreamerCard";
 import ActivityLog from "@/components/dashboard/ActivityLog";
 import StreamStats from "@/components/dashboard/StreamStats";
 import { fetchAllUserStreams } from "@/lib/helpers/dashboard";
-import { StreamData } from "@/lib/types/streaming.types";
 import {
   Activity,
   ChevronRight,
@@ -27,11 +24,24 @@ import UpcomingStreamsCalendar from "@/components/dashboard/UpcomingStreamsCalen
 import Header from "@/components/layout/Header";
 import { getStreamThumbnail } from "@/components/layout/Header";
 
+// Minimal type to replace deleted streaming types
+type StreamDoc = {
+  id: string;
+  title: string;
+  description?: string;
+  userId: string;
+  hasStarted: boolean;
+  hasEnded: boolean;
+  createdAt?: unknown;
+  endedAt?: unknown;
+  viewCount?: number;
+  thumbnailUrl?: string;
+};
+
 export default function DashboardPage() {
   // Add states for dropdowns
-  const [liveStreams, setLiveStreams] = useState<StreamData[]>([]);
-  const [pastStreams, setPastStreams] = useState<StreamData[]>([]);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [liveStreams, setLiveStreams] = useState<StreamDoc[]>([]);
+  const [pastStreams, setPastStreams] = useState<StreamDoc[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isStreamerGuideOpen, setIsStreamerGuideOpen] = useState(false);
   const [isExploreStreamersOpen, setIsExploreStreamersOpen] = useState(false);
@@ -142,45 +152,9 @@ export default function DashboardPage() {
   };
 
   const handleCreateStream = () => {
-    setIsCreateModalOpen(true);
+    // Redirect to a different page since streaming functionality is removed
+    router.push("/dashboard");
   };
-
-  // Recommended streamers with Unsplash images
-  const recommendedStreamers = [
-    {
-      id: "streamer1",
-      name: "FitnessPro",
-      status: "live" as const,
-      imageUrl:
-        "https://images.unsplash.com/photo-1594381898411-846e7d193883?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
-      streamTitle: "HIIT Workout Session",
-      viewerCount: 342,
-    },
-    {
-      id: "streamer2",
-      name: "YogaMaster",
-      status: "online" as const,
-      // Use a different yoga instructor image
-      imageUrl:
-        "https://images.unsplash.com/photo-1552196563-55cd4e45efb3?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
-    },
-    {
-      id: "streamer3",
-      name: "NutritionExpert",
-      status: "live" as const,
-      imageUrl:
-        "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
-      streamTitle: "Healthy Meal Prep",
-      viewerCount: 156,
-    },
-    {
-      id: "streamer4",
-      name: "MindfulnessGuide",
-      status: "offline" as const,
-      imageUrl:
-        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&crop=faces&fit=crop&auto=format&q=80",
-    },
-  ];
 
   // Update the SkeletonLoader component to be more reusable
   const SkeletonLoader = ({
@@ -224,7 +198,7 @@ export default function DashboardPage() {
                 className="bg-brandOrange hover:bg-brandWhite hover:text-brandBlack flex-1 sm:flex-auto text-brandBlack border-2 border-brandOrange"
               >
                 <Plus className="h-4 w-4 mr-2 text-brandBlack" />
-                New Stream
+                Dashboard
               </Button>
               <Button
                 variant="outline"
@@ -259,9 +233,7 @@ export default function DashboardPage() {
                   <div
                     key={stream.id}
                     className="bg-brandBlack/90 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:scale-[1.02] border border-brandOrange"
-                    onClick={() =>
-                      router.push(`/dashboard/streams/manage/${stream.id}`)
-                    }
+                    onClick={() => router.push(`/dashboard`)}
                   >
                     <div className="relative aspect-video">
                       <Image
@@ -282,12 +254,16 @@ export default function DashboardPage() {
                           <span className="truncate max-w-[120px]">
                             Started{" "}
                             {stream.createdAt
-                              ? new Date(stream.createdAt).toLocaleTimeString()
+                              ? new Date(
+                                  typeof stream.createdAt === "string"
+                                    ? stream.createdAt
+                                    : (stream.createdAt as { toDate(): Date }).toDate()
+                                ).toLocaleTimeString()
                               : "Recently"}
                           </span>
                           <div className="flex items-center">
                             <Activity className="h-3 w-3 mr-1 text-brandOrange" />
-                            {stream.viewerCount || 0} viewers
+                            {stream.viewCount || 0} viewers
                           </div>
                         </div>
                       </div>
@@ -372,19 +348,21 @@ export default function DashboardPage() {
                           {stream.title}
                         </h4>
                         <div className="text-xs sm:text-sm text-brandGray truncate">
-                          {stream.updatedAt
-                            ? new Date(stream.updatedAt).toLocaleDateString()
+                          {stream.endedAt
+                            ? new Date(
+                                typeof stream.endedAt === "string"
+                                  ? stream.endedAt
+                                  : (stream.endedAt as { toDate(): Date }).toDate()
+                              ).toLocaleDateString()
                             : "N/A"}{" "}
-                          • {stream.viewerCount || 0} views
+                          • {stream.viewCount || 0} views
                         </div>
                       </div>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="flex-shrink-0 text-brandOrange"
-                        onClick={() =>
-                          router.push(`/dashboard/streams/manage/${stream.id}`)
-                        }
+                        onClick={() => router.push(`/dashboard`)}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -409,7 +387,7 @@ export default function DashboardPage() {
                         onClick={handleCreateStream}
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        Create Your First Stream
+                        View Dashboard
                       </Button>
                     </div>
                   )}
@@ -474,91 +452,28 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {recommendedStreamers.map((streamer, index) => (
-                      <div
-                        key={streamer.id}
-                        className={`${
-                          index % 3 === 0
-                            ? "bg-gradient-to-r from-blue-900 to-blue-800"
-                            : index % 3 === 1
-                            ? "bg-gradient-to-r from-blue-800 to-blue-700"
-                            : "bg-gradient-to-r from-blue-700 to-blue-900"
-                        } rounded-lg overflow-hidden border border-brandOrange`}
-                      >
-                        <StreamerCard streamer={streamer} />
-                      </div>
-                    ))}
+                    <p className="text-brandGray text-sm">Streaming features have been removed from this dashboard.</p>
                   </div>
                 </div>
               )}
-
-              {/* Quick Tips Card */}
-              <div className="bg-brandBlack rounded-lg p-4 sm:p-6 border-2 border-brandOrange">
-                <h3 className="text-lg font-medium mb-3 text-brandOrange">
-                  Streamer Tips
-                </h3>
-                <ul className="space-y-3 text-sm">
-                  <li className="flex items-start">
-                    <div className="bg-brandOrange/20 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
-                      <Activity className="h-4 w-4 text-brandOrange" />
-                    </div>
-                    <span className="text-brandWhite">
-                      Schedule streams in advance to build anticipation
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <div className="bg-brandOrange/20 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
-                      <Activity className="h-4 w-4 text-brandOrange" />
-                    </div>
-                    <span className="text-brandWhite">
-                      Engage with your audience through polls and Q&As
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <div className="bg-brandOrange/20 p-1 rounded mr-2 mt-0.5 flex-shrink-0">
-                      <Activity className="h-4 w-4 text-brandOrange" />
-                    </div>
-                    <span className="text-brandWhite">
-                      Use detailed descriptions and relevant tags
-                    </span>
-                  </li>
-                </ul>
-                <Button
-                  className="w-full mt-4 bg-brandOrange hover:bg-brandWhite hover:text-brandBlack text-brandBlack border-2 border-brandOrange"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setIsStreamerGuideOpen(true);
-                  }}
-                  type="button"
-                >
-                  View Streamer Guide
-                </Button>
-              </div>
             </div>
           </div>
+
+          {/* Modals */}
+          <SettingsModal
+            open={isSettingsOpen}
+            onOpenChange={setIsSettingsOpen}
+          />
+          <StreamerGuideModal
+            open={isStreamerGuideOpen}
+            onOpenChange={setIsStreamerGuideOpen}
+          />
+          <ExploreStreamersModal
+            open={isExploreStreamersOpen}
+            onOpenChange={setIsExploreStreamersOpen}
+          />
         </div>
       </main>
-
-      {/* Create Stream Modal */}
-      <CreateStreamModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-      />
-
-      {/* Settings Modal */}
-      <SettingsModal open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
-
-      {/* Streamer Guide Modal */}
-      <StreamerGuideModal
-        open={isStreamerGuideOpen}
-        onOpenChange={setIsStreamerGuideOpen}
-      />
-
-      {/* Explore Streamers Modal */}
-      <ExploreStreamersModal
-        open={isExploreStreamersOpen}
-        onOpenChange={setIsExploreStreamersOpen}
-      />
     </div>
   );
 }

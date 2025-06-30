@@ -6,7 +6,7 @@ This directory contains the core logic, utilities, types, hooks, and configurati
 
 *   `/config`: Contains configuration files for external services like Twilio. **Note:** Firebase configuration has been moved and consolidated.
 *   `/firebase`: Contains the centralized Firebase client (`client.ts`) and admin (`admin.ts`) SDK initializations and related utility functions.
-*   `/helpers`: Contains helper functions specific to certain application features (e.g., authentication flows, streaming logic).
+*   `/helpers`: Contains helper functions specific to certain application features (e.g., authentication flows, dashboard data).
 *   `/hooks`: Contains custom React hooks used throughout the application.
 *   `/models`: Defines data structures and types used across the application.
 *   `/services`: Includes service classes abstracting interactions with external APIs (e.g., Twilio).

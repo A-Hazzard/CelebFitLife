@@ -1,6 +1,28 @@
 import { db } from "@/lib/firebase/client";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { StreamData, StreamerWithStreams } from "@/lib/types/streaming.types";
+
+// Minimal types to replace deleted streaming types
+type Stream = {
+  id: string;
+  title?: string;
+  hasEnded?: boolean;
+  thumbnail?: string;
+};
+
+type StreamerWithStreams = {
+  id: string;
+  name: string;
+  username: string;
+  avatarUrl?: string;
+  bio?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  thumbnail?: string;
+  Category?: string;
+  Tags?: string[];
+  streams?: Stream[];
+};
 
 export const fetchStreamersWithStreams = async () => {
   const streamerCol = collection(db, "streamer");
@@ -13,7 +35,8 @@ export const fetchStreamersWithStreams = async () => {
     // Map streamerName to name and username for compatibility
     const streamer = {
       id: streamerDoc.id,
-      name: data.streamerName || data.username || "Unknown Streamer",
+      name:
+        data.streamerName || data.username || data.name || "Unknown Streamer",
       username: data.streamerName || data.username || "unknown_streamer",
       avatarUrl: data.avatarUrl || "",
       bio: data.bio || data.Quote || "",
@@ -35,7 +58,7 @@ export const fetchStreamersWithStreams = async () => {
     const streams = streamSnap.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
-    })) as StreamData[];
+    })) as Stream[];
 
     streamerData.push({ ...streamer, streams });
   }

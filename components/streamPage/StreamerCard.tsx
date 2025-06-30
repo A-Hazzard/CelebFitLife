@@ -2,38 +2,27 @@ import React from "react";
 import Image from "next/image";
 import { Lock } from "lucide-react";
 
-// Define the Stream type inline based on expected fields
-interface Stream {
+// Minimal types to replace deleted streaming types
+type Stream = {
   id: string;
-  title: string;
-  thumbnail?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  isLive?: boolean;
-  hasStarted?: boolean;
+  title?: string;
   hasEnded?: boolean;
-  category?: string;
-  tags?: string[];
-}
+  thumbnail?: string;
+};
 
-// Define the Streamer type inline based on expected fields
-interface Streamer {
+type EnrichedStreamer = {
   id: string;
-  name: string;
-  username: string;
+  name?: string;
+  username?: string;
   avatarUrl?: string;
   bio?: string;
-  category?: string;
-  tags?: string[];
-  isActive?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  thumbnail?: string;
+  categoryName?: string;
+  tagNames?: string[];
   streams?: Stream[];
-}
+};
 
 const StreamerCard: React.FC<{
-  streamer: Streamer;
+  streamer: EnrichedStreamer;
   isLocked?: boolean;
   onLockedClick?: () => void;
 }> = ({ streamer, isLocked = false, onLockedClick }) => {
@@ -54,9 +43,12 @@ const StreamerCard: React.FC<{
       {/* Thumbnail as Background */}
       <div className="relative w-full md:w-1/3 h-48 md:h-auto flex-shrink-0">
         <Image
-          src={streamer.thumbnail || "/favicon.ico"}
+          src={streamer.avatarUrl || "/favicon.ico"}
           alt="Thumbnail"
           className="object-cover w-full h-full md:rounded-l-xl"
+          width={200}
+          height={160}
+          priority
         />
         {/* Dark overlay only on mobile */}
         <div className="absolute inset-0 bg-black/50 md:hidden" />
@@ -84,9 +76,9 @@ const StreamerCard: React.FC<{
               <h3 className="text-base md:text-lg font-bold text-brandWhite truncate">
                 {streamer.username || streamer.name || "Unknown Streamer"}
               </h3>
-              {streamer.category && (
+              {streamer.categoryName && (
                 <span className="bg-brandOrange text-brandBlack text-[10px] px-1 py-0.5 md:text-xs md:px-2 md:py-1 rounded-full">
-                  {streamer.category}
+                  {streamer.categoryName}
                 </span>
               )}
             </div>
@@ -105,17 +97,17 @@ const StreamerCard: React.FC<{
 
         {/* Tags */}
         <div className="flex flex-wrap gap-2 mb-2">
-          {Array.isArray(streamer.tags) && streamer.tags.length > 0 ? (
-            streamer.tags.map((tag: string, i: number) => (
+          {streamer.tagNames && streamer.tagNames.length > 0 ? (
+            streamer.tagNames.map((tag: string, i: number) => (
               <span
                 key={i}
-                className="bg-gray-800 text-gray-300 text-xs px-2 py-1 rounded-full"
+                className="bg-blue-900 border border-brandOrange/30 text-xs px-2 py-1 rounded-full text-brandOrange"
               >
-                #{tag}
+                {tag}
               </span>
             ))
           ) : (
-            <span className="text-gray-500 text-xs">No tags</span>
+            <span className="text-xs text-brandOrange/50">No tags</span>
           )}
         </div>
 
@@ -125,32 +117,35 @@ const StreamerCard: React.FC<{
             <h4 className="text-xs font-semibold text-brandWhite mb-1">
               📺 Streams
             </h4>
-            {Array.isArray(streamer.streams) &&
-              streamer.streams.length > 0 &&
-              streamer.streams.map((stream: Stream, index: number) => (
-                <div
-                  key={stream.id || index}
-                  className="flex items-start space-x-2"
-                >
-                  <div className="relative w-12 h-8 overflow-hidden rounded-md border border-brandOrange/20">
-                    {/* Stream thumbnail or fallback */}
-                    <Image
-                      src={stream.thumbnail || "/default-thumbnail.jpg"}
-                      alt={stream.title}
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-xs text-brandWhite truncate">
-                      {stream.title}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {stream.category || "Uncategorized"}
-                    </div>
-                  </div>
+            {streamer.streams.map((stream, index) => (
+              <div
+                key={stream.id || index}
+                className="flex items-start space-x-2"
+              >
+                <div className="relative w-12 h-8 overflow-hidden rounded-md border border-brandOrange/20">
+                  <Image
+                    src={stream.thumbnail || "/favicon.ico"}
+                    alt={stream.title || "Stream thumbnail"}
+                    width={48}
+                    height={32}
+                    className="object-cover"
+                    priority={index < 2}
+                  />
                 </div>
-              ))}
+                <div className="flex-1">
+                  <p className="text-xs font-medium text-brandWhite truncate">
+                    {stream.title || "Untitled Stream"}
+                  </p>
+                  <p className="text-[10px] text-brandOrange/70">
+                    {stream.hasEnded ? (
+                      <span className="text-red-400">Ended</span>
+                    ) : (
+                      <span className="text-green-400">Live</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
