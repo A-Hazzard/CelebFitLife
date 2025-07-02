@@ -152,8 +152,8 @@ export default function DashboardPage() {
   };
 
   const handleCreateStream = () => {
-    // Redirect to a different page since streaming functionality is removed
-    router.push("/dashboard");
+    // Redirect to stream creation page
+    router.push("/streams/new");
   };
 
   // Update the SkeletonLoader component to be more reusable
@@ -198,7 +198,7 @@ export default function DashboardPage() {
                 className="bg-brandOrange hover:bg-brandWhite hover:text-brandBlack flex-1 sm:flex-auto text-brandBlack border-2 border-brandOrange"
               >
                 <Plus className="h-4 w-4 mr-2 text-brandBlack" />
-                Dashboard
+                Create Stream
               </Button>
               <Button
                 variant="outline"
@@ -257,7 +257,9 @@ export default function DashboardPage() {
                               ? new Date(
                                   typeof stream.createdAt === "string"
                                     ? stream.createdAt
-                                    : (stream.createdAt as { toDate(): Date }).toDate()
+                                    : (
+                                        stream.createdAt as { toDate(): Date }
+                                      ).toDate()
                                 ).toLocaleTimeString()
                               : "Recently"}
                           </span>
@@ -352,7 +354,9 @@ export default function DashboardPage() {
                             ? new Date(
                                 typeof stream.endedAt === "string"
                                   ? stream.endedAt
-                                  : (stream.endedAt as { toDate(): Date }).toDate()
+                                  : (
+                                      stream.endedAt as { toDate(): Date }
+                                    ).toDate()
                               ).toLocaleDateString()
                             : "N/A"}{" "}
                           • {stream.viewCount || 0} views
@@ -452,7 +456,9 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="space-y-3">
-                    <p className="text-brandGray text-sm">Streaming features have been removed from this dashboard.</p>
+                    <p className="text-brandGray text-sm">
+                      Streaming features have been removed from this dashboard.
+                    </p>
                   </div>
                 </div>
               )}

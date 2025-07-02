@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Share, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ShareButtonProps } from "@/lib/types/ui";
+import { toast } from "sonner";
 
 export default function ShareButton({ streamLink }: ShareButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -37,9 +38,27 @@ export default function ShareButton({ streamLink }: ShareButtonProps) {
       await navigator.clipboard.writeText(streamLink);
       setCopied(true);
       setIsOpen(false);
+      toast.success("Stream link copied to clipboard!");
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error("Failed to copy:", error);
+      // Fallback for older browsers
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = streamLink;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+        setCopied(true);
+        setIsOpen(false);
+        toast.success("Stream link copied to clipboard!");
+        setTimeout(() => setCopied(false), 2000);
+      } catch (fallbackError) {
+        console.error("Fallback copy failed:", fallbackError);
+        toast.error("Unable to copy link. Please copy manually.");
+      }
     }
   };
 
