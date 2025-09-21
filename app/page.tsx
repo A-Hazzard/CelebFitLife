@@ -256,7 +256,7 @@ export default function Home() {
           __html: JSON.stringify(faqSchema),
         }}
       />
-      <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white">
       {/* Hero Section */}
       <section className="relative min-h-screen overflow-hidden">
         {/* Background Image */}
@@ -317,7 +317,7 @@ export default function Home() {
                 className="text-white hover:text-orange-500 text-sm font-medium transition-all duration-300 hover:scale-105"
               >
                 FAQ
-              </button>
+            </button>
             </div>
             
             {/* Mobile hamburger menu */}
@@ -328,7 +328,7 @@ export default function Home() {
                 <path d="M3 18H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
-           </div>
+          </div>
         </nav>
 
         {/* Hero Content */}
@@ -365,30 +365,30 @@ export default function Home() {
           
           {/* Desktop Layout */}
           <div className="hidden md:block">
-            <div className="glass-card rounded-3xl p-14 max-w-xl mt-24">
-              <h1 className="text-5xl lg:text-6xl font-bold leading-tight text-white mb-6 uppercase">
-                TRAIN WITH YOUR IDOL.{" "}
-                <span className="text-orange-500">LIVE</span>
-              </h1>
-              <p className="text-gray-300 text-xl mb-12 leading-relaxed">
-                Be part of the world&apos;s first live celebrity training experience. Limited sports. No reruns
-              </p>
-              
-              <div className="mb-8">
-                <div className="flex gap-4">
-                  <input
-                    type="email"
+          <div className="glass-card rounded-3xl p-14 max-w-xl mt-24">
+            <h1 className="text-5xl lg:text-6xl font-bold leading-tight text-white mb-6 uppercase">
+              TRAIN WITH YOUR IDOL.{" "}
+              <span className="text-orange-500">LIVE</span>
+            </h1>
+            <p className="text-gray-300 text-xl mb-12 leading-relaxed">
+              Be part of the world&apos;s first live celebrity training experience. Limited sports. No reruns
+            </p>
+            
+            <div className="mb-8">
+              <div className="flex gap-4">
+                <input
+                  type="email"
                     placeholder="Enter your email"
-                    className="flex-1 bg-gray-700 text-white px-4 py-3 rounded-lg text-sm"
-                  />
+                  className="flex-1 bg-gray-700 text-white px-4 py-3 rounded-lg text-sm"
+                />
                         <button className="group bg-white text-black px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 hover:bg-orange-500 hover:text-white hover:scale-105 hover:shadow-lg">
-                          Join Waitlist
-                        </button>
-                </div>
+                  Join Waitlist
+                </button>
               </div>
-              
-              <p className="text-gray-300 text-sm text-center">
-                First live sessions drops soon. Reserve your spot now.
+            </div>
+            
+            <p className="text-gray-300 text-sm text-center">
+              First live sessions drops soon. Reserve your spot now.
               </p>
             </div>
           </div>
@@ -407,7 +407,7 @@ export default function Home() {
         </div>
       </section>
 
-                  {/* Features Section */}
+      {/* Features Section */}
                   <section ref={featuresRef} className="px-4 md:px-6 lg:px-56 pb-12 md:pb-24">
         <div className="text-center mb-8 md:mb-16">
           <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white mb-8 uppercase">
@@ -480,7 +480,7 @@ export default function Home() {
         </div>
       </section>
 
-                  {/* How it Works Section */}
+      {/* How it Works Section */}
                   <section ref={stepsRef} className="px-4 md:px-6 lg:px-40 py-12 md:py-24">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16 items-start">
           <div>
@@ -489,8 +489,8 @@ export default function Home() {
               Join the world&apos;s first live celebrity fitness experience. Connect with your favorite athletes and trainers in real-time, interactive workout sessions that push you to achieve your personal best.
             </p>
                         <button className="group bg-white text-black px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 hover:bg-orange-500 hover:text-white hover:scale-105 hover:shadow-lg">
-                          Join Waitlist
-                        </button>
+              Join Waitlist
+            </button>
           </div>
 
           <div className="space-y-4 md:space-y-6">
@@ -562,7 +562,7 @@ export default function Home() {
         </div>
       </section>
 
-                  {/* FAQ Section */}
+      {/* FAQ Section */}
                   <section id="faq-section" ref={faqRef} className="px-4 md:px-6 lg:px-40 py-12 md:py-24">
         <div className="text-center mb-8 md:mb-16">
           <p className="text-gray-500 text-xs md:text-sm uppercase tracking-widest mb-4 md:mb-8">WANT TO KNOW MORE?</p>
@@ -589,8 +589,8 @@ export default function Home() {
                 >
                   {openFAQ === index ? (
                     <>
-                      <path d="M7.75586 7.75781L16.2411 16.2431" stroke="#FF6600" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M7.75691 16.2431L16.2422 7.75781" stroke="#FF6600" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M7.75586 7.75781L16.2411 16.2431" stroke="#FF6600" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M7.75691 16.2431L16.2422 7.75781" stroke="#FF6600" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </>
                   ) : (
                     <>
@@ -598,8 +598,8 @@ export default function Home() {
                       <path d="M12 18V6" stroke="#FF6600" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </>
                   )}
-                </svg>
-              </div>
+              </svg>
+            </div>
               <div 
                 className={`overflow-hidden transition-all duration-300 ease-in-out ${
                   openFAQ === index ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
@@ -647,7 +647,7 @@ export default function Home() {
             >
               FAQs
             </button>
-          </nav>
+            </nav>
             <p className="text-white text-sm md:text-base">© CelebFit 2025</p>
           </div>
           <div className="flex justify-center lg:justify-end gap-4 md:gap-8 mt-4 lg:mt-0">
@@ -723,7 +723,7 @@ export default function Home() {
                       <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-orange-500/25">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
                           <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
+              </svg>
                       </div>
                       <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Live Celebrity Workouts</h3>
                       <p className="text-gray-300 leading-relaxed text-lg">
@@ -738,7 +738,7 @@ export default function Home() {
                       <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-orange-500/25">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
                           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
+              </svg>
                       </div>
                       <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Interactive Q&A</h3>
                       <p className="text-gray-300 leading-relaxed text-lg">
@@ -753,7 +753,7 @@ export default function Home() {
                       <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-orange-500/25">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
                           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
+              </svg>
                       </div>
                       <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Exclusive Access</h3>
                       <p className="text-gray-300 leading-relaxed text-lg">
@@ -769,8 +769,8 @@ export default function Home() {
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
                           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                           <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      </div>
+              </svg>
+            </div>
                       <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Personalized Experience</h3>
                       <p className="text-gray-300 leading-relaxed text-lg">
                         Get personalized attention and motivation from celebrity trainers who understand your fitness goals 
@@ -953,11 +953,11 @@ export default function Home() {
                   </div>
                 </div>
               )}
-            </div>
+          </div>
           </div>
         </div>
       )}
-      </div>
+    </div>
     </>
   );
 }

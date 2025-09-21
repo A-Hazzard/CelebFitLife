@@ -1,7 +1,7 @@
 export const SITE_CONFIG = {
   name: 'CelebFitLife',
-  url: 'https://celebfitlife.com',
-  domain: 'celebfitlife.com',
+  url: 'https://celebfitlife.vercel.app',
+  domain: 'celebfitlife.vercel.app',
   locale: 'en_US',
   defaultLanguage: 'en',
   supportedLanguages: ['en'],
@@ -29,7 +29,7 @@ export const BUSINESS_INFO = {
   contact: {
     phone: '+1 (555) 123-FIT',
     email: 'hello@celebfitlife.com',
-    website: 'https://celebfitlife.com',
+    website: 'https://celebfitlife.vercel.app',
   },
   
   social: {
@@ -70,7 +70,7 @@ export const SEO_DEFAULTS = {
     'exclusive workout sessions',
     'celebrity fitness app'
   ],
-  image: '/logo.png',
+  image: 'https://celebfitlife.vercel.app/logo.png',
   imageAlt: 'CelebFitLife Logo - Train with Celebrity Trainers Live',
   twitterHandle: '@celebfitlife',
   facebookAppId: 'your-facebook-app-id',

@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
-  metadataBase: new URL("https://celebfitlife.com"),
+  metadataBase: new URL("https://celebfitlife.vercel.app"),
   alternates: {
     canonical: "/",
     languages: {
@@ -49,13 +49,13 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://celebfitlife.com",
+    url: "https://celebfitlife.vercel.app",
     title: "CelebFitLife - Train with Celebrity Trainers Live",
     description: "Join exclusive live fitness sessions with celebrity trainers and athletes. Real-time, interactive workouts with your fitness idols.",
     siteName: "CelebFitLife",
     images: [
       {
-        url: "/logo.png",
+        url: "https://celebfitlife.vercel.app/logo.png",
         width: 1200,
         height: 630,
         alt: "CelebFitLife - Train with Celebrity Trainers Live",
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
     creator: "@celebfitlife",
     title: "CelebFitLife - Train with Celebrity Trainers Live",
     description: "Join exclusive live fitness sessions with celebrity trainers and athletes. Real-time, interactive workouts with your fitness idols.",
-    images: ["/logo.png"],
+    images: ["https://celebfitlife.vercel.app/logo.png"],
   },
   robots: {
     index: true,
@@ -104,6 +104,17 @@ export default function RootLayout({
         <link rel="icon" href="/logo.png" />
         <link rel="apple-touch-icon" href="/logo.png" />
         <link rel="shortcut icon" href="/logo.png" />
+        
+        {/* Additional OpenGraph Meta Tags */}
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:secure_url" content="https://celebfitlife.vercel.app/logo.png" />
+        
+        {/* Twitter Card Additional Meta Tags */}
+        <meta name="twitter:image:width" content="1200" />
+        <meta name="twitter:image:height" content="630" />
+        <meta name="twitter:image:alt" content="CelebFitLife - Train with Celebrity Trainers Live" />
         
         {/* Structured Data */}
         <script
