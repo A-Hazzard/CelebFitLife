@@ -82,9 +82,7 @@ export const metadata: Metadata = {
     },
   },
   verification: {
-    google: "your-google-verification-code",
-    yandex: "your-yandex-verification-code",
-    yahoo: "your-yahoo-verification-code",
+    google: "MQPIbQOIEtdmZEVFd4AasX1SWgH0Y-jGVCPOzgZo8pM",
   },
   category: "fitness",
 };
