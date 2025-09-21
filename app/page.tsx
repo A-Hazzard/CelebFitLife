@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { TextPlugin } from "gsap/TextPlugin";
+import { generateFAQSchema } from "@/lib/seo/schema";
 
 gsap.registerPlugin(ScrollTrigger, TextPlugin);
 
@@ -242,8 +243,20 @@ export default function Home() {
       });
     }
   }, []);
+
+  // Generate FAQ structured data
+  const faqSchema = generateFAQSchema(faqs);
+
   return (
-    <div className="min-h-screen bg-black text-white">
+    <>
+      {/* FAQ Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(faqSchema),
+        }}
+      />
+      <div className="min-h-screen bg-black text-white">
       {/* Hero Section */}
       <section className="relative min-h-screen overflow-hidden">
         {/* Background Image */}
@@ -944,6 +957,7 @@ export default function Home() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
