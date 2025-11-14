@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@stripe/stripe-js": "^8.4.0",
+    "@types/nodemailer": "^7.0.3",
     "axios": "^1.13.2",
     "gsap": "^3.13.0",
     "mongoose": "^8.19.3",
     "next": "15.5.3",
+    "nodemailer": "^7.0.10",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "stripe": "^19.3.0"

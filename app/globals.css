@@ -9,10 +9,15 @@
   --font-geist: var(--font-geist);
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   background: #010101;
   color: #ffffff;
   font-family: var(--font-geist), -apple-system, Roboto, Helvetica, sans-serif;
+  overflow-x: hidden;
 }
 
 .hero-gradient {

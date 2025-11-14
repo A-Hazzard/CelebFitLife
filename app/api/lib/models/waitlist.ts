@@ -3,9 +3,10 @@ import mongoose, { Document, Model, Schema } from 'mongoose';
 // TypeScript interface for type safety
 export interface IWaitlist extends Document {
   email: string;
-  paymentStatus: 'pending' | 'complete';
+  paymentStatus: 'unpaid' | 'pending' | 'paid' | 'refunded' | 'failed';
   stripeCheckoutId?: string;
   stripeCustomerId?: string;
+  waitListEmailSent?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,8 +27,8 @@ const WaitlistSchema = new Schema<IWaitlist>(
     },
     paymentStatus: {
       type: String,
-      enum: ['pending', 'complete'],
-      default: 'pending',
+      enum: ['unpaid', 'pending', 'paid', 'refunded', 'failed'],
+      default: 'unpaid',
       required: true
     },
     stripeCheckoutId: {
@@ -37,6 +38,10 @@ const WaitlistSchema = new Schema<IWaitlist>(
     stripeCustomerId: {
       type: String,
       default: null
+    },
+    waitListEmailSent: {
+      type: Boolean,
+      default: false
     }
   },
   {

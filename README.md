@@ -78,15 +78,15 @@ To democratize access to celebrity fitness training by creating exclusive, live,
    ```
 
 3. **Run the development server**
-   ```bash
+```bash
    pnpm dev
    # or
-   npm run dev
-   # or
-   yarn dev
-   # or
-   bun dev
-   ```
+npm run dev
+# or
+yarn dev
+# or
+bun dev
+```
 
 4. **Open your browser**
    

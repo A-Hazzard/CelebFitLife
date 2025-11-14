@@ -7,6 +7,7 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { TextPlugin } from "gsap/TextPlugin";
 import { generateFAQSchema } from "@/lib/seo/schema";
+import WaitlistForm from "@/components/WaitlistForm";
 
 gsap.registerPlugin(ScrollTrigger, TextPlugin);
 
@@ -15,10 +16,18 @@ export default function Home() {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   
   // Refs for animations
-  const heroRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const heroContentRef = useRef<HTMLDivElement>(null);
+  const whatIsCelebFitRef = useRef<HTMLElement>(null);
   const featuresRef = useRef<HTMLDivElement>(null);
+  const featuresTitleRef = useRef<HTMLHeadingElement>(null);
   const stepsRef = useRef<HTMLDivElement>(null);
+  const howItWorksTitleRef = useRef<HTMLHeadingElement>(null);
+  const howItWorksDescRef = useRef<HTMLParagraphElement>(null);
+  const howItWorksFormRef = useRef<HTMLFormElement>(null);
   const faqRef = useRef<HTMLDivElement>(null);
+  const faqTitleRef = useRef<HTMLHeadingElement>(null);
+  const footerRef = useRef<HTMLElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
@@ -125,44 +134,79 @@ export default function Home() {
 
   // Advanced page animations
   useEffect(() => {
-    const masterTL = gsap.timeline();
-    
-    // Simple hero container fade in
-    if (heroRef.current) {
-      masterTL.fromTo(heroRef.current,
-        { 
-          opacity: 0
-        },
-        { 
-          opacity: 1,
-          duration: 0.8, 
-          ease: "power2.out" 
-        }
+    // Animate navigation on load
+    if (navRef.current) {
+      gsap.fromTo(navRef.current,
+        { opacity: 0, y: -20 },
+        { opacity: 1, y: 0, duration: 1.2, ease: "power2.out" }
       );
     }
+
+    // Animate hero content (but not the background image)
+    if (heroContentRef.current) {
+      gsap.fromTo(heroContentRef.current,
+        { opacity: 0, y: 30 },
+        { opacity: 1, y: 0, duration: 1.4, delay: 0.3, ease: "power2.out" }
+      );
+    }
+
+    // Animate "What is CelebFitLife" section
+    if (whatIsCelebFitRef.current) {
+      ScrollTrigger.create({
+        trigger: whatIsCelebFitRef.current,
+        start: "top 80%",
+        onEnter: () => {
+          const title = whatIsCelebFitRef.current?.querySelector('h3');
+          const paragraph = whatIsCelebFitRef.current?.querySelector('p');
+          
+          if (title) {
+            gsap.fromTo(title,
+              { opacity: 0, y: 20 },
+              { opacity: 1, y: 0, duration: 1.0, ease: "power2.out" }
+            );
+          }
+          
+          if (paragraph) {
+            gsap.fromTo(paragraph,
+              { opacity: 0, y: 20 },
+              { opacity: 1, y: 0, duration: 1.0, delay: 0.2, ease: "power2.out" }
+            );
+          }
+        }
+      });
+    }
     
-    
-    // Fast ScrollTrigger animations
+    // Enhanced Features section animation
     if (featuresRef.current) {
       ScrollTrigger.create({
         trigger: featuresRef.current,
         start: "top 80%",
         onEnter: () => {
+          // Animate title
+          if (featuresTitleRef.current) {
+            gsap.fromTo(featuresTitleRef.current,
+              { opacity: 0, y: 30 },
+              { opacity: 1, y: 0, duration: 1.0, ease: "power2.out" }
+            );
+          }
+
+          // Animate feature cards
           const cards = featuresRef.current?.querySelectorAll('.feature-card');
           if (cards) {
             gsap.fromTo(cards, 
               { 
                 opacity: 0, 
-                y: 30, 
-                scale: 0.95
+                y: 40, 
+                scale: 0.9
               },
               { 
                 opacity: 1, 
                 y: 0, 
                 scale: 1,
-                duration: 0.4, 
-                stagger: 0.1, 
-                ease: "power2.out" 
+                duration: 0.9, 
+                stagger: 0.2, 
+                delay: 0.3,
+                ease: "back.out(1.1)" 
               }
             );
             
@@ -171,7 +215,8 @@ export default function Home() {
               card.addEventListener('mouseenter', () => {
                 gsap.to(card, {
                   scale: 1.02,
-                  duration: 0.2,
+                  y: -5,
+                  duration: 0.3,
                   ease: "power2.out"
                 });
               });
@@ -179,7 +224,8 @@ export default function Home() {
               card.addEventListener('mouseleave', () => {
                 gsap.to(card, {
                   scale: 1,
-                  duration: 0.2,
+                  y: 0,
+                  duration: 0.3,
                   ease: "power2.out"
                 });
               });
@@ -189,27 +235,53 @@ export default function Home() {
       });
     }
     
-    // Fast steps animation
+    // Enhanced How it Works section animation
     if (stepsRef.current) {
       ScrollTrigger.create({
         trigger: stepsRef.current,
-        start: "top 70%",
+        start: "top 75%",
         onEnter: () => {
+          // Animate title
+          if (howItWorksTitleRef.current) {
+            gsap.fromTo(howItWorksTitleRef.current,
+              { opacity: 0, y: 30 },
+              { opacity: 1, y: 0, duration: 1.0, ease: "power2.out" }
+            );
+          }
+          
+          // Animate description
+          if (howItWorksDescRef.current) {
+            gsap.fromTo(howItWorksDescRef.current,
+              { opacity: 0, y: 20 },
+              { opacity: 1, y: 0, duration: 1.0, delay: 0.2, ease: "power2.out" }
+            );
+          }
+          
+          // Animate form
+          if (howItWorksFormRef.current) {
+            gsap.fromTo(howItWorksFormRef.current,
+              { opacity: 0, y: 20, scale: 0.95 },
+              { opacity: 1, y: 0, scale: 1, duration: 0.9, delay: 0.4, ease: "back.out(1.2)" }
+            );
+          }
+          
+          // Animate step cards with stagger
           const steps = stepsRef.current?.querySelectorAll('.step-item');
           if (steps) {
             gsap.fromTo(steps, 
               { 
                 opacity: 0, 
-                x: -20, 
-                scale: 0.95
+                x: -30, 
+                scale: 0.9
               },
               { 
                 opacity: 1, 
                 x: 0, 
                 scale: 1,
-                duration: 0.3, 
-                stagger: 0.05, 
-                ease: "power2.out" 
+                duration: 0.9, 
+                stagger: 0.15, 
+                delay: 0.5,
+                ease: "back.out(1.1)" 
               }
             );
           }
@@ -217,26 +289,64 @@ export default function Home() {
       });
     }
     
-    // Fast FAQ animation
+    // Enhanced FAQ animation
     if (faqRef.current) {
       ScrollTrigger.create({
         trigger: faqRef.current,
         start: "top 80%",
         onEnter: () => {
+          // Animate subtitle
+          const subtitle = faqRef.current?.querySelector('p');
+          if (subtitle) {
+            gsap.fromTo(subtitle,
+              { opacity: 0, y: 20 },
+              { opacity: 1, y: 0, duration: 0.9, ease: "power2.out" }
+            );
+          }
+
+          // Animate title
+          if (faqTitleRef.current) {
+            gsap.fromTo(faqTitleRef.current,
+              { opacity: 0, y: 30 },
+              { opacity: 1, y: 0, duration: 1.0, delay: 0.2, ease: "power2.out" }
+            );
+          }
+
+          // Animate FAQ items
           const faqItems = faqRef.current?.querySelectorAll('.faq-item');
           if (faqItems) {
             gsap.fromTo(faqItems, 
               { 
                 opacity: 0, 
-                y: 20
+                x: -30,
+                scale: 0.95
               },
               { 
                 opacity: 1, 
-                y: 0,
-                duration: 0.3, 
-                stagger: 0.05, 
-                ease: "power2.out" 
+                x: 0,
+                scale: 1,
+                duration: 0.9, 
+                stagger: 0.12, 
+                delay: 0.4,
+                ease: "back.out(1.1)" 
               }
+            );
+          }
+        }
+      });
+    }
+
+    // Animate Footer
+    if (footerRef.current) {
+      ScrollTrigger.create({
+        trigger: footerRef.current,
+        start: "top 90%",
+        onEnter: () => {
+          const footerContent = footerRef.current?.querySelectorAll('div > div');
+          if (footerContent) {
+            gsap.fromTo(footerContent,
+              { opacity: 0, y: 20 },
+              { opacity: 1, y: 0, duration: 0.9, stagger: 0.15, ease: "power2.out" }
             );
           }
         }
@@ -281,7 +391,7 @@ export default function Home() {
         </div>
 
         {/* Navigation */}
-        <nav className="relative z-10 flex items-center justify-between px-4 md:px-6 lg:px-40 py-4 md:py-12">
+        <nav ref={navRef} className="relative z-10 flex items-center justify-between px-4 md:px-6 lg:px-40 py-4 md:py-12">
           <div className="flex items-center gap-4">
             <svg width="120" height="22" viewBox="0 0 146 26" fill="none" xmlns="http://www.w3.org/2000/svg" className="md:w-[146px] md:h-[26px]">
               <path d="M11.2251 26C4.57318 26 0 21.1294 0 13.035C0 5.01078 4.50389 0 11.2597 0C17.3573 0 20.614 3.2938 21.688 8.72507L17.7384 8.93531C17.0801 5.53639 15.0014 3.469 11.2597 3.469C6.79048 3.469 3.88028 7.11321 3.88028 13.035C3.88028 18.9919 6.82513 22.531 11.2251 22.531C15.2093 22.531 17.3227 20.2534 17.9116 16.5391L21.8612 16.7493C20.9258 22.3908 17.288 26 11.2251 26Z" fill="white"/>
@@ -332,7 +442,7 @@ export default function Home() {
         </nav>
 
         {/* Hero Content */}
-        <div ref={heroRef} className="relative z-10 px-4 md:px-6 lg:px-40">
+        <div ref={heroContentRef} className="relative z-10 px-4 md:px-6 lg:px-40">
           {/* Mobile Layout */}
           <div className="md:hidden flex flex-col justify-end h-screen pb-12">
             <div className="glass-card rounded-3xl p-6">
@@ -345,21 +455,8 @@ export default function Home() {
               </p>
               
               <div className="mb-6">
-                <div className="flex flex-col gap-3">
-                  <input
-                    type="email"
-                    placeholder="Enter your email"
-                    className="bg-gray-700 text-white px-4 py-3 rounded-lg text-sm"
-                  />
-                        <button className="group bg-white text-black px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 hover:bg-orange-500 hover:text-white hover:scale-105 hover:shadow-lg">
-                          Join Waitlist
-                        </button>
-                </div>
+                <WaitlistForm variant="mobile" />
               </div>
-              
-              <p className="text-gray-300 text-sm text-center">
-                First live sessions drops soon. Reserve your spot now.
-              </p>
             </div>
           </div>
           
@@ -375,28 +472,15 @@ export default function Home() {
             </p>
             
             <div className="mb-8">
-              <div className="flex gap-4">
-                <input
-                  type="email"
-                    placeholder="Enter your email"
-                  className="flex-1 bg-gray-700 text-white px-4 py-3 rounded-lg text-sm"
-                />
-                        <button className="group bg-white text-black px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 hover:bg-orange-500 hover:text-white hover:scale-105 hover:shadow-lg">
-                  Join Waitlist
-                </button>
-              </div>
+              <WaitlistForm variant="desktop" />
             </div>
-            
-            <p className="text-gray-300 text-sm text-center">
-              First live sessions drops soon. Reserve your spot now.
-              </p>
             </div>
           </div>
         </div>
       </section>
 
       {/* What is CelebFitLife Section */}
-      <section className="px-4 md:px-6 lg:px-56 py-12 md:py-24">
+      <section ref={whatIsCelebFitRef} className="px-4 md:px-6 lg:px-56 py-12 md:py-24">
         <div className="text-center mb-8 md:mb-16">
           <h3 className="text-sm md:text-base text-white uppercase tracking-widest mb-4">WHAT IS CELEBFIT?</h3>
           <div className="max-w-4xl mx-auto">
@@ -410,7 +494,7 @@ export default function Home() {
       {/* Features Section */}
                   <section ref={featuresRef} className="px-4 md:px-6 lg:px-56 pb-12 md:pb-24">
         <div className="text-center mb-8 md:mb-16">
-          <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white mb-8 uppercase">
+          <h2 ref={featuresTitleRef} className="text-2xl md:text-4xl lg:text-5xl font-bold text-white mb-8 uppercase">
             TRAIN WITH THE PEOPLE WHO INSPIRE YOU. IN REAL TIME
           </h2>
         </div>
@@ -484,13 +568,13 @@ export default function Home() {
                   <section ref={stepsRef} className="px-4 md:px-6 lg:px-40 py-12 md:py-24">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16 items-start">
           <div>
-            <h2 className="text-3xl md:text-5xl font-bold text-gray-100 mb-6 md:mb-8">HOW IT WORKS?</h2>
-            <p className="text-gray-300 text-base md:text-lg leading-relaxed mb-6 md:mb-8">
+            <h2 ref={howItWorksTitleRef} className="text-3xl md:text-5xl font-bold text-gray-100 mb-6 md:mb-8">HOW IT WORKS?</h2>
+            <p ref={howItWorksDescRef} className="text-gray-300 text-base md:text-lg leading-relaxed mb-6 md:mb-8">
               Join the world&apos;s first live celebrity fitness experience. Connect with your favorite athletes and trainers in real-time, interactive workout sessions that push you to achieve your personal best.
             </p>
-                        <button className="group bg-white text-black px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 hover:bg-orange-500 hover:text-white hover:scale-105 hover:shadow-lg">
-              Join Waitlist
-            </button>
+            <div ref={howItWorksFormRef}>
+              <WaitlistForm variant="inline" />
+            </div>
           </div>
 
           <div className="space-y-4 md:space-y-6">
@@ -566,7 +650,7 @@ export default function Home() {
                   <section id="faq-section" ref={faqRef} className="px-4 md:px-6 lg:px-40 py-12 md:py-24">
         <div className="text-center mb-8 md:mb-16">
           <p className="text-gray-500 text-xs md:text-sm uppercase tracking-widest mb-4 md:mb-8">WANT TO KNOW MORE?</p>
-          <h2 className="text-3xl md:text-5xl font-bold text-gray-100">FREQUENTLY ASKED QUESTIONS</h2>
+          <h2 ref={faqTitleRef} className="text-3xl md:text-5xl font-bold text-gray-100">FREQUENTLY ASKED QUESTIONS</h2>
         </div>
 
         <div className="max-w-4xl mx-auto space-y-3">
@@ -615,9 +699,9 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-gray-600 bg-black px-4 md:px-6 lg:px-56 py-8 md:py-12">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 md:gap-8">
-          <div className="text-center lg:text-left">
+      <footer ref={footerRef} className="border-t border-gray-600 bg-black px-4 md:px-6 lg:px-56 py-8 md:py-12">
+        <div className="flex flex-col lg:flex-row justify-between items-center lg:items-center gap-6 md:gap-8">
+          <div className="text-center lg:text-left w-full lg:w-auto">
             <svg width="142" height="28" viewBox="0 0 142 28" fill="none" xmlns="http://www.w3.org/2000/svg" className="mb-6 mx-auto lg:mx-0">
               <path d="M10.9175 27C4.44789 27 0 22.1294 0 14.035C0 6.01078 4.3805 1 10.9512 1C16.8818 1 20.0492 4.2938 21.0938 9.72507L17.2524 9.93531C16.6122 6.53639 14.5904 4.469 10.9512 4.469C6.60444 4.469 3.77397 8.11321 3.77397 14.035C3.77397 19.9919 6.63814 23.531 10.9175 23.531C14.7926 23.531 16.8481 21.2534 17.4209 17.5391L21.2623 17.7493C20.3525 23.3908 16.8144 27 10.9175 27Z" fill="white"/>
               <path d="M32.6102 26.8598C27.421 26.8598 24.1188 23.0054 24.1188 17.1186C24.1188 11.2318 27.421 7.37736 32.5091 7.37736C37.3951 7.37736 40.731 10.9865 40.731 17.2588V18.2049H27.8591C28.0276 21.8491 29.8134 23.6712 32.6439 23.6712C34.7668 23.6712 36.182 22.5849 36.7549 20.8329L40.4614 21.0782C39.5179 24.5472 36.5864 26.8598 32.6102 26.8598ZM27.8591 15.4016H36.9233C36.7212 12.1078 34.969 10.531 32.5091 10.531C29.9819 10.531 28.2634 12.248 27.8591 15.4016Z" fill="white"/>
@@ -650,7 +734,7 @@ export default function Home() {
             </nav>
             <p className="text-white text-sm md:text-base">© CelebFit 2025</p>
           </div>
-          <div className="flex justify-center lg:justify-end gap-4 md:gap-8 mt-4 lg:mt-0">
+          <div className="flex justify-center lg:justify-end gap-4 md:gap-8 w-full lg:w-auto">
             <button 
               onClick={() => openModal('privacy')}
               className="text-gray-300 hover:text-white text-sm md:text-base transition-all duration-300 hover:scale-105"
