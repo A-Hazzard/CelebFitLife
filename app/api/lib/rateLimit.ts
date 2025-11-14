@@ -72,6 +72,7 @@ export function recordError(identifier: string): { shouldTimeout: boolean; timeo
       errorCount: 0,
       resetTime: 0,
       lastErrorTime: 0,
+      timeoutLevel: 0,
     };
   }
 
@@ -147,6 +148,7 @@ export function rateLimit(
       errorCount: 0,
       resetTime: now + windowMs,
       lastErrorTime: 0,
+      timeoutLevel: 0,
     };
   }
 
