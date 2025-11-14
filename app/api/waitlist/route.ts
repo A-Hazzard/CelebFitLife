@@ -2,22 +2,75 @@ import { NextResponse } from "next/server";
 import Waitlist from "../lib/models/waitlist";
 import connectDB from "../lib/models/db";
 import { stripe } from "@/lib/stripe";
-import { rateLimit, getClientIdentifier } from "../lib/rateLimit";
+import { rateLimitErrors, recordError, recordSuccess, getClientIdentifier } from "../lib/rateLimit";
 
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL as string;
 
 export async function POST(request: Request) {
   try {
     const { email } = await request.json();
+    const clientId = getClientIdentifier(request);
+
+    // Check rate limit before processing
+    const errorLimit = rateLimitErrors(clientId, 5);
+    if (!errorLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: "Too many error attempts. Please try again later.",
+          retryAfter: Math.ceil((errorLimit.resetTime - Date.now()) / 1000),
+          timeoutMinutes: errorLimit.timeoutMinutes,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": Math.ceil((errorLimit.resetTime - Date.now()) / 1000).toString(),
+          },
+        }
+      );
+    }
 
     if (!email) {
       console.log("Email Required");
+      const errorResult = recordError(clientId);
+      if (errorResult.shouldTimeout) {
+        return NextResponse.json(
+          {
+            error: "Email Required",
+            rateLimited: true,
+            retryAfter: Math.ceil((errorResult.resetTime - Date.now()) / 1000),
+            timeoutMinutes: errorResult.timeoutMinutes,
+          },
+          { 
+            status: 429,
+            headers: {
+              "Retry-After": Math.ceil((errorResult.resetTime - Date.now()) / 1000).toString(),
+            }
+          }
+        );
+      }
       return NextResponse.json({ error: "Email Required" }, { status: 400 });
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       console.error("Invalid Email Format");
+      const errorResult = recordError(clientId);
+      if (errorResult.shouldTimeout) {
+        return NextResponse.json(
+          {
+            error: "Invalid Email Format",
+            rateLimited: true,
+            retryAfter: Math.ceil((errorResult.resetTime - Date.now()) / 1000),
+            timeoutMinutes: errorResult.timeoutMinutes,
+          },
+          { 
+            status: 429,
+            headers: {
+              "Retry-After": Math.ceil((errorResult.resetTime - Date.now()) / 1000).toString(),
+            }
+          }
+        );
+      }
       return NextResponse.json(
         { error: "Invalid Email Format" },
         { status: 400 }
@@ -51,6 +104,8 @@ export async function POST(request: Request) {
           // NOTE: Resuming checkout doesn't count against rate limit
           if (session.status === 'open') {
             console.log(`Resuming checkout for existing user: ${sanitizedEmail}`);
+            // Reset error count on successful resume
+            recordSuccess(clientId);
             return NextResponse.json(
               {
                 success: true,
@@ -71,7 +126,46 @@ export async function POST(request: Request) {
           // If we can't retrieve the session, create a new one
         }
       } else if (existingUser.paymentStatus === 'paid') {
-        // User already paid - no rate limiting needed for this check
+        // User already paid - this is an error, check rate limit first
+        const errorLimit = rateLimitErrors(clientId, 5);
+        
+        if (!errorLimit.allowed) {
+          return Response.json(
+            {
+              error: "Email Already Registered",
+              rateLimited: true,
+              retryAfter: Math.ceil((errorLimit.resetTime - Date.now()) / 1000),
+              timeoutMinutes: errorLimit.timeoutMinutes,
+            },
+            { 
+              status: 429,
+              headers: {
+                "Retry-After": Math.ceil((errorLimit.resetTime - Date.now()) / 1000).toString(),
+              }
+            }
+          );
+        }
+        
+        // Record the error and check if we should timeout
+        const errorResult = recordError(clientId);
+        
+        if (errorResult.shouldTimeout) {
+          return Response.json(
+            {
+              error: "Email Already Registered",
+              rateLimited: true,
+              retryAfter: Math.ceil((errorResult.resetTime - Date.now()) / 1000),
+              timeoutMinutes: errorResult.timeoutMinutes,
+            },
+            { 
+              status: 429,
+              headers: {
+                "Retry-After": Math.ceil((errorResult.resetTime - Date.now()) / 1000).toString(),
+              }
+            }
+          );
+        }
+        
         return Response.json(
           {
             error: "Email Already Registered",
@@ -80,31 +174,6 @@ export async function POST(request: Request) {
         );
       }
       // If status is 'unpaid', 'failed', or 'refunded', allow creating new checkout
-    }
-
-    // Rate limiting - only apply to NEW waitlist entries (not resume attempts)
-    // Increased limit: 10 requests per 15 minutes per IP
-    const clientId = getClientIdentifier(request);
-    const limit = rateLimit(clientId, 10, 15 * 60 * 1000);
-
-    if (!limit.allowed) {
-      return NextResponse.json(
-        {
-          error: "Too many requests. Please try again later.",
-          retryAfter: Math.ceil((limit.resetTime - Date.now()) / 1000),
-        },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": Math.ceil(
-              (limit.resetTime - Date.now()) / 1000
-            ).toString(),
-            "X-RateLimit-Limit": "10",
-            "X-RateLimit-Remaining": limit.remaining.toString(),
-            "X-RateLimit-Reset": limit.resetTime.toString(),
-          },
-        }
-      );
     }
 
     // Check if Stripe is configured
@@ -199,6 +268,9 @@ export async function POST(request: Request) {
         paymentStatus: "pending",
       });
 
+      // Record success - reset error count
+      recordSuccess(clientId);
+
       return NextResponse.json(
         {
           success: true,
@@ -232,6 +304,9 @@ export async function POST(request: Request) {
       stripeCheckoutId: session.id,
       paymentStatus: "pending",
     });
+
+    // Record success - reset error count
+    recordSuccess(clientId);
 
     return NextResponse.json(
       {
