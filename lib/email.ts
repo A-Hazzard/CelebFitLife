@@ -288,7 +288,7 @@ export function generateWelcomeEmail(customerEmail: string): EmailOptions {
               </div>
               
               <div class="cta-container">
-                <a href="https://celebfitlife.com" class="cta-button">
+                <a href="https://celebfitlife.vercel.app" class="cta-button">
                   Visit CelebFitLife
                 </a>
               </div>

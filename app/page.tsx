@@ -24,7 +24,7 @@ export default function Home() {
   const stepsRef = useRef<HTMLDivElement>(null);
   const howItWorksTitleRef = useRef<HTMLHeadingElement>(null);
   const howItWorksDescRef = useRef<HTMLParagraphElement>(null);
-  const howItWorksFormRef = useRef<HTMLFormElement>(null);
+  const howItWorksFormRef = useRef<HTMLDivElement>(null);
   const faqRef = useRef<HTMLDivElement>(null);
   const faqTitleRef = useRef<HTMLHeadingElement>(null);
   const footerRef = useRef<HTMLElement>(null);
