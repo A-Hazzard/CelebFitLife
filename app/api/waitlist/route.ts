@@ -8,30 +8,6 @@ const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL as string;
 
 export async function POST(request: Request) {
   try {
-    // Rate limiting - 5 requests per 15 minutes per IP
-    const clientId = getClientIdentifier(request);
-    const limit = rateLimit(clientId, 5, 15 * 60 * 1000);
-
-    if (!limit.allowed) {
-      return NextResponse.json(
-        {
-          error: "Too many requests. Please try again later.",
-          retryAfter: Math.ceil((limit.resetTime - Date.now()) / 1000),
-        },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": Math.ceil(
-              (limit.resetTime - Date.now()) / 1000
-            ).toString(),
-            "X-RateLimit-Limit": "5",
-            "X-RateLimit-Remaining": limit.remaining.toString(),
-            "X-RateLimit-Reset": limit.resetTime.toString(),
-          },
-        }
-      );
-    }
-
     const { email } = await request.json();
 
     if (!email) {
@@ -65,12 +41,69 @@ export async function POST(request: Request) {
     const existingUser = await Waitlist.findOne({ email: sanitizedEmail });
 
     if (existingUser) {
-      console.error("Email already registered");
-      return Response.json(
+      // Check if user has a pending checkout that can be resumed
+      if (existingUser.paymentStatus === 'pending' && existingUser.stripeCheckoutId) {
+        try {
+          // Check if the checkout session is still valid
+          const session = await stripe.checkout.sessions.retrieve(existingUser.stripeCheckoutId);
+          
+          // If session is still open (not expired or completed), return the existing URL
+          // NOTE: Resuming checkout doesn't count against rate limit
+          if (session.status === 'open') {
+            console.log(`Resuming checkout for existing user: ${sanitizedEmail}`);
+            return NextResponse.json(
+              {
+                success: true,
+                url: session.url,
+                resumed: true,
+              },
+              { status: 200 }
+            );
+          }
+          
+          // If session expired or was canceled, update status and create new session
+          if (session.status === 'expired' || (session.status === 'complete' && session.payment_status !== 'paid')) {
+            console.log(`Previous checkout expired for: ${sanitizedEmail}, creating new session`);
+            // Will fall through to create new session below
+          }
+        } catch (error) {
+          console.error("Error checking existing checkout session:", error);
+          // If we can't retrieve the session, create a new one
+        }
+      } else if (existingUser.paymentStatus === 'paid') {
+        // User already paid - no rate limiting needed for this check
+        return Response.json(
+          {
+            error: "Email Already Registered",
+          },
+          { status: 409 }
+        );
+      }
+      // If status is 'unpaid', 'failed', or 'refunded', allow creating new checkout
+    }
+
+    // Rate limiting - only apply to NEW waitlist entries (not resume attempts)
+    // Increased limit: 10 requests per 15 minutes per IP
+    const clientId = getClientIdentifier(request);
+    const limit = rateLimit(clientId, 10, 15 * 60 * 1000);
+
+    if (!limit.allowed) {
+      return NextResponse.json(
         {
-          error: "Email Already Registered",
+          error: "Too many requests. Please try again later.",
+          retryAfter: Math.ceil((limit.resetTime - Date.now()) / 1000),
         },
-        { status: 409 }
+        {
+          status: 429,
+          headers: {
+            "Retry-After": Math.ceil(
+              (limit.resetTime - Date.now()) / 1000
+            ).toString(),
+            "X-RateLimit-Limit": "10",
+            "X-RateLimit-Remaining": limit.remaining.toString(),
+            "X-RateLimit-Reset": limit.resetTime.toString(),
+          },
+        }
       );
     }
 
@@ -86,10 +119,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const newEntry = await Waitlist.create({
-      email: sanitizedEmail,
-      paymentStatus: "unpaid",
-    });
+    // Use existing entry if it exists and isn't paid, otherwise create new
+    let waitlistEntry = existingUser;
+    
+    if (!waitlistEntry || waitlistEntry.paymentStatus === 'paid') {
+      waitlistEntry = await Waitlist.create({
+        email: sanitizedEmail,
+        paymentStatus: "unpaid",
+      });
+    } else {
+      // Update existing entry to reset status if needed
+      waitlistEntry = await Waitlist.findByIdAndUpdate(
+        waitlistEntry._id,
+        { paymentStatus: "unpaid" },
+        { new: true }
+      );
+    }
 
     const baseUrl = APP_BASE_URL?.trim();
     if (!baseUrl || !baseUrl.startsWith("http")) {
@@ -100,6 +145,14 @@ export async function POST(request: Request) {
         {
           error: "Server configuration error",
         },
+        { status: 500 }
+      );
+    }
+
+    // Ensure waitlistEntry exists
+    if (!waitlistEntry) {
+      return NextResponse.json(
+        { error: "Failed to create waitlist entry" },
         { status: 500 }
       );
     }
@@ -132,16 +185,16 @@ export async function POST(request: Request) {
         mode: "payment",
         success_url: `${APP_BASE_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${APP_BASE_URL}/?canceled=true`,
-        client_reference_id: String(newEntry._id),
+        client_reference_id: String(waitlistEntry._id),
         customer_email: sanitizedEmail,
         metadata: {
-          waitlist_id: String(newEntry._id),
+          waitlist_id: String(waitlistEntry._id),
           email: sanitizedEmail,
         },
       });
 
       // Update entry with checkout session ID
-      await Waitlist.findByIdAndUpdate(newEntry._id, {
+      await Waitlist.findByIdAndUpdate(waitlistEntry._id, {
         stripeCheckoutId: session.id,
         paymentStatus: "pending",
       });
@@ -166,16 +219,16 @@ export async function POST(request: Request) {
       mode: "payment",
       success_url: `${APP_BASE_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_BASE_URL}/?canceled=true`,
-      client_reference_id: String(newEntry._id),
+      client_reference_id: String(waitlistEntry._id),
       customer_email: sanitizedEmail,
       metadata: {
-        waitlist_id: String(newEntry._id),
+        waitlist_id: String(waitlistEntry._id),
         email: sanitizedEmail,
       },
     });
 
     // Update entry with checkout session ID
-    await Waitlist.findByIdAndUpdate(newEntry._id, {
+    await Waitlist.findByIdAndUpdate(waitlistEntry._id, {
       stripeCheckoutId: session.id,
       paymentStatus: "pending",
     });

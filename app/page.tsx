@@ -14,6 +14,7 @@ gsap.registerPlugin(ScrollTrigger, TextPlugin);
 export default function Home() {
   const [openFAQ, setOpenFAQ] = useState<number | null>(0);
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Refs for animations
   const navRef = useRef<HTMLElement>(null);
@@ -431,15 +432,67 @@ export default function Home() {
             </div>
             
             {/* Mobile hamburger menu */}
-            <div className="md:hidden">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 12H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M3 6H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M3 18H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
+            <button 
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M18 6L6 18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M6 6L18 18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ) : (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 12H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M3 6H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M3 18H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </button>
           </div>
         </nav>
+
+        {/* Mobile Menu Overlay */}
+        {mobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <div 
+              className="flex flex-col items-center justify-center h-full gap-8 px-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => {
+                  openModal('features');
+                  setMobileMenuOpen(false);
+                }}
+                className="text-white text-xl font-medium hover:text-orange-500 transition-colors"
+              >
+                Features
+              </button>
+              <button
+                onClick={() => {
+                  openModal('how-it-works');
+                  setMobileMenuOpen(false);
+                }}
+                className="text-white text-xl font-medium hover:text-orange-500 transition-colors"
+              >
+                How it Works
+              </button>
+              <button
+                onClick={() => {
+                  scrollToFAQ();
+                  setMobileMenuOpen(false);
+                }}
+                className="text-white text-xl font-medium hover:text-orange-500 transition-colors"
+              >
+                FAQ
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Hero Content */}
         <div ref={heroContentRef} className="relative z-10 px-4 md:px-6 lg:px-40">

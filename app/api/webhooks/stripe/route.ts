@@ -147,6 +147,23 @@ export async function POST(request: Request) {
               paymentStatus: 'failed'
             }
           );
+          console.log(`❌ Async payment failed for waitlist entry: ${session.client_reference_id}`);
+        }
+        break;
+      }
+
+      case 'checkout.session.expired': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        
+        if (session.client_reference_id) {
+          await Waitlist.findByIdAndUpdate(
+            session.client_reference_id,
+            {
+              paymentStatus: 'unpaid',
+              stripeCheckoutId: null // Clear expired checkout ID
+            }
+          );
+          console.log(`⏰ Checkout session expired for waitlist entry: ${session.client_reference_id}`);
         }
         break;
       }
