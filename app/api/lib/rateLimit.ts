@@ -22,7 +22,7 @@ const TIMEOUT_DURATIONS = [
 
 export function rateLimitErrors(
   identifier: string,
-  maxErrors: number = 5
+  _maxErrors: number = 5
 ): { allowed: boolean; resetTime: number; timeoutMinutes: number } {
   const now = Date.now();
   const key = identifier;
@@ -72,6 +72,7 @@ export function recordError(identifier: string): { shouldTimeout: boolean; timeo
       errorCount: 0,
       resetTime: 0,
       lastErrorTime: 0,
+      timeoutLevel: 0,
     };
   }
 
@@ -147,6 +148,7 @@ export function rateLimit(
       errorCount: 0,
       resetTime: now + windowMs,
       lastErrorTime: 0,
+      timeoutLevel: 0,
     };
   }
 
