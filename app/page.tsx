@@ -518,10 +518,6 @@ export default function Home() {
                 </div>
                 <div className="mt-8 flex flex-col sm:flex-row sm:items-center gap-4 text-sm text-gray-400">
                   <div className="flex items-center gap-3">
-                    <span className="inline-flex h-3 w-3 rounded-full bg-orange-500 animate-pulse"></span>
-                    <span>Live cohorts kick off March 2025</span>
-                  </div>
-                  <div className="flex items-center gap-3">
                     <span className="text-white font-semibold">Featuring</span>
                     <span className="uppercase tracking-widest text-xs text-gray-500">Pro Athletes & Celebrity Trainers</span>
                   </div>
