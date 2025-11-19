@@ -8,6 +8,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { TextPlugin } from "gsap/TextPlugin";
 import { generateFAQSchema } from "@/lib/seo/schema";
 import WaitlistForm from "@/components/WaitlistForm";
+import TiltCard from "@/components/TiltCard";
 
 gsap.registerPlugin(ScrollTrigger, TextPlugin);
 
@@ -391,142 +392,142 @@ export default function Home() {
           <div className="absolute inset-0 hero-gradient"></div>
         </div>
 
-        {/* Navigation */}
-        <nav ref={navRef} className="relative z-10 flex items-center justify-between px-4 md:px-6 lg:px-40 py-4 md:py-12">
-          <div className="flex items-center gap-4">
-            <svg width="120" height="22" viewBox="0 0 146 26" fill="none" xmlns="http://www.w3.org/2000/svg" className="md:w-[146px] md:h-[26px]">
-              <path d="M11.2251 26C4.57318 26 0 21.1294 0 13.035C0 5.01078 4.50389 0 11.2597 0C17.3573 0 20.614 3.2938 21.688 8.72507L17.7384 8.93531C17.0801 5.53639 15.0014 3.469 11.2597 3.469C6.79048 3.469 3.88028 7.11321 3.88028 13.035C3.88028 18.9919 6.82513 22.531 11.2251 22.531C15.2093 22.531 17.3227 20.2534 17.9116 16.5391L21.8612 16.7493C20.9258 22.3908 17.288 26 11.2251 26Z" fill="white"/>
-              <path d="M33.5288 25.8598C28.1934 25.8598 24.7982 22.0054 24.7982 16.1186C24.7982 10.2318 28.1934 6.37736 33.4249 6.37736C38.4485 6.37736 41.8783 9.98652 41.8783 16.2588V17.2049H28.6438C28.8171 20.8491 30.6533 22.6712 33.5635 22.6712C35.7461 22.6712 37.2012 21.5849 37.7902 19.8329L41.6012 20.0782C40.6311 23.5472 37.617 25.8598 33.5288 25.8598ZM28.6438 14.4016H37.9634C37.7556 11.1078 35.954 9.531 33.4249 9.531C30.8265 9.531 29.0596 11.248 28.6438 14.4016Z" fill="white"/>
-              <path d="M49.8527 25.4394C47.4276 25.4394 45.8339 24.248 45.8339 21.4798V0.560646H49.5063V21.1294C49.5063 22.0054 49.9567 22.3908 50.7882 22.3908H52.2433V25.4394H49.8527Z" fill="white"/>
-              <path d="M63.5052 25.8598C58.1698 25.8598 54.7745 22.0054 54.7745 16.1186C54.7745 10.2318 58.1698 6.37736 63.4012 6.37736C68.4248 6.37736 71.8547 9.98652 71.8547 16.2588V17.2049H58.6202C58.7934 20.8491 60.6296 22.6712 63.5398 22.6712C65.7225 22.6712 67.1776 21.5849 67.7665 19.8329L71.5775 20.0782C70.6074 23.5472 67.5933 25.8598 63.5052 25.8598ZM58.6202 14.4016H67.9398C67.7319 11.1078 65.9303 9.531 63.4012 9.531C60.8028 9.531 59.0359 11.248 58.6202 14.4016Z" fill="white"/>
-              <path d="M84.5514 25.8598C81.9876 25.8598 79.9435 24.6685 78.9042 22.6361L78.8003 25.4394H75.3704V0.560646H79.0428V9.42588C79.9782 7.81402 81.9876 6.37736 84.5514 6.37736C89.3671 6.37736 92.3812 10.1617 92.3812 16.1186C92.3812 22.0755 89.3671 25.8598 84.5514 25.8598ZM83.9624 22.6361C86.7687 22.6361 88.5702 20.1482 88.5702 16.1186C88.5702 12.0189 86.8033 9.60108 83.9971 9.60108C80.879 9.60108 79.0428 12.0189 79.0428 16.1186C79.0428 20.1482 80.879 22.6361 83.9624 22.6361Z" fill="white"/>
-              <path d="M96.5154 25.4394V0.560646H113.492V5.04582H101.781V11.0728H112.868V15.4879H101.781V25.4394H96.5154Z" fill="#FF5500"/>
-              <path d="M117.424 25.4394V0.560646H122.69V25.4394H117.424Z" fill="#FF5500"/>
-              <path d="M133.354 25.4394V5.04582H126.01V0.560646H146V5.04582H138.655V25.4394H133.354Z" fill="#FF5500"/>
-            </svg>
-            <span className="bg-orange-500 text-black px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider hidden sm:inline-block">
-              Coming Soon
-            </span>
-          </div>
-          <div className="flex items-center gap-2 md:gap-6">
-            {/* Desktop navigation */}
-            <div className="hidden md:flex items-center gap-8">
-              <button 
-                onClick={() => openModal('features')}
-                className="text-white hover:text-orange-500 text-sm font-medium transition-all duration-300 hover:scale-105"
-              >
-                Features
-              </button>
-              <button 
-                onClick={() => openModal('how-it-works')}
-                className="text-white hover:text-orange-500 text-sm font-medium transition-all duration-300 hover:scale-105"
-              >
-                How it Works
-              </button>
-              <button 
-                onClick={scrollToFAQ}
-                className="text-white hover:text-orange-500 text-sm font-medium transition-all duration-300 hover:scale-105"
-              >
-                FAQ
-            </button>
-            </div>
-            
-            {/* Mobile hamburger menu */}
-            <button 
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
-              aria-label="Toggle menu"
-            >
-              {mobileMenuOpen ? (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M18 6L6 18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M6 6L18 18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <div className="relative z-10 w-full">
+          <div className="max-w-6xl mx-auto w-full px-4 md:px-6 lg:px-8">
+            {/* Navigation */}
+            <nav ref={navRef} className="flex items-center justify-between py-4 md:py-8">
+              <div className="flex items-center gap-4">
+                <svg width="120" height="22" viewBox="0 0 146 26" fill="none" xmlns="http://www.w3.org/2000/svg" className="md:w-[146px] md:h-[26px]">
+                  <path d="M11.2251 26C4.57318 26 0 21.1294 0 13.035C0 5.01078 4.50389 0 11.2597 0C17.3573 0 20.614 3.2938 21.688 8.72507L17.7384 8.93531C17.0801 5.53639 15.0014 3.469 11.2597 3.469C6.79048 3.469 3.88028 7.11321 3.88028 13.035C3.88028 18.9919 6.82513 22.531 11.2251 22.531C15.2093 22.531 17.3227 20.2534 17.9116 16.5391L21.8612 16.7493C20.9258 22.3908 17.288 26 11.2251 26Z" fill="white"/>
+                  <path d="M33.5288 25.8598C28.1934 25.8598 24.7982 22.0054 24.7982 16.1186C24.7982 10.2318 28.1934 6.37736 33.4249 6.37736C38.4485 6.37736 41.8783 9.98652 41.8783 16.2588V17.2049H28.6438C28.8171 20.8491 30.6533 22.6712 33.5635 22.6712C35.7461 22.6712 37.2012 21.5849 37.7902 19.8329L41.6012 20.0782C40.6311 23.5472 37.617 25.8598 33.5288 25.8598ZM28.6438 14.4016H37.9634C37.7556 11.1078 35.954 9.531 33.4249 9.531C30.8265 9.531 29.0596 11.248 28.6438 14.4016Z" fill="white"/>
+                  <path d="M49.8527 25.4394C47.4276 25.4394 45.8339 24.248 45.8339 21.4798V0.560646H49.5063V21.1294C49.5063 22.0054 49.9567 22.3908 50.7882 22.3908H52.2433V25.4394H49.8527Z" fill="white"/>
+                  <path d="M63.5052 25.8598C58.1698 25.8598 54.7745 22.0054 54.7745 16.1186C54.7745 10.2318 58.1698 6.37736 63.4012 6.37736C68.4248 6.37736 71.8547 9.98652 71.8547 16.2588V17.2049H58.6202C58.7934 20.8491 60.6296 22.6712 63.5398 22.6712C65.7225 22.6712 67.1776 21.5849 67.7665 19.8329L71.5775 20.0782C70.6074 23.5472 67.5933 25.8598 63.5052 25.8598ZM58.6202 14.4016H67.9398C67.7319 11.1078 65.9303 9.531 63.4012 9.531C60.8028 9.531 59.0359 11.248 58.6202 14.4016Z" fill="white"/>
+                  <path d="M84.5514 25.8598C81.9876 25.8598 79.9435 24.6685 78.9042 22.6361L78.8003 25.4394H75.3704V0.560646H79.0428V9.42588C79.9782 7.81402 81.9876 6.37736 84.5514 6.37736C89.3671 6.37736 92.3812 10.1617 92.3812 16.1186C92.3812 22.0755 89.3671 25.8598 84.5514 25.8598ZM83.9624 22.6361C86.7687 22.6361 88.5702 20.1482 88.5702 16.1186C88.5702 12.0189 86.8033 9.60108 83.9971 9.60108C80.879 9.60108 79.0428 12.0189 79.0428 16.1186C79.0428 20.1482 80.879 22.6361 83.9624 22.6361Z" fill="white"/>
+                  <path d="M96.5154 25.4394V0.560646H113.492V5.04582H101.781V11.0728H112.868V15.4879H101.781V25.4394H96.5154Z" fill="#FF5500"/>
+                  <path d="M117.424 25.4394V0.560646H122.69V25.4394H117.424Z" fill="#FF5500"/>
+                  <path d="M133.354 25.4394V5.04582H126.01V0.560646H146V5.04582H138.655V25.4394H133.354Z" fill="#FF5500"/>
                 </svg>
-              ) : (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 12H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M3 6H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M3 18H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </button>
+                <span className="bg-orange-500 text-black px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider hidden sm:inline-block">
+                  Coming Soon
+                </span>
+              </div>
+              <div className="flex items-center gap-2 md:gap-6">
+                {/* Desktop navigation */}
+                <div className="hidden md:flex items-center gap-8">
+                  <button 
+                    onClick={() => openModal('features')}
+                    className="text-white hover:text-orange-500 text-sm font-medium transition-all duration-300 hover:scale-105"
+                  >
+                    Features
+                  </button>
+                  <button 
+                    onClick={() => openModal('how-it-works')}
+                    className="text-white hover:text-orange-500 text-sm font-medium transition-all duration-300 hover:scale-105"
+                  >
+                    How it Works
+                  </button>
+                  <button 
+                    onClick={scrollToFAQ}
+                    className="text-white hover:text-orange-500 text-sm font-medium transition-all duration-300 hover:scale-105"
+                  >
+                    FAQ
+                </button>
+                </div>
+                
+                {/* Mobile hamburger menu */}
+                <button 
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="md:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  aria-label="Toggle menu"
+                >
+                  {mobileMenuOpen ? (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M18 6L6 18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M6 6L18 18" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ) : (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 12H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M3 6H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M3 18H21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </nav>
           </div>
-        </nav>
 
-        {/* Mobile Menu Overlay */}
-        {mobileMenuOpen && (
-          <div 
-            className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 md:hidden"
-            onClick={() => setMobileMenuOpen(false)}
-          >
+          {/* Mobile Menu Overlay */}
+          {mobileMenuOpen && (
             <div 
-              className="flex flex-col items-center justify-center h-full gap-8 px-4"
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 md:hidden"
+              onClick={() => setMobileMenuOpen(false)}
             >
-              <button
-                onClick={() => {
-                  openModal('features');
-                  setMobileMenuOpen(false);
-                }}
-                className="text-white text-xl font-medium hover:text-orange-500 transition-colors"
+              <div 
+                className="flex flex-col items-center justify-center h-full gap-8 px-4"
+                onClick={(e) => e.stopPropagation()}
               >
-                Features
-              </button>
-              <button
-                onClick={() => {
-                  openModal('how-it-works');
-                  setMobileMenuOpen(false);
-                }}
-                className="text-white text-xl font-medium hover:text-orange-500 transition-colors"
-              >
-                How it Works
-              </button>
-              <button
-                onClick={() => {
-                  scrollToFAQ();
-                  setMobileMenuOpen(false);
-                }}
-                className="text-white text-xl font-medium hover:text-orange-500 transition-colors"
-              >
-                FAQ
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Hero Content */}
-        <div ref={heroContentRef} className="relative z-10 px-4 md:px-6 lg:px-40">
-          {/* Mobile Layout */}
-          <div className="md:hidden flex flex-col justify-end h-screen pb-12">
-            <div className="glass-card rounded-3xl p-6">
-              <h1 className="text-3xl font-bold leading-tight text-white mb-4 uppercase">
-                TRAIN WITH YOUR IDOL.{" "}
-                <span className="text-orange-500">LIVE</span>
-              </h1>
-              <p className="text-gray-300 text-lg mb-8 leading-relaxed">
-                Be part of the world&apos;s first live celebrity training experience. Limited sports. No reruns
-              </p>
-              
-              <div className="mb-6">
-                <WaitlistForm variant="mobile" />
+                <button
+                  onClick={() => {
+                    openModal('features');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="text-white text-xl font-medium hover:text-orange-500 transition-colors"
+                >
+                  Features
+                </button>
+                <button
+                  onClick={() => {
+                    openModal('how-it-works');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="text-white text-xl font-medium hover:text-orange-500 transition-colors"
+                >
+                  How it Works
+                </button>
+                <button
+                  onClick={() => {
+                    scrollToFAQ();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="text-white text-xl font-medium hover:text-orange-500 transition-colors"
+                >
+                  FAQ
+                </button>
               </div>
             </div>
-          </div>
-          
-          {/* Desktop Layout */}
-          <div className="hidden md:block">
-          <div className="glass-card rounded-3xl p-14 max-w-xl mt-24">
-            <h1 className="text-5xl lg:text-6xl font-bold leading-tight text-white mb-6 uppercase">
-              TRAIN WITH YOUR IDOL.{" "}
-              <span className="text-orange-500">LIVE</span>
-            </h1>
-            <p className="text-gray-300 text-xl mb-12 leading-relaxed">
-              Be part of the world&apos;s first live celebrity training experience. Limited sports. No reruns
-            </p>
-            
-            <div className="mb-8">
-              <WaitlistForm variant="desktop" />
-            </div>
+          )}
+
+          {/* Hero Content */}
+          <div ref={heroContentRef} className="max-w-6xl mx-auto w-full px-4 md:px-6 lg:px-8 pb-16">
+            <div className="grid gap-10 lg:gap-16 min-h-[calc(100vh-140px)] lg:grid-cols-[minmax(420px,520px)_minmax(0,1fr)] items-center pt-10 md:pt-0">
+              <TiltCard className="glass-card rounded-3xl p-6 sm:p-8 lg:p-12 max-w-2xl" intensity={12}>
+                <p className="text-xs font-semibold tracking-[0.4em] text-orange-400 uppercase mb-5">
+                  New drops opening soon
+                </p>
+                <h1 className="text-4xl sm:text-5xl xl:text-6xl font-bold leading-[1.1] text-white uppercase mb-6">
+                  TRAIN WITH YOUR IDOL.{" "}
+                  <span className="text-orange-500">LIVE</span>
+                </h1>
+                <p className="text-base sm:text-lg lg:text-xl text-gray-300 leading-relaxed mb-8">
+                  Be part of the world&apos;s first live celebrity training experience. Limited sports. No reruns.
+                  Claim a seat in the first live cohorts before they disappear.
+                </p>
+                <div className="max-w-md">
+                  <WaitlistForm variant="hero" />
+                </div>
+                <div className="mt-8 flex flex-col sm:flex-row sm:items-center gap-4 text-sm text-gray-400">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-3 w-3 rounded-full bg-orange-500 animate-pulse"></span>
+                    <span>Live cohorts kick off March 2025</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-white font-semibold">Featuring</span>
+                    <span className="uppercase tracking-widest text-xs text-gray-500">Pro Athletes & Celebrity Trainers</span>
+                  </div>
+                </div>
+              </TiltCard>
+              <div className="hidden lg:block h-full" aria-hidden="true"></div>
             </div>
           </div>
         </div>
@@ -626,7 +627,7 @@ export default function Home() {
               Join the world&apos;s first live celebrity fitness experience. Connect with your favorite athletes and trainers in real-time, interactive workout sessions that push you to achieve your personal best.
             </p>
             <div ref={howItWorksFormRef}>
-              <WaitlistForm variant="inline" />
+              <WaitlistForm variant="hero" />
             </div>
           </div>
 
@@ -778,12 +779,6 @@ export default function Home() {
             >
               How it works
             </button>
-            <button 
-              onClick={scrollToFAQ}
-              className="text-gray-300 hover:text-white text-sm md:text-base transition-all duration-300 hover:scale-105"
-            >
-              FAQs
-            </button>
             </nav>
             <p className="text-white text-sm md:text-base">© CelebFit 2025</p>
           </div>
@@ -808,29 +803,25 @@ export default function Home() {
       {activeModal && (
         <div 
           ref={backdropRef}
-          className="fixed inset-0 bg-black/90 backdrop-blur-2xl flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50 p-4"
           onClick={closeModal}
         >
           <div 
             ref={modalRef}
-            className="relative bg-gradient-to-br from-slate-900 via-gray-900 to-black rounded-2xl max-w-5xl w-full max-h-[85vh] overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] border border-gray-800/50"
+            className="relative glass-card rounded-3xl max-w-5xl w-full max-h-[85vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Animated background pattern */}
-            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-orange-500/5 opacity-50"></div>
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-orange-500/10 via-transparent to-transparent"></div>
-            
             {/* Header */}
-            <div className="relative bg-gradient-to-r from-gray-900/80 to-gray-800/80 backdrop-blur-sm p-8 border-b border-gray-800/50">
-              <div className="flex justify-between items-center">
+            <div className="relative p-6 md:p-8 border-b border-white/16">
+              <div className="flex justify-between items-start">
                 <div>
-                  <h2 className="text-3xl md:text-5xl font-bold text-white mb-2">
-                    {activeModal === 'features' && '✨ Features'}
-                    {activeModal === 'how-it-works' && '🚀 How It Works'}
-                    {activeModal === 'privacy' && '🔒 Privacy Policy'}
-                    {activeModal === 'terms' && '📋 Terms of Service'}
+                  <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white mb-2 uppercase">
+                    {activeModal === 'features' && 'FEATURES'}
+                    {activeModal === 'how-it-works' && 'HOW IT WORKS'}
+                    {activeModal === 'privacy' && 'PRIVACY POLICY'}
+                    {activeModal === 'terms' && 'TERMS OF SERVICE'}
                   </h2>
-                  <p className="text-gray-400 text-lg">
+                  <p className="text-gray-300 text-sm md:text-base">
                     {activeModal === 'features' && 'Discover what makes CelebFitLife unique'}
                     {activeModal === 'how-it-works' && 'Your journey to fitness starts here'}
                     {activeModal === 'privacy' && 'Your privacy and data protection'}
@@ -839,9 +830,10 @@ export default function Home() {
                 </div>
                 <button 
                   onClick={closeModal}
-                  className="group p-3 rounded-xl bg-gray-800/60 hover:bg-gray-700/60 backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-lg"
+                  className="group p-2 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0"
+                  aria-label="Close"
                 >
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-400 group-hover:text-white transition-colors">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-300 group-hover:text-white transition-colors">
                     <path d="M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
@@ -850,122 +842,122 @@ export default function Home() {
             </div>
             
             {/* Content */}
-            <div className="relative p-8 overflow-y-auto max-h-[calc(85vh-140px)] scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+            <div className="relative p-6 md:p-8 overflow-y-auto max-h-[calc(85vh-180px)]">
 
               {activeModal === 'features' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="group relative bg-gradient-to-br from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-orange-500/25">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <div className="flex items-start gap-4 md:gap-6">
+                      <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
                           <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+                        </svg>
                       </div>
-                      <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Live Celebrity Workouts</h3>
-                      <p className="text-gray-300 leading-relaxed text-lg">
-                        Train with your favorite celebrities and athletes in real-time, high-energy workout sessions. 
-                        No pre-recorded content - every session is live and exclusive.
-                      </p>
+                      <div>
+                        <h3 className="text-xl md:text-2xl font-bold text-white mb-2 uppercase">Live Celebrity Workouts</h3>
+                        <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                          Train with your favorite celebrities and athletes in real-time, high-energy workout sessions. 
+                          No pre-recorded content - every session is live and exclusive.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div className="group relative bg-gradient-to-br from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-orange-500/25">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <div className="flex items-start gap-4 md:gap-6">
+                      <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
                           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+                        </svg>
                       </div>
-                      <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Interactive Q&A</h3>
-                      <p className="text-gray-300 leading-relaxed text-lg">
-                        Ask questions during sessions and get real-time feedback from celebrity trainers. 
-                        Perfect your form and technique with direct guidance from the pros.
-                      </p>
+                      <div>
+                        <h3 className="text-xl md:text-2xl font-bold text-white mb-2 uppercase">Interactive Q&A</h3>
+                        <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                          Ask questions during sessions and get real-time feedback from celebrity trainers. 
+                          Perfect your form and technique with direct guidance from the pros.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div className="group relative bg-gradient-to-br from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-orange-500/25">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <div className="flex items-start gap-4 md:gap-6">
+                      <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
                           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+                        </svg>
                       </div>
-                      <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Exclusive Access</h3>
-                      <p className="text-gray-300 leading-relaxed text-lg">
-                        Limited sessions with no replays or reruns. Show up or miss out on these once-in-a-lifetime 
-                        training experiences with your fitness idols.
-                      </p>
+                      <div>
+                        <h3 className="text-xl md:text-2xl font-bold text-white mb-2 uppercase">Exclusive Access</h3>
+                        <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                          Limited sessions with no replays or reruns. Show up or miss out on these once-in-a-lifetime 
+                          training experiences with your fitness idols.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div className="group relative bg-gradient-to-br from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-orange-500/25">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <div className="flex items-start gap-4 md:gap-6">
+                      <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
                           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                           <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-                      <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Personalized Experience</h3>
-                      <p className="text-gray-300 leading-relaxed text-lg">
-                        Get personalized attention and motivation from celebrity trainers who understand your fitness goals 
-                        and push you to achieve your personal best.
-                      </p>
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-xl md:text-2xl font-bold text-white mb-2 uppercase">Personalized Experience</h3>
+                        <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                          Get personalized attention and motivation from celebrity trainers who understand your fitness goals 
+                          and push you to achieve your personal best.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
 
               {activeModal === 'how-it-works' && (
-                <div className="space-y-8">
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative flex items-start gap-8">
-                      <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white w-20 h-20 rounded-3xl flex items-center justify-center font-bold text-2xl shadow-lg shadow-orange-500/25 group-hover:scale-110 transition-transform duration-300 flex-shrink-0">1</div>
-                      <div className="flex-1">
-                        <h3 className="text-3xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Join the Waitlist</h3>
-                        <p className="text-gray-300 leading-relaxed text-xl">
+                <div className="space-y-4 md:space-y-6">
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <div className="flex items-start gap-4 md:gap-6">
+                      <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center font-bold text-xl flex-shrink-0">1</div>
+                      <div>
+                        <h3 className="text-xl md:text-2xl font-bold text-white mb-2 uppercase">Join the Waitlist</h3>
+                        <p className="text-gray-300 text-base md:text-lg leading-relaxed">
                           Sign up to secure your spot in our exclusive live sessions. Be among the first to experience 
                           celebrity fitness training like never before.
                         </p>
                       </div>
                     </div>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative flex items-start gap-8">
-                      <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white w-20 h-20 rounded-3xl flex items-center justify-center font-bold text-2xl shadow-lg shadow-orange-500/25 group-hover:scale-110 transition-transform duration-300 flex-shrink-0">2</div>
-                      <div className="flex-1">
-                        <h3 className="text-3xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Get Notified</h3>
-                        <p className="text-gray-300 leading-relaxed text-xl">
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <div className="flex items-start gap-4 md:gap-6">
+                      <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center font-bold text-xl flex-shrink-0">2</div>
+                      <div>
+                        <h3 className="text-xl md:text-2xl font-bold text-white mb-2 uppercase">Get Notified</h3>
+                        <p className="text-gray-300 text-base md:text-lg leading-relaxed">
                           Receive exclusive notifications about upcoming sessions with your favorite celebrity trainers. 
                           Never miss an opportunity to train with the stars.
                         </p>
                       </div>
                     </div>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative flex items-start gap-8">
-                      <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white w-20 h-20 rounded-3xl flex items-center justify-center font-bold text-2xl shadow-lg shadow-orange-500/25 group-hover:scale-110 transition-transform duration-300 flex-shrink-0">3</div>
-                      <div className="flex-1">
-                        <h3 className="text-3xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Train Live</h3>
-                        <p className="text-gray-300 leading-relaxed text-xl">
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <div className="flex items-start gap-4 md:gap-6">
+                      <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center font-bold text-xl flex-shrink-0">3</div>
+                      <div>
+                        <h3 className="text-xl md:text-2xl font-bold text-white mb-2 uppercase">Train Live</h3>
+                        <p className="text-gray-300 text-base md:text-lg leading-relaxed">
                           Join high-energy live workouts with celebrity trainers. Ask questions, get real-time feedback, 
                           and train alongside your fitness idols in exclusive sessions.
                         </p>
                       </div>
                     </div>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative flex items-start gap-8">
-                      <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white w-20 h-20 rounded-3xl flex items-center justify-center font-bold text-2xl shadow-lg shadow-orange-500/25 group-hover:scale-110 transition-transform duration-300 flex-shrink-0">4</div>
-                      <div className="flex-1">
-                        <h3 className="text-3xl font-bold text-white mb-4 group-hover:text-orange-400 transition-colors">Watch Your Gains</h3>
-                        <p className="text-gray-300 leading-relaxed text-xl">
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <div className="flex items-start gap-4 md:gap-6">
+                      <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center font-bold text-xl flex-shrink-0">4</div>
+                      <div>
+                        <h3 className="text-xl md:text-2xl font-bold text-white mb-2 uppercase">Watch Your Gains</h3>
+                        <p className="text-gray-300 text-base md:text-lg leading-relaxed">
                           Track your progress and celebrate your transformation as you achieve the fitness goals 
                           you&apos;ve always dreamed of reaching with celebrity guidance.
                         </p>
@@ -977,116 +969,81 @@ export default function Home() {
 
 
               {activeModal === 'privacy' && (
-                <div className="space-y-8">
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <h3 className="text-3xl font-bold text-white mb-6">🔒 Privacy Policy</h3>
-                      <p className="text-gray-300 leading-relaxed text-xl">
-                        At CelebFitLife, we are committed to protecting your privacy and ensuring the security of your personal information.
-                      </p>
-                    </div>
+                <div className="space-y-4 md:space-y-6">
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                      At CelebFitLife, we are committed to protecting your privacy and ensuring the security of your personal information.
+                    </p>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <h4 className="text-2xl font-bold text-orange-400 mb-6">📊 Information We Collect</h4>
-                      <p className="text-gray-300 leading-relaxed text-xl">
-                        We collect information you provide directly to us, such as when you join our waitlist, including your email address 
-                        and any other information you choose to provide.
-                      </p>
-                    </div>
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <h4 className="text-xl md:text-2xl font-bold text-orange-500 mb-4 uppercase">Information We Collect</h4>
+                    <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                      We collect information you provide directly to us, such as when you join our waitlist, including your email address 
+                      and any other information you choose to provide.
+                    </p>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <h4 className="text-2xl font-bold text-orange-400 mb-6">🎯 How We Use Your Information</h4>
-                      <p className="text-gray-300 leading-relaxed text-xl">
-                        We use the information we collect to send you notifications about upcoming live sessions, provide customer support, 
-                        and improve our services.
-                      </p>
-                    </div>
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <h4 className="text-xl md:text-2xl font-bold text-orange-500 mb-4 uppercase">How We Use Your Information</h4>
+                    <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                      We use the information we collect to send you notifications about upcoming live sessions, provide customer support, 
+                      and improve our services.
+                    </p>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <h4 className="text-2xl font-bold text-orange-400 mb-6">🛡️ Data Security</h4>
-                      <p className="text-gray-300 leading-relaxed text-xl">
-                        We implement appropriate security measures to protect your personal information against unauthorized access, 
-                        alteration, disclosure, or destruction.
-                      </p>
-                    </div>
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <h4 className="text-xl md:text-2xl font-bold text-orange-500 mb-4 uppercase">Data Security</h4>
+                    <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                      We implement appropriate security measures to protect your personal information against unauthorized access, 
+                      alteration, disclosure, or destruction.
+                    </p>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <h4 className="text-2xl font-bold text-orange-400 mb-6">📧 Contact Us</h4>
-                      <p className="text-gray-300 leading-relaxed text-xl">
-                        If you have any questions about this Privacy Policy, please contact us at privacy@celebfitlife.com
-                      </p>
-                    </div>
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <h4 className="text-xl md:text-2xl font-bold text-orange-500 mb-4 uppercase">Contact Us</h4>
+                    <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                      If you have any questions about this Privacy Policy, please contact us at privacy@celebfitlife.com
+                    </p>
                   </div>
                 </div>
               )}
 
               {activeModal === 'terms' && (
-                <div className="space-y-8">
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <h3 className="text-3xl font-bold text-white mb-6">📋 Terms of Service</h3>
-                      <p className="text-gray-300 leading-relaxed text-xl">
-                        Welcome to CelebFitLife. These Terms of Service (&quot;Terms&quot;) govern your use of our platform and services.
-                      </p>
-                    </div>
+                <div className="space-y-4 md:space-y-6">
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                      Welcome to CelebFitLife. These Terms of Service (&quot;Terms&quot;) govern your use of our platform and services.
+                    </p>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <h4 className="text-2xl font-bold text-orange-400 mb-6">✅ Acceptance of Terms</h4>
-                      <p className="text-gray-300 leading-relaxed text-xl">
-                        By joining our waitlist or using our services, you agree to be bound by these Terms and our Privacy Policy.
-                      </p>
-                    </div>
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <h4 className="text-xl md:text-2xl font-bold text-orange-500 mb-4 uppercase">Acceptance of Terms</h4>
+                    <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                      By joining our waitlist or using our services, you agree to be bound by these Terms and our Privacy Policy.
+                    </p>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <h4 className="text-2xl font-bold text-orange-400 mb-6">🎯 Live Sessions</h4>
-                      <p className="text-gray-300 leading-relaxed text-xl">
-                        Our live training sessions are exclusive and limited. Sessions are conducted on a first-come, first-served basis 
-                        and may be subject to capacity limitations.
-                      </p>
-                    </div>
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <h4 className="text-xl md:text-2xl font-bold text-orange-500 mb-4 uppercase">Live Sessions</h4>
+                    <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                      Our live training sessions are exclusive and limited. Sessions are conducted on a first-come, first-served basis 
+                      and may be subject to capacity limitations.
+                    </p>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <h4 className="text-2xl font-bold text-orange-400 mb-6">🤝 User Conduct</h4>
-                      <p className="text-gray-300 leading-relaxed text-xl">
-                        Users must maintain respectful behavior during live sessions. Any inappropriate conduct may result in removal 
-                        from the session and termination of access.
-                      </p>
-                    </div>
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <h4 className="text-xl md:text-2xl font-bold text-orange-500 mb-4 uppercase">User Conduct</h4>
+                    <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                      Users must maintain respectful behavior during live sessions. Any inappropriate conduct may result in removal 
+                      from the session and termination of access.
+                    </p>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <h4 className="text-2xl font-bold text-orange-400 mb-6">⚠️ Limitation of Liability</h4>
-                      <p className="text-gray-300 leading-relaxed text-xl">
-                        CelebFitLife is not responsible for any injuries that may occur during training sessions. Users participate 
-                        at their own risk and should consult with healthcare professionals before beginning any fitness program.
-                      </p>
-                    </div>
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <h4 className="text-xl md:text-2xl font-bold text-orange-500 mb-4 uppercase">Limitation of Liability</h4>
+                    <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                      CelebFitLife is not responsible for any injuries that may occur during training sessions. Users participate 
+                      at their own risk and should consult with healthcare professionals before beginning any fitness program.
+                    </p>
                   </div>
-                  <div className="group relative bg-gradient-to-r from-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/40 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/10">
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative">
-                      <h4 className="text-2xl font-bold text-orange-400 mb-6">📧 Contact Information</h4>
-                      <p className="text-gray-300 leading-relaxed text-xl">
-                        For questions about these Terms, please contact us at legal@celebfitlife.com
-                      </p>
-                    </div>
+                  <div className="step-card rounded-3xl p-6 md:p-8">
+                    <h4 className="text-xl md:text-2xl font-bold text-orange-500 mb-4 uppercase">Contact Information</h4>
+                    <p className="text-gray-300 text-base md:text-lg leading-relaxed">
+                      For questions about these Terms, please contact us at legal@celebfitlife.com
+                    </p>
                   </div>
                 </div>
               )}

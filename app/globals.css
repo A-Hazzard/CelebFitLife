@@ -21,7 +21,10 @@ body {
 }
 
 .hero-gradient {
-  background: linear-gradient(0deg, #010101 1.36%, rgba(6, 6, 6, 0.20) 41.19%, rgba(0, 0, 0, 0.10) 100%), rgba(0, 0, 0, 0.15);
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.95) 0%, rgba(3, 3, 3, 0.7) 38%, rgba(0, 0, 0, 0.25) 100%),
+    linear-gradient(0deg, #010101 1.36%, rgba(6, 6, 6, 0.2) 41.19%, rgba(0, 0, 0, 0.1) 100%),
+    rgba(0, 0, 0, 0.35);
   background-blend-mode: normal, multiply;
 }
 
@@ -30,18 +33,29 @@ body {
 }
 
 .glass-card {
-  background: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  position: relative;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(24px) saturate(140%);
+  box-shadow: 0 20px 65px rgba(0, 0, 0, 0.55), 0 0 55px rgba(255, 102, 0, 0.12);
+}
+
+.glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 60%);
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 @media (max-width: 768px) {
   .glass-card {
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow: 0 15px 45px rgba(0, 0, 0, 0.35), 0 0 30px rgba(255, 102, 0, 0.1);
   }
 }
 

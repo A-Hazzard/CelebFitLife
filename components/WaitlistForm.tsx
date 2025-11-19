@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 interface WaitlistFormProps {
-  variant?: "mobile" | "desktop" | "inline";
+  variant?: "mobile" | "desktop" | "inline" | "hero";
 }
 
 export default function WaitlistForm({ variant = "desktop" }: WaitlistFormProps) {
@@ -53,19 +53,34 @@ export default function WaitlistForm({ variant = "desktop" }: WaitlistFormProps)
     }
   };
 
-  const inputClasses =
-    variant === "mobile"
-      ? "bg-gray-700 text-white px-4 py-3 rounded-lg text-sm"
-      : variant === "inline"
-      ? "flex-1 bg-gray-700 text-white px-4 py-3 rounded-lg text-sm"
-      : "flex-1 bg-gray-700 text-white px-4 py-3 rounded-lg text-sm";
+  const sharedInput =
+    "text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed";
 
-  const containerClasses =
-    variant === "mobile"
-      ? "flex flex-col gap-3"
-      : variant === "inline"
-      ? "flex flex-col md:flex-row gap-3 md:gap-4"
-      : "flex gap-4";
+  const inputClasses = (() => {
+    switch (variant) {
+      case "mobile":
+        return `${sharedInput} bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-base`;
+      case "inline":
+        return `${sharedInput} flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm`;
+      case "hero":
+        return `${sharedInput} flex-1 bg-white/10 border border-white/20 rounded-xl px-5 py-3 text-base`;
+      default:
+        return `${sharedInput} flex-1 bg-white/10 border border-white/20 rounded-xl px-5 py-3 text-base`;
+    }
+  })();
+
+  const containerClasses = (() => {
+    switch (variant) {
+      case "mobile":
+        return "flex flex-col gap-3";
+      case "inline":
+        return "flex flex-col md:flex-row gap-3 md:gap-4";
+      case "hero":
+        return "flex flex-col sm:flex-row gap-3 sm:gap-4";
+      default:
+        return "flex flex-col sm:flex-row gap-3 sm:gap-4";
+    }
+  })();
 
   return (
     <form onSubmit={handleSubmit} className="w-full">
@@ -83,7 +98,7 @@ export default function WaitlistForm({ variant = "desktop" }: WaitlistFormProps)
         <button
           type="submit"
           disabled={loading}
-          className="group bg-white text-black px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 hover:bg-orange-500 hover:text-white hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 w-full md:w-auto"
+          className="cursor-pointer group w-full md:w-auto bg-gradient-to-r from-orange-500 to-orange-400 text-black font-semibold px-6 py-3 rounded-xl text-base shadow-lg shadow-orange-500/40 transition-all duration-300 hover:from-orange-400 hover:to-orange-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
         >
           {loading ? "Processing..." : "Join Waitlist"}
         </button>
@@ -91,7 +106,7 @@ export default function WaitlistForm({ variant = "desktop" }: WaitlistFormProps)
       {error && (
         <p className="mt-3 text-red-400 text-sm text-center">{error}</p>
       )}
-      {variant === "mobile" || variant === "desktop" ? (
+      {variant === "mobile" || variant === "desktop" || variant === "hero" ? (
         <p className="text-gray-300 text-sm text-center mt-4">
           First live sessions drops soon. Reserve your spot now.
         </p>
