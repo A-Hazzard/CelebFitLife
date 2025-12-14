@@ -5,6 +5,15 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { Download, Users, Vote, DollarSign, TrendingUp, LogOut, Info, ChevronLeft, ChevronRight, FileSpreadsheet } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { exportDashboardPDF, exportDashboardExcel } from "@/lib/utils/exportUtils";
+import {
+  DashboardSkeleton,
+  DashboardHeaderSkeleton,
+  MetricsCardsSkeleton,
+  RevenueChartSkeleton,
+  VoteChartSkeleton,
+  DeviceChartSkeleton,
+  RecentActivityTableSkeleton
+} from "@/components/ui/skeletons/DashboardSkeletons";
 
 // Types
 type MetricsData = {
@@ -12,7 +21,6 @@ type MetricsData = {
   totalVotes: number;
   totalRevenue: number;
   conversionRate: number;
-  // votePercentages now contains objects like { name: 'Alex', paid: 10, waitlist: 5 }
   votePercentages: Array<{ name: string; paid: number; waitlist: number }>; 
   deviceDistribution: Array<{ name: string; value: number }>;
   recentActivity: Array<{ email: string; status: string; date: string; paidAt?: string }>; 
@@ -73,11 +81,13 @@ export default function AdminDashboard() {
   }, [limit, router]);
 
   useEffect(() => {
-    fetchMetrics(page);
-    // Poll every 60s for updates without resetting page ideally, but for now simple poll
-    const interval = setInterval(() => fetchMetrics(page), 60000); 
-    return () => clearInterval(interval);
-  }, [fetchMetrics, page]);
+    if (!checkingAuth) {
+      fetchMetrics(page);
+      // Poll every 60s for updates
+      const interval = setInterval(() => fetchMetrics(page), 60000); 
+      return () => clearInterval(interval);
+    }
+  }, [fetchMetrics, page, checkingAuth]);
 
   const handleExportPDF = async () => {
     if (!data) {
@@ -129,23 +139,19 @@ export default function AdminDashboard() {
 
   const handleLogout = async () => {
       try {
-        // Call logout API to clear server-side httpOnly cookie
         const res = await fetch("/api/admin/logout", {
           method: "POST",
-          credentials: 'include', // Include cookies in request
+          credentials: 'include',
         });
         
         if (res.ok) {
-          // Redirect to login after successful logout
           router.push("/admin/login");
         } else {
           console.error("Logout failed");
-          // Still redirect even if API call fails
           router.push("/admin/login");
         }
       } catch (error) {
         console.error("Logout error:", error);
-        // Redirect to login even if there's an error
         router.push("/admin/login");
       }
   };
@@ -156,22 +162,30 @@ export default function AdminDashboard() {
       }
   };
 
-  // Don't render until auth check is complete
+  // Show auth skeleton instead of spinner
   if (checkingAuth) {
+    return <DashboardSkeleton />;
+  }
+
+  // Show full skeleton while initial load
+  if (loading && !data) {
     return (
-      <div className="min-h-screen bg-black text-white p-8 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+      <div className="min-h-screen bg-[#050505] text-white p-4 md:p-8 font-sans overflow-x-hidden">
+        <div className="max-w-7xl mx-auto space-y-8 w-full">
+          <DashboardHeaderSkeleton />
+          <MetricsCardsSkeleton />
+          <RevenueChartSkeleton />
+          <div className="grid md:grid-cols-2 gap-8">
+            <VoteChartSkeleton />
+            <DeviceChartSkeleton />
+          </div>
+          <RecentActivityTableSkeleton />
+        </div>
       </div>
     );
   }
 
-  if (loading && !data) return (
-    <div className="min-h-screen bg-black text-white p-8 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
-    </div>
-  );
-
-  if (!data) return <div className="min-h-screen bg-black text-white p-8">Error loading data. Please try refreshing.</div>;
+  if (!data) return <div className="min-h-screen bg-[#050505] text-white p-8">Error loading data. Please try refreshing.</div>;
 
   const PIE_COLORS = ["#fb923c", "#3b82f6", "#ef4444"]; // Orange, Blue, Red
 
@@ -206,7 +220,6 @@ export default function AdminDashboard() {
                 } else if (value === 'pdf') {
                   handleExportPDF();
                 }
-                // Reset select after action
                 e.target.value = '';
               }}
               className="w-full px-4 py-3 bg-gray-800 text-white rounded-xl border border-gray-700 hover:bg-gray-700 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium"
@@ -235,81 +248,90 @@ export default function AdminDashboard() {
         </div>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard 
-            title="Total Revenue" 
-            value={`$${data.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} 
-            icon={<DollarSign className="w-5 h-5 text-green-400" />} 
-            change="Real-time from Stripe"
-            trend="up"
-            info="Total captured revenue from all paid memberships (Waitlist + Subscriptions)."
-          />
-          <MetricCard 
-            title="Total Users" 
-            value={data.totalUsers.toLocaleString()} 
-            icon={<Users className="w-5 h-5 text-blue-400" />} 
-            change="+12% growth"
-            trend="up"
-            info="Total number of registered users including both paid and waitlist status."
-          />
-          <MetricCard 
-            title="Conversion Rate" 
-            value={`${data.conversionRate}%`} 
-            icon={<TrendingUp className="w-5 h-5 text-orange-400" />} 
-            change="Above Industry Avg"
-            trend="up"
-            info="Percentage of total registered users who have converted to a paid membership."
-          />
-           <MetricCard 
-            title="Total Votes" 
-            value={data.totalVotes.toLocaleString()} 
-            icon={<Vote className="w-5 h-5 text-purple-400" />} 
-            change="High Engagement"
-            trend="neutral"
-            info="Weighted vote count. Paid members votes count significantly more than waitlist votes."
-          />
-        </div>
+        {data ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <MetricCard 
+              title="Total Revenue" 
+              value={`$${data.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} 
+              icon={<DollarSign className="w-5 h-5 text-green-400" />} 
+              change="Real-time from Stripe"
+              trend="up"
+              info="Total captured revenue from all paid memberships (Waitlist + Subscriptions)."
+            />
+            <MetricCard 
+              title="Total Users" 
+              value={data.totalUsers.toLocaleString()} 
+              icon={<Users className="w-5 h-5 text-blue-400" />} 
+              change="+12% growth"
+              trend="up"
+              info="Total number of registered users including both paid and waitlist status."
+            />
+            <MetricCard 
+              title="Conversion Rate" 
+              value={`${data.conversionRate}%`} 
+              icon={<TrendingUp className="w-5 h-5 text-orange-400" />} 
+              change="Above Industry Avg"
+              trend="up"
+              info="Percentage of total registered users who have converted to a paid membership."
+            />
+            <MetricCard 
+              title="Total Votes" 
+              value={data.totalVotes.toLocaleString()} 
+              icon={<Vote className="w-5 h-5 text-purple-400" />} 
+              change="High Engagement"
+              trend="neutral"
+              info="Weighted vote count. Paid members votes count significantly more than waitlist votes."
+            />
+          </div>
+        ) : (
+          <MetricsCardsSkeleton />
+        )}
 
         {/* Revenue Trend - Line Chart */}
-        <div className="bg-gray-900/40 p-6 rounded-3xl border border-white/5 backdrop-blur-sm">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-green-500" /> Revenue Growth
-            </h2>
-            <div className="overflow-x-auto -mx-6 px-6">
-                <div className="h-[300px] min-w-[600px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={data.revenueTrend}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                            <XAxis dataKey="date" stroke="#6b7280" tick={{fontSize: 12}} />
-                            <YAxis stroke="#6b7280" tick={{fontSize: 12}} tickFormatter={(val) => `$${val}`} />
-                            <Tooltip 
-                                contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
-                                itemStyle={{ color: '#fff' }}
-                                formatter={(value: number) => [`$${value}`, "Revenue"]}
-                            />
-                            <Line type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={3} dot={{r: 4, fill: '#10b981'}} activeDot={{ r: 6 }} />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-        </div>
+        {data ? (
+          <div className="bg-gray-900/40 p-6 rounded-3xl border border-white/5 backdrop-blur-sm">
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-green-500" /> Revenue Growth
+              </h2>
+              <div className="overflow-x-auto -mx-6 px-6">
+                  <div className="h-[300px] min-w-[600px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={data.revenueTrend}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                              <XAxis dataKey="date" stroke="#6b7280" tick={{fontSize: 12}} />
+                              <YAxis stroke="#6b7280" tick={{fontSize: 12}} tickFormatter={(val) => `$${val}`} />
+                              <Tooltip 
+                                  contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
+                                  itemStyle={{ color: '#fff' }}
+                                  formatter={(value: number) => [`$${value}`, "Revenue"]}
+                              />
+                              <Line type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={3} dot={{r: 4, fill: '#10b981'}} activeDot={{ r: 6 }} />
+                          </LineChart>
+                      </ResponsiveContainer>
+                  </div>
+              </div>
+          </div>
+        ) : (
+          <RevenueChartSkeleton />
+        )}
 
         {/* Charts Section */}
         <div className="grid md:grid-cols-2 gap-8">
             {/* Voting Distribution - Stacked Chart */}
-            <div className="bg-gray-900/40 p-6 rounded-3xl border border-white/5 backdrop-blur-sm">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                    <h2 className="text-xl font-bold">Vote Distribution (Stacked)</h2>
-                    <div className="flex gap-4 text-xs flex-wrap">
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 bg-orange-500 rounded-sm"></div> Paid Member</div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 bg-gray-600 rounded-sm"></div> Waitlist</div>
-                    </div>
-                </div>
-                {/* Desktop: Horizontal bars (vertical layout) */}
-                <div className="hidden md:block">
-                <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={data.votePercentages} layout="vertical" margin={{ right: 20 }}>
+            {data ? (
+              <div className="bg-gray-900/40 p-6 rounded-3xl border border-white/5 backdrop-blur-sm">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                      <h2 className="text-xl font-bold">Vote Distribution (Stacked)</h2>
+                      <div className="flex gap-4 text-xs flex-wrap">
+                          <div className="flex items-center gap-2"><div className="w-3 h-3 bg-orange-500 rounded-sm"></div> Paid Member</div>
+                          <div className="flex items-center gap-2"><div className="w-3 h-3 bg-gray-600 rounded-sm"></div> Waitlist</div>
+                      </div>
+                  </div>
+                  {/* Desktop: Horizontal bars (vertical layout) */}
+                  <div className="hidden md:block">
+                  <div className="h-[300px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={data.votePercentages} layout="vertical" margin={{ right: 20 }}>
                                  <CartesianGrid strokeDasharray="3 3" stroke="#333" horizontal={false} />
                                 <XAxis type="number" stroke="#6b7280" tick={{fontSize: 12}} />
                                 <YAxis type="category" dataKey="name" stroke="#6b7280" tick={{fontSize: 12}} width={100} />
@@ -324,71 +346,80 @@ export default function AdminDashboard() {
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
-                </div>
-                {/* Mobile: Vertical bars (horizontal layout) */}
-                <div className="block md:hidden">
-                    <div className="h-[400px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={data.votePercentages} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                                <XAxis 
-                                    type="category" 
-                                    dataKey="name" 
-                                    stroke="#6b7280" 
-                                    tick={{fontSize: 11}} 
-                                    angle={-45}
-                                    textAnchor="end"
-                                    height={80}
-                                />
-                                <YAxis type="number" stroke="#6b7280" tick={{fontSize: 12}} />
-                            <Tooltip 
-                                    contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
-                                itemStyle={{ color: '#fff' }}
-                                    cursor={{fill: 'transparent'}}
-                                />
-                                {/* Stacked Bars - vertical */}
-                                <Bar dataKey="waitlist" stackId="a" fill="#4b5563" radius={[0, 0, 0, 0]} name="Waitlist Vote" />
-                                <Bar dataKey="paid" stackId="a" fill="#f97316" radius={[6, 6, 0, 0]} name="Paid Member Vote" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                    </div>
-                </div>
-            </div>
+                  </div>
+                  {/* Mobile: Vertical bars (horizontal layout) */}
+                  <div className="block md:hidden">
+                      <div className="h-[400px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={data.votePercentages} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                                  <XAxis 
+                                      type="category" 
+                                      dataKey="name" 
+                                      stroke="#6b7280" 
+                                      tick={{fontSize: 11}} 
+                                      angle={-45}
+                                      textAnchor="end"
+                                      height={80}
+                                  />
+                                  <YAxis type="number" stroke="#6b7280" tick={{fontSize: 12}} />
+                              <Tooltip 
+                                      contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
+                                  itemStyle={{ color: '#fff' }}
+                                      cursor={{fill: 'transparent'}}
+                                  />
+                                  {/* Stacked Bars - vertical */}
+                                  <Bar dataKey="waitlist" stackId="a" fill="#4b5563" radius={[0, 0, 0, 0]} name="Waitlist Vote" />
+                                  <Bar dataKey="paid" stackId="a" fill="#f97316" radius={[6, 6, 0, 0]} name="Paid Member Vote" />
+                          </BarChart>
+                      </ResponsiveContainer>
+                      </div>
+                  </div>
+              </div>
+            ) : (
+              <VoteChartSkeleton />
+            )}
 
             {/* Device/User Stats */}
-            <div className="bg-gray-900/40 p-6 rounded-3xl border border-white/5 backdrop-blur-sm">
-                <h2 className="text-xl font-bold mb-6">User Devices</h2>
-                 <div className="h-[300px] w-full flex items-center justify-center">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={data.deviceDistribution}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={80}
-                                outerRadius={110}
-                                paddingAngle={5}
-                                dataKey="value"
-                            >
-                                {data.deviceDistribution.map((entry, index: number) => (
-                                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip 
-                                 contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
-                                 itemStyle={{ color: '#fff' }}
-                            />
-                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
+            {data ? (
+              <div className="bg-gray-900/40 p-6 rounded-3xl border border-white/5 backdrop-blur-sm">
+                  <h2 className="text-xl font-bold mb-6">User Devices</h2>
+                   <div className="h-[300px] w-full flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                              <Pie
+                                  data={data.deviceDistribution}
+                                  cx="50%"
+                                  cy="50%"
+                                  innerRadius={80}
+                                  outerRadius={110}
+                                  paddingAngle={5}
+                                  dataKey="value"
+                              >
+                                  {data.deviceDistribution.map((entry, index: number) => (
+                                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                                  ))}
+                              </Pie>
+                              <Tooltip 
+                                   contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
+                                   itemStyle={{ color: '#fff' }}
+                              />
+                              <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                          </PieChart>
+                      </ResponsiveContainer>
+                  </div>
+              </div>
+            ) : (
+              <DeviceChartSkeleton />
+            )}
         </div>
 
-        {/* Recent Activity Table with Pagination */}
+        {/* Recent Activity - Table on Desktop, Cards on Mobile */}
         <div className="bg-gray-900/40 p-6 rounded-3xl border border-white/5 backdrop-blur-sm">
             <h2 className="text-xl font-bold mb-6">Recent Signups</h2>
-            <div className="overflow-x-auto">
+            
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="border-b border-gray-800 text-gray-400 text-sm uppercase tracking-wider">
@@ -421,17 +452,47 @@ export default function AdminDashboard() {
                 </table>
             </div>
 
+            {/* Mobile Cards */}
+            <div className="block md:hidden space-y-4">
+                {data.recentActivity && data.recentActivity.map((user, i: number) => (
+                    <div key={i} className="bg-gray-800/30 p-4 rounded-xl border border-white/5">
+                        <div className="space-y-3">
+                            <p className="font-medium text-gray-200 text-sm">{user.email}</p>
+                            <div className="flex justify-between items-center">
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
+                                    user.status === 'paid' 
+                                    ? 'bg-green-500/10 text-green-400 border-green-500/20' 
+                                    : 'bg-gray-800 text-gray-400 border-gray-700'
+                                }`}>
+                                    {user.status === 'paid' ? 'Paid Member' : 'Waitlist'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between text-xs text-gray-500">
+                                <div>
+                                    <span className="text-gray-400">Joined: </span>
+                                    {new Date(user.date).toLocaleDateString()}
+                                </div>
+                                <div>
+                                    <span className="text-gray-400">Paid: </span>
+                                    {user.paidAt ? new Date(user.paidAt).toLocaleDateString() : '-'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
             {/* Pagination Controls */}
             {data.pagination && (
-                <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/5 text-sm text-gray-400">
-                    <div>
+                <div className="flex flex-col sm:flex-row items-center justify-between mt-6 pt-4 border-t border-white/5 text-sm text-gray-400 gap-4">
+                    <div className="text-center sm:text-left">
                         Showing <span className="text-white font-medium">{((page - 1) * limit) + 1}</span> to <span className="text-white font-medium">{Math.min(page * limit, data.pagination.totalItems)}</span> of <span className="text-white font-medium">{data.pagination.totalItems}</span>
                     </div>
                     <div className="flex gap-2">
                         <button 
                             onClick={() => handlePageChange(page - 1)}
                             disabled={page === 1}
-                            className="bg-white/5 hover:bg-white/10 p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="bg-white/5 hover:bg-white/10 p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </button>
@@ -441,7 +502,7 @@ export default function AdminDashboard() {
                         <button 
                             onClick={() => handlePageChange(page + 1)}
                             disabled={page === data.pagination.totalPages}
-                            className="bg-white/5 hover:bg-white/10 p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="bg-white/5 hover:bg-white/10 p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
                         >
                             <ChevronRight className="w-4 h-4" />
                         </button>
