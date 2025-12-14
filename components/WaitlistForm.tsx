@@ -10,11 +10,14 @@ export default function WaitlistForm({ variant = "desktop" }: WaitlistFormProps)
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
+  const [isNewUser, setIsNewUser] = useState<boolean | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    setEmailSent(false);
 
     try {
       // Validate email
@@ -24,7 +27,7 @@ export default function WaitlistForm({ variant = "desktop" }: WaitlistFormProps)
         return;
       }
 
-      // Call API to create waitlist entry and get Stripe checkout URL
+      // Call API to create waitlist entry and send verification email
       const response = await fetch("/api/waitlist", {
         method: "POST",
         headers: {
@@ -39,11 +42,13 @@ export default function WaitlistForm({ variant = "desktop" }: WaitlistFormProps)
         throw new Error(data.error || "Something went wrong");
       }
 
-      if (data.url) {
-        // Redirect to Stripe Checkout
-        window.location.href = data.url;
+      if (data.success) {
+        // Show success message instead of redirecting
+        setEmailSent(true);
+        setIsNewUser(data.data?.isNewUser ?? null);
+        setLoading(false);
       } else {
-        throw new Error("No checkout URL received");
+        throw new Error(data.error || "Something went wrong");
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Failed to join waitlist. Please try again.";
@@ -106,7 +111,28 @@ export default function WaitlistForm({ variant = "desktop" }: WaitlistFormProps)
       {error && (
         <p className="mt-3 text-red-400 text-sm text-center">{error}</p>
       )}
-      {variant === "mobile" || variant === "desktop" || variant === "hero" ? (
+      {emailSent && (
+        <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
+          <p className="text-green-400 text-sm text-center font-semibold mb-2">
+            ✓ Verification email sent!
+          </p>
+          <p className="text-gray-300 text-sm text-center">
+            {isNewUser === false ? (
+              <>
+                Please check your inbox at <span className="text-white font-medium">{email}</span> and click the verification link to verify your email address.
+              </>
+            ) : (
+              <>
+                Please check your inbox at <span className="text-white font-medium">{email}</span> and click the verification link to complete your registration.
+              </>
+            )}
+          </p>
+          <p className="text-gray-400 text-xs text-center mt-2">
+            Didn&apos;t receive the email? Check your spam folder or try again.
+          </p>
+        </div>
+      )}
+      {!emailSent && (variant === "mobile" || variant === "desktop" || variant === "hero") ? (
         <p className="text-gray-300 text-sm text-center mt-4">
           First live sessions drops soon. Reserve your spot now.
         </p>

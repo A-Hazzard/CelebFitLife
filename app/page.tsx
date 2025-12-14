@@ -765,13 +765,13 @@ export default function Home() {
           <nav className="flex flex-wrap justify-center lg:justify-start gap-4 md:gap-8 mb-6 md:mb-8">
             <button 
               onClick={() => openModal('features')}
-              className="text-gray-300 hover:text-white text-sm md:text-base transition-all duration-300 hover:scale-105"
+              className="text-gray-300 hover:text-white text-sm md:text-base transition-all duration-300 hover:scale-105 cursor-pointer"
             >
               Features
             </button>
             <button 
               onClick={() => openModal('how-it-works')}
-              className="text-gray-300 hover:text-white text-sm md:text-base transition-all duration-300 hover:scale-105"
+              className="text-gray-300 hover:text-white text-sm md:text-base transition-all duration-300 hover:scale-105 cursor-pointer"
             >
               How it works
             </button>

@@ -90,8 +90,41 @@ body {
     box-shadow: 0 0 5px rgba(255, 165, 0, 0.3);
   }
   50% {
-    box-shadow: 0 0 20px rgba(255, 165, 0, 0.6), 0 0 30px rgba(255, 165, 0, 0.4);
+    box-shadow: 0 0 20px rgba(255, 165, 0, 0.6);
   }
+}
+
+@keyframes flame {
+  0% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-10px) translateX(5px) scale(1.2);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-20px) translateX(-5px) scale(0.8);
+    opacity: 0;
+  }
+}
+
+@keyframes gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 3s ease infinite;
+}
+
+.animate-flame {
+  animation: flame 1.5s ease-in-out infinite;
 }
 
 @keyframes slideInUp {
@@ -145,4 +178,13 @@ body {
 
 .animate-scale-in {
   animation: scaleIn 0.4s ease-out;
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 3s ease infinite;
+}
+
+.animate-flame {
+  animation: flame 1.5s ease-in-out infinite;
 }

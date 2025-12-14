@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import Waitlist from "../lib/models/waitlist";
+import User from "../lib/models/user";
 import connectDB from "../lib/models/db";
-import { stripe } from "@/lib/stripe";
 import { rateLimitErrors, recordError, recordSuccess, getClientIdentifier } from "../lib/rateLimit";
+import { sendEmail, generateVerificationEmail } from "@/lib/email";
+import crypto from "crypto";
 
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL as string;
 
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
     const clientId = getClientIdentifier(request);
 
     // Check rate limit before processing
-    const errorLimit = rateLimitErrors(clientId, 5);
+    const errorLimit = rateLimitErrors(clientId);
     if (!errorLimit.allowed) {
       return NextResponse.json(
         {
@@ -91,232 +92,96 @@ export async function POST(request: Request) {
       );
     }
 
-    const existingUser = await Waitlist.findOne({ email: sanitizedEmail });
+    // Get origin from request headers for dynamic link generation
+    const origin = request.headers.get('origin') || 
+                   request.headers.get('referer')?.split('/').slice(0, 3).join('/') ||
+                   APP_BASE_URL?.trim() ||
+                   'https://celebfitlife.vercel.app';
 
-    if (existingUser) {
-      // Check if user has a pending checkout that can be resumed
-      if (existingUser.paymentStatus === 'pending' && existingUser.stripeCheckoutId) {
-        try {
-          // Check if the checkout session is still valid
-          const session = await stripe.checkout.sessions.retrieve(existingUser.stripeCheckoutId);
-          
-          // If session is still open (not expired or completed), return the existing URL
-          // NOTE: Resuming checkout doesn't count against rate limit
-          if (session.status === 'open') {
-            console.log(`Resuming checkout for existing user: ${sanitizedEmail}`);
-            // Reset error count on successful resume
-            recordSuccess(clientId);
-            return NextResponse.json(
-              {
-                success: true,
-                url: session.url,
-                resumed: true,
-              },
-              { status: 200 }
-            );
-          }
-          
-          // If session expired or was canceled, update status and create new session
-          if (session.status === 'expired' || (session.status === 'complete' && session.payment_status !== 'paid')) {
-            console.log(`Previous checkout expired for: ${sanitizedEmail}, creating new session`);
-            // Will fall through to create new session below
-          }
-        } catch (error) {
-          console.error("Error checking existing checkout session:", error);
-          // If we can't retrieve the session, create a new one
-        }
-      } else if (existingUser.paymentStatus === 'paid') {
-        // User already paid - this is an error, check rate limit first
-        const errorLimit = rateLimitErrors(clientId, 5);
-        
-        if (!errorLimit.allowed) {
-          return Response.json(
-            {
-              error: "Email Already Registered",
-              rateLimited: true,
-              retryAfter: Math.ceil((errorLimit.resetTime - Date.now()) / 1000),
-              timeoutMinutes: errorLimit.timeoutMinutes,
-            },
-            { 
-              status: 429,
-              headers: {
-                "Retry-After": Math.ceil((errorLimit.resetTime - Date.now()) / 1000).toString(),
-              }
-            }
-          );
-        }
-        
-        // Record the error and check if we should timeout
-        const errorResult = recordError(clientId);
-        
-        if (errorResult.shouldTimeout) {
-          return Response.json(
-            {
-              error: "Email Already Registered",
-              rateLimited: true,
-              retryAfter: Math.ceil((errorResult.resetTime - Date.now()) / 1000),
-              timeoutMinutes: errorResult.timeoutMinutes,
-            },
-            { 
-              status: 429,
-              headers: {
-                "Retry-After": Math.ceil((errorResult.resetTime - Date.now()) / 1000).toString(),
-              }
-            }
-          );
-        }
-        
-        return Response.json(
-          {
-            error: "Email Already Registered",
-          },
-          { status: 409 }
-        );
-      }
-      // If status is 'unpaid', 'failed', or 'refunded', allow creating new checkout
-    }
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenExpiry = new Date();
+    verificationTokenExpiry.setHours(verificationTokenExpiry.getHours() + 24); // 24 hour expiry
 
-    // Check if Stripe is configured
-    const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-    if (!STRIPE_SECRET_KEY) {
-      console.error("STRIPE_SECRET_KEY is not configured");
-      return NextResponse.json(
-        {
-          error: "Payment system not configured",
-        },
-        { status: 500 }
-      );
-    }
+    const existingUser = await User.findOne({ email: sanitizedEmail });
+    const isNewUser = !existingUser;
 
-    // Use existing entry if it exists and isn't paid, otherwise create new
-    let waitlistEntry = existingUser;
+    // Use existing entry if it exists, otherwise create new
+    let user = existingUser;
     
-    if (!waitlistEntry || waitlistEntry.paymentStatus === 'paid') {
-      waitlistEntry = await Waitlist.create({
+    if (!user) {
+      // Create new user with isVerified: false
+      user = await User.create({
         email: sanitizedEmail,
         paymentStatus: "unpaid",
+        isVerified: false,
+        verificationToken,
+        verificationTokenExpiry,
+        ip: (request.headers.get("x-forwarded-for") ?? "127.0.0.1").split(",")[0],
+        userAgent: request.headers.get("user-agent") || "Unknown",
+        country: "Unknown", // Placeholder for GeoIP
+        city: "Unknown",
+        deviceType: (request.headers.get("user-agent") || "").toLowerCase().includes("mobile") ? "Mobile" : "Desktop"
       });
+      console.log(`Created new user: ${sanitizedEmail}`);
     } else {
-      // Update existing entry to reset status if needed
-      waitlistEntry = await Waitlist.findByIdAndUpdate(
-        waitlistEntry._id,
-        { paymentStatus: "unpaid" },
+      // For existing users, always send verification email (re-verification)
+      // Update verification token even if already verified (allows re-verification)
+      user = await User.findByIdAndUpdate(
+        user._id,
+        {
+          verificationToken,
+          verificationTokenExpiry,
+          // Reset payment status to unpaid if not paid (allows retrying)
+          ...(user.paymentStatus !== 'paid' && { paymentStatus: "unpaid" })
+        },
         { new: true }
       );
+      console.log(`Sending verification email to existing user: ${sanitizedEmail}`);
     }
 
-    const baseUrl = APP_BASE_URL?.trim();
-    if (!baseUrl || !baseUrl.startsWith("http")) {
-      console.error(
-        "NEXT_PUBLIC_APP_URL must be a valid URL starting with http:// or https://"
-      );
+    // Send verification email
+    try {
+      const emailOptions = generateVerificationEmail(sanitizedEmail, verificationToken, origin, isNewUser);
+      const emailSent = await sendEmail(emailOptions);
+      
+      if (!emailSent) {
+        console.error(`Failed to send verification email to: ${sanitizedEmail}`);
+        // Don't fail the request, but log the error
+      } else {
+        console.log(`Verification email sent to: ${sanitizedEmail}`);
+      }
+    } catch (error) {
+      console.error(`Error sending verification email to ${sanitizedEmail}:`, error);
+      // Don't fail the request, but log the error
+    }
+
+    // Ensure user exists before returning
+    if (!user) {
       return NextResponse.json(
-        {
-          error: "Server configuration error",
-        },
+        { error: "Failed to create user" },
         { status: 500 }
       );
     }
 
-    // Ensure waitlistEntry exists
-    if (!waitlistEntry) {
-      return NextResponse.json(
-        { error: "Failed to create waitlist entry" },
-        { status: 500 }
-      );
-    }
-
-    // Get or create $1 price
-    const WAITLIST_PRICE_ID = process.env.STRIPE_WAITLIST_PRICE_ID;
-
-    if (!WAITLIST_PRICE_ID) {
-      // Create product and price if not exists
-      const product = await stripe.products.create({
-        name: "CelebFitLife Waitlist Access",
-        description:
-          "Join the exclusive waitlist for live celebrity fitness sessions",
-      });
-
-      const price = await stripe.prices.create({
-        product: product.id,
-        unit_amount: 100, // $1.00 in cents
-        currency: "usd",
-      });
-
-      // Use the created price ID
-      const session = await stripe.checkout.sessions.create({
-        line_items: [
-          {
-            price: price.id,
-            quantity: 1,
-          },
-        ],
-        mode: "payment",
-        success_url: `${APP_BASE_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${APP_BASE_URL}/?canceled=true`,
-        client_reference_id: String(waitlistEntry._id),
-        customer_email: sanitizedEmail,
-        metadata: {
-          waitlist_id: String(waitlistEntry._id),
-          email: sanitizedEmail,
-        },
-      });
-
-      // Update entry with checkout session ID
-      await Waitlist.findByIdAndUpdate(waitlistEntry._id, {
-        stripeCheckoutId: session.id,
-        paymentStatus: "pending",
-      });
-
-      // Record success - reset error count
-      recordSuccess(clientId);
-
-      return NextResponse.json(
-        {
-          success: true,
-          url: session.url,
-        },
-        { status: 201 }
-      );
-    }
-
-    // Create Checkout Session with existing price
-    const session = await stripe.checkout.sessions.create({
-      line_items: [
-        {
-          price: WAITLIST_PRICE_ID,
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
-      success_url: `${APP_BASE_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${APP_BASE_URL}/?canceled=true`,
-      client_reference_id: String(waitlistEntry._id),
-      customer_email: sanitizedEmail,
-      metadata: {
-        waitlist_id: String(waitlistEntry._id),
-        email: sanitizedEmail,
-      },
-    });
-
-    // Update entry with checkout session ID
-    await Waitlist.findByIdAndUpdate(waitlistEntry._id, {
-      stripeCheckoutId: session.id,
-      paymentStatus: "pending",
-    });
-
-    // Record success - reset error count
     recordSuccess(clientId);
-
     return NextResponse.json(
       {
         success: true,
-        url: session.url,
+        message: isNewUser 
+          ? "Verification email sent. Please check your inbox to complete your registration."
+          : "Verification email sent. Please check your inbox to verify your email address.",
+        data: {
+            id: user._id,
+            email: user.email,
+            isVerified: user.isVerified,
+            isNewUser: isNewUser
+        }
       },
       { status: 201 }
     );
   } catch (error: unknown) {
-    console.error("Waitlist API Error:", error);
+    console.error("User API Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -338,17 +203,17 @@ export async function GET() {
       );
     }
 
-    const [allWaitlists, count] = await Promise.all([
-      Waitlist.find({}),
-      Waitlist.countDocuments({}),
+    const [allUsers, count] = await Promise.all([
+      User.find({}),
+      User.countDocuments({}),
     ]);
 
-    console.log("Got Waitlist");
+    console.log("Got Users");
     return NextResponse.json(
       {
         success: true,
         data: {
-          allWaitlists,
+          allUsers,
           count,
         },
       },

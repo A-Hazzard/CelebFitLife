@@ -14,7 +14,7 @@ export default function ContactSupportButton({ userEmail }: ContactSupportButton
     <>
       <button
         onClick={() => setShowForm(true)}
-        className="bg-gray-800 text-white px-8 py-3 rounded-lg font-medium transition-all duration-300 hover:bg-gray-700 hover:scale-105 border border-gray-700"
+        className="bg-gray-800 text-white px-8 py-3 rounded-lg font-medium transition-all duration-300 hover:bg-gray-700 hover:scale-105 border border-gray-700 cursor-pointer"
       >
         Contact Support
       </button>

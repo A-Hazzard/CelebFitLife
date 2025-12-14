@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { stripe } from '@/lib/stripe';
 import connectDB from '@/app/api/lib/models/db';
-import Waitlist from '@/app/api/lib/models/waitlist';
+import User from '@/app/api/lib/models/user';
 import ContactSupportButton from '@/components/ContactSupportButton';
 import { sendEmail, generateWelcomeEmail } from '@/lib/email';
 
@@ -31,13 +31,13 @@ export default async function SuccessPage({
 
     // Update database to ensure it's marked as paid
     await connectDB();
-    let waitlistEntry = null;
+    let user = null;
     if (session.client_reference_id) {
-      // First, get the current entry to check email status
-      waitlistEntry = await Waitlist.findById(session.client_reference_id);
+      // First, get the current user to check email status
+      user = await User.findById(session.client_reference_id);
       
       // Update payment status
-      waitlistEntry = await Waitlist.findByIdAndUpdate(
+      user = await User.findByIdAndUpdate(
         session.client_reference_id,
         {
           paymentStatus: 'paid',
@@ -48,14 +48,14 @@ export default async function SuccessPage({
       );
     }
 
-    const customerEmail = session.customer_details?.email || session.customer_email || waitlistEntry?.email;
+    const customerEmail = session.customer_details?.email || session.customer_email || user?.email;
 
     // Validate email format before sending
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const isValidEmail = customerEmail && emailRegex.test(customerEmail);
 
     // Send confirmation email if not already sent (prevents duplicate on refresh)
-    if (isValidEmail && waitlistEntry && !waitlistEntry.waitListEmailSent) {
+    if (isValidEmail && user && !user.waitListEmailSent) {
       try {
         // Send email to the customer's email address
         const emailOptions = generateWelcomeEmail(customerEmail);
@@ -63,7 +63,7 @@ export default async function SuccessPage({
         
         if (emailSent) {
           // Mark email as sent to prevent duplicate on refresh
-          await Waitlist.findByIdAndUpdate(waitlistEntry._id, {
+          await User.findByIdAndUpdate(user._id, {
             waitListEmailSent: true
           });
           console.log(`✅ Confirmation email sent from success page to: ${customerEmail}`);
@@ -74,10 +74,10 @@ export default async function SuccessPage({
         console.error('❌ Error sending confirmation email from success page:', emailError);
         // Don't fail the page if email fails
       }
-    } else if (waitlistEntry?.waitListEmailSent) {
+    } else if (user?.waitListEmailSent) {
       console.log(`ℹ️ Confirmation email already sent to: ${customerEmail} (skipping to prevent duplicate)`);
     } else if (!customerEmail) {
-      console.warn(`⚠️ No customer email found in session or waitlist entry`);
+      console.warn(`⚠️ No customer email found in session or user entry`);
     } else if (!isValidEmail) {
       console.error(`❌ Invalid email address format: ${customerEmail} - Email not sent`);
     }
@@ -145,12 +145,30 @@ export default async function SuccessPage({
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                href="/"
-                className="bg-white text-black px-8 py-3 rounded-lg font-medium transition-all duration-300 hover:bg-orange-500 hover:text-white hover:scale-105"
-              >
-                Back to Home
-              </Link>
+              {customerEmail ? (
+                user?.votedFor ? (
+                  <Link
+                    href={`/onboarding/options?email=${encodeURIComponent(customerEmail)}`}
+                    className="bg-orange-500 text-black px-8 py-3 rounded-lg font-bold transition-all duration-300 hover:bg-orange-400 hover:scale-105 cursor-pointer"
+                  >
+                    Preview
+                  </Link>
+                ) : (
+                  <Link
+                    href={`/onboarding/vote?email=${encodeURIComponent(customerEmail)}`}
+                    className="bg-orange-500 text-black px-8 py-3 rounded-lg font-bold transition-all duration-300 hover:bg-orange-400 hover:scale-105 cursor-pointer"
+                  >
+                    Vote Now
+                  </Link>
+                )
+              ) : (
+                <Link
+                  href="/"
+                  className="bg-white text-black px-8 py-3 rounded-lg font-medium transition-all duration-300 hover:bg-orange-500 hover:text-white hover:scale-105 cursor-pointer"
+                >
+                  Back to Home
+                </Link>
+              )}
               <ContactSupportButton userEmail={customerEmail || undefined} />
             </div>
           </div>

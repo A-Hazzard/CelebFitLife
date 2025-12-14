@@ -100,7 +100,7 @@ export default function ContactSupportForm({ onClose, userEmail }: ContactSuppor
             </div>
             <button
               onClick={onClose}
-              className="ml-4 p-2 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0"
+              className="ml-4 p-2 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
               aria-label="Close"
             >
               <svg
@@ -191,7 +191,7 @@ export default function ContactSupportForm({ onClose, userEmail }: ContactSuppor
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-gray-800 text-white px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 hover:bg-gray-700 hover:scale-105 border border-gray-700"
+              className="flex-1 bg-gray-800 text-white px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 hover:bg-gray-700 hover:scale-105 border border-gray-700 cursor-pointer"
             >
               Cancel
             </button>

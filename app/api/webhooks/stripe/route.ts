@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { stripe } from '@/lib/stripe';
 import connectDB from '../../lib/models/db';
-import Waitlist from '../../lib/models/waitlist';
+import User from '../../lib/models/user';
 import Stripe from 'stripe';
 import { sendEmail, generateWelcomeEmail } from '@/lib/email';
 export const runtime = 'nodejs';
@@ -56,9 +56,9 @@ export async function POST(request: Request) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         
-        // Update waitlist entry to paid
+        // Update user to paid
         if (session.client_reference_id) {
-          const updatedEntry = await Waitlist.findByIdAndUpdate(
+          const updatedUser = await User.findByIdAndUpdate(
             session.client_reference_id,
             {
               paymentStatus: 'paid',
@@ -68,18 +68,18 @@ export async function POST(request: Request) {
             { new: true }
           );
           
-          console.log(`✅ Payment successful for waitlist entry: ${session.client_reference_id}`);
+          console.log(`✅ Payment successful for user: ${session.client_reference_id}`);
           
           // Send welcome email (only if not already sent)
-          const customerEmail = session.customer_details?.email || session.customer_email || updatedEntry?.email;
-          if (customerEmail && updatedEntry && !updatedEntry.waitListEmailSent) {
+          const customerEmail = session.customer_details?.email || session.customer_email || updatedUser?.email;
+          if (customerEmail && updatedUser && !updatedUser.waitListEmailSent) {
             try {
               // Send email to the customer's email address
               const emailOptions = generateWelcomeEmail(customerEmail);
               const emailSent = await sendEmail(emailOptions);
               if (emailSent) {
                 // Mark email as sent
-                await Waitlist.findByIdAndUpdate(updatedEntry._id, {
+                await User.findByIdAndUpdate(updatedUser._id, {
                   waitListEmailSent: true
                 });
                 console.log(`✅ Welcome email sent to: ${customerEmail}`);
@@ -90,10 +90,10 @@ export async function POST(request: Request) {
               console.error('❌ Error sending welcome email:', emailError);
               // Don't fail the webhook if email fails
             }
-          } else if (updatedEntry?.waitListEmailSent) {
+          } else if (updatedUser?.waitListEmailSent) {
             console.log(`ℹ️ Confirmation email already sent to: ${customerEmail} (skipping duplicate)`);
           } else {
-            console.warn(`⚠️ Cannot send email: customerEmail=${customerEmail}, updatedEntry=${!!updatedEntry}, emailSent=${updatedEntry?.waitListEmailSent}`);
+            console.warn(`⚠️ Cannot send email: customerEmail=${customerEmail}, updatedUser=${!!updatedUser}, emailSent=${updatedUser?.waitListEmailSent}`);
           }
         }
         break;
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         
         if (session.client_reference_id) {
-          const updatedEntry = await Waitlist.findByIdAndUpdate(
+          const updatedUser = await User.findByIdAndUpdate(
             session.client_reference_id,
             {
               paymentStatus: 'paid',
@@ -114,15 +114,15 @@ export async function POST(request: Request) {
           );
           
           // Send welcome email for async payments too (only if not already sent)
-          const customerEmail = session.customer_details?.email || session.customer_email || updatedEntry?.email;
-          if (customerEmail && updatedEntry && !updatedEntry.waitListEmailSent) {
+          const customerEmail = session.customer_details?.email || session.customer_email || updatedUser?.email;
+          if (customerEmail && updatedUser && !updatedUser.waitListEmailSent) {
             try {
               // Send email to the customer's email address
               const emailOptions = generateWelcomeEmail(customerEmail);
               const emailSent = await sendEmail(emailOptions);
               if (emailSent) {
                 // Mark email as sent
-                await Waitlist.findByIdAndUpdate(updatedEntry._id, {
+                await User.findByIdAndUpdate(updatedUser._id, {
                   waitListEmailSent: true
                 });
                 console.log(`✅ Welcome email sent to: ${customerEmail}`);
@@ -141,13 +141,13 @@ export async function POST(request: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         
         if (session.client_reference_id) {
-          await Waitlist.findByIdAndUpdate(
+          await User.findByIdAndUpdate(
             session.client_reference_id,
             {
               paymentStatus: 'failed'
             }
           );
-          console.log(`❌ Async payment failed for waitlist entry: ${session.client_reference_id}`);
+          console.log(`❌ Async payment failed for user: ${session.client_reference_id}`);
         }
         break;
       }
@@ -156,14 +156,14 @@ export async function POST(request: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         
         if (session.client_reference_id) {
-          await Waitlist.findByIdAndUpdate(
+          await User.findByIdAndUpdate(
             session.client_reference_id,
             {
               paymentStatus: 'unpaid',
               stripeCheckoutId: null // Clear expired checkout ID
             }
           );
-          console.log(`⏰ Checkout session expired for waitlist entry: ${session.client_reference_id}`);
+          console.log(`⏰ Checkout session expired for user: ${session.client_reference_id}`);
         }
         break;
       }
@@ -171,9 +171,9 @@ export async function POST(request: Request) {
       case 'charge.refunded': {
         const charge = event.data.object as Stripe.Charge;
         
-        // Find waitlist entry by customer ID
+        // Find user by customer ID
         if (charge.customer) {
-          await Waitlist.findOneAndUpdate(
+          await User.findOneAndUpdate(
             { stripeCustomerId: charge.customer as string },
             {
               paymentStatus: 'refunded'

@@ -340,3 +340,243 @@ You're receiving this email because you joined our waitlist.
   };
 }
 
+/**
+ * Generate verification email template
+ * 
+ * @param customerEmail - The email address of the user
+ * @param token - The verification token
+ * @param origin - The origin URL for the verification link
+ * @param isNewUser - Whether this is a new user (true) or existing user (false)
+ * @returns EmailOptions object ready to send
+ */
+export function generateVerificationEmail(customerEmail: string, token: string, origin: string, isNewUser: boolean = true): EmailOptions {
+  const verificationLink = `${origin}/api/verify-email?token=${token}`;
+  
+  // Different messaging for new vs existing users
+  const greeting = isNewUser 
+    ? 'Thank you for joining <span class="highlight">CelebFitLife</span>! To complete your registration and access all features, please verify your email address by clicking the button below.'
+    : 'Please verify your email address to continue accessing CelebFitLife. Click the button below to verify your email.';
+  
+  const securityNote = isNewUser
+    ? 'This verification link will expire in 24 hours. If you didn\'t create an account with CelebFitLife, you can safely ignore this email.'
+    : 'This verification link will expire in 24 hours.';
+  
+  const postVerification = isNewUser
+    ? 'Once verified, you\'ll be able to choose your path and start your fitness journey with celebrity trainers!'
+    : 'Once verified, you\'ll regain access to all CelebFitLife features and can continue your fitness journey.';
+  
+  return {
+    to: customerEmail,
+    subject: 'Verify Your Email - CelebFitLife',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+              line-height: 1.6;
+              color: #1a1a1a;
+              background-color: #f5f5f5;
+              padding: 40px 20px;
+            }
+            .email-container {
+              max-width: 600px;
+              margin: 0 auto;
+              background-color: #ffffff;
+              border-radius: 12px;
+              overflow: hidden;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .header {
+              background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+              color: #ffffff;
+              padding: 48px 40px;
+              text-align: center;
+            }
+            .logo {
+              font-size: 32px;
+              font-weight: 700;
+              color: #ffffff;
+              margin-bottom: 16px;
+              letter-spacing: -1px;
+            }
+            .logo span {
+              color: #FF7F30;
+            }
+            .header-subtitle {
+              font-size: 16px;
+              color: #cccccc;
+              margin-top: 8px;
+            }
+            .content {
+              padding: 40px;
+            }
+            .greeting {
+              font-size: 18px;
+              color: #1a1a1a;
+              margin-bottom: 24px;
+              font-weight: 500;
+            }
+            .main-text {
+              font-size: 16px;
+              color: #4a4a4a;
+              margin-bottom: 32px;
+              line-height: 1.7;
+            }
+            .highlight {
+              color: #FF7F30;
+              font-weight: 600;
+            }
+            .cta-container {
+              text-align: center;
+              margin: 40px 0;
+            }
+            .cta-button {
+              display: inline-block;
+              background-color: #000000;
+              color: #ffffff;
+              padding: 16px 40px;
+              text-decoration: none;
+              border-radius: 12px;
+              font-weight: 600;
+              font-size: 16px;
+              transition: all 0.3s ease;
+              border: 2px solid #000000;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .cta-button:hover {
+              background-color: #FF7F30;
+              color: #000000;
+              border-color: #FF7F30;
+              transform: translateY(-2px);
+              box-shadow: 0 6px 12px rgba(255, 127, 48, 0.3);
+            }
+            @media (max-width: 480px) {
+              .cta-button {
+                padding: 14px 32px;
+                font-size: 15px;
+                display: block;
+                width: 100%;
+                max-width: 280px;
+                margin: 0 auto;
+              }
+            }
+            .security-note {
+              background: #f9f9f9;
+              border-left: 4px solid #FF7F30;
+              padding: 16px;
+              margin: 32px 0;
+              border-radius: 4px;
+            }
+            .security-note p {
+              font-size: 14px;
+              color: #666;
+              margin: 0;
+            }
+            .closing {
+              font-size: 16px;
+              color: #4a4a4a;
+              margin-top: 32px;
+              line-height: 1.7;
+            }
+            .signature {
+              margin-top: 24px;
+              font-size: 16px;
+              color: #1a1a1a;
+            }
+            .signature strong {
+              color: #000;
+            }
+            .footer {
+              background-color: #f9f9f9;
+              padding: 32px 40px;
+              text-align: center;
+              border-top: 1px solid #e5e5e5;
+            }
+            .footer-text {
+              font-size: 13px;
+              color: #999;
+              line-height: 1.6;
+            }
+            .footer-link {
+              color: #FF7F30;
+              text-decoration: none;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="email-container">
+            <div class="header">
+              <div class="logo">Celeb<span>Fit</span>Life</div>
+              <div class="header-subtitle">Train with Your Idol. Live.</div>
+            </div>
+            
+            <div class="content">
+              <div class="greeting">Hi there! 👋</div>
+              
+              <div class="main-text">
+                ${greeting}
+              </div>
+              
+              <div class="cta-container">
+                <a href="${verificationLink}" class="cta-button">
+                  Verify Email Address
+                </a>
+              </div>
+              
+              <div class="security-note">
+                <p><strong>Security Note:</strong> ${securityNote}</p>
+              </div>
+              
+              <div class="closing">
+                ${postVerification}
+              </div>
+              
+              <div class="signature">
+                Best regards,<br>
+                <strong>The CelebFitLife Team</strong>
+              </div>
+            </div>
+            
+            <div class="footer">
+              <div class="footer-text">
+                <p>© ${new Date().getFullYear()} CelebFitLife. All rights reserved.</p>
+                <p style="margin-top: 8px;">You're receiving this email because you signed up for CelebFitLife.</p>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `
+Verify Your Email - CelebFitLife
+
+Hi there!
+
+${isNewUser 
+  ? 'Thank you for joining CelebFitLife! To complete your registration and access all features, please verify your email address by clicking the link below:'
+  : 'Please verify your email address to continue accessing CelebFitLife. Click the link below to verify your email:'}
+
+${verificationLink}
+
+Security Note: ${securityNote}
+
+${postVerification}
+
+Best regards,
+The CelebFitLife Team
+
+© ${new Date().getFullYear()} CelebFitLife. All rights reserved.
+You're receiving this email because you signed up for CelebFitLife.
+    `,
+  };
+}
+

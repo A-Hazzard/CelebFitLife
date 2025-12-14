@@ -21,8 +21,7 @@ const TIMEOUT_DURATIONS = [
 ];
 
 export function rateLimitErrors(
-  identifier: string,
-  _maxErrors: number = 5
+  identifier: string
 ): { allowed: boolean; resetTime: number; timeoutMinutes: number } {
   const now = Date.now();
   const key = identifier;
