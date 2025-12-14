@@ -200,12 +200,12 @@ export default function AdminDashboard() {
             >
                 <FileSpreadsheet className="w-4 h-4" /> Export Excel
             </button>
-            <button 
-                onClick={handleExportPDF}
+          <button 
+            onClick={handleExportPDF}
                 className="flex items-center gap-2 px-6 py-2 bg-white text-black rounded-xl font-bold hover:bg-gray-200 transition-colors shadow-lg shadow-white/5 cursor-pointer"
-            >
+          >
                 <Download className="w-4 h-4" /> Export PDF
-            </button>
+          </button>
           </div>
         </div>
 
@@ -227,7 +227,7 @@ export default function AdminDashboard() {
             trend="up"
             info="Total number of registered users including both paid and waitlist status."
           />
-           <MetricCard 
+          <MetricCard 
             title="Conversion Rate" 
             value={`${data.conversionRate}%`} 
             icon={<TrendingUp className="w-5 h-5 text-orange-400" />} 
@@ -235,7 +235,7 @@ export default function AdminDashboard() {
             trend="up"
             info="Percentage of total registered users who have converted to a paid membership."
           />
-          <MetricCard 
+           <MetricCard 
             title="Total Votes" 
             value={data.totalVotes.toLocaleString()} 
             icon={<Vote className="w-5 h-5 text-purple-400" />} 
@@ -282,8 +282,8 @@ export default function AdminDashboard() {
                 </div>
                 {/* Desktop: Horizontal bars (vertical layout) */}
                 <div className="hidden md:block">
-                    <div className="h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={data.votePercentages} layout="vertical" margin={{ right: 20 }}>
                                  <CartesianGrid strokeDasharray="3 3" stroke="#333" horizontal={false} />
                                 <XAxis type="number" stroke="#6b7280" tick={{fontSize: 12}} />
@@ -316,16 +316,16 @@ export default function AdminDashboard() {
                                     height={80}
                                 />
                                 <YAxis type="number" stroke="#6b7280" tick={{fontSize: 12}} />
-                                <Tooltip 
+                            <Tooltip 
                                     contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
-                                    itemStyle={{ color: '#fff' }}
+                                itemStyle={{ color: '#fff' }}
                                     cursor={{fill: 'transparent'}}
                                 />
                                 {/* Stacked Bars - vertical */}
                                 <Bar dataKey="waitlist" stackId="a" fill="#4b5563" radius={[0, 0, 0, 0]} name="Waitlist Vote" />
                                 <Bar dataKey="paid" stackId="a" fill="#f97316" radius={[6, 6, 0, 0]} name="Paid Member Vote" />
-                            </BarChart>
-                        </ResponsiveContainer>
+                        </BarChart>
+                    </ResponsiveContainer>
                     </div>
                 </div>
             </div>
@@ -453,8 +453,8 @@ function MetricCard({ title, value, icon, change, trend = 'neutral', info }: Met
                 </div>
                 <div className="flex items-center gap-2">
                     <span className={`text-xs font-bold ${trendColor} ${trendBg} px-2 py-1 rounded-full`}>
-                        {change}
-                    </span>
+                    {change}
+                </span>
                     {info && <InfoTooltip text={info} />}
                 </div>
             </div>

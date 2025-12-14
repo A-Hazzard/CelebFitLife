@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
     // Check if user already voted
     if (user.votedFor) {
-        return NextResponse.json({ error: "You have already voted." }, { status: 403 });
+         return NextResponse.json({ error: "You have already voted." }, { status: 403 });
     }
 
     // Map ID to Name
