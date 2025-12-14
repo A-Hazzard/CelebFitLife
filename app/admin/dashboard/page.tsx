@@ -180,32 +180,57 @@ export default function AdminDashboard() {
       <div className="max-w-7xl mx-auto space-y-8 w-full">
         
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 bg-gray-900/40 p-4 md:p-6 rounded-3xl border border-white/5 backdrop-blur-sm w-full">
-          <div>
-            <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-red-500">
-                Executive Dashboard
-            </h1>
-            <p className="text-gray-400 mt-1">Real-time Performance & Growth Metrics</p>
-          </div>
-          <div className="flex gap-3">
-             <button 
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-gray-300 rounded-xl hover:bg-gray-700 transition-colors text-sm font-medium cursor-pointer"
+        <div className="flex flex-col gap-4 mb-8 bg-gray-900/40 p-4 md:p-6 rounded-3xl border border-white/5 backdrop-blur-sm w-full">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 w-full">
+            <div className="w-full md:w-auto">
+              <h1 className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-red-500">
+                  Executive Dashboard
+              </h1>
+              <p className="text-gray-400 mt-1 text-sm md:text-base">Real-time Performance & Growth Metrics</p>
+            </div>
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-gray-300 rounded-xl hover:bg-gray-700 transition-colors text-sm font-medium cursor-pointer w-full md:w-auto justify-center md:justify-start"
             >
                 <LogOut className="w-4 h-4" /> Logout
             </button>
-            <button 
-                onClick={handleExportExcel}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl font-bold hover:bg-green-500 transition-colors shadow-lg shadow-green-600/20 cursor-pointer"
+          </div>
+          
+          {/* Mobile Export Select */}
+          <div className="md:hidden w-full">
+            <select
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === 'excel') {
+                  handleExportExcel();
+                } else if (value === 'pdf') {
+                  handleExportPDF();
+                }
+                // Reset select after action
+                e.target.value = '';
+              }}
+              className="w-full px-4 py-3 bg-gray-800 text-white rounded-xl border border-gray-700 hover:bg-gray-700 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium"
             >
-                <FileSpreadsheet className="w-4 h-4" /> Export Excel
+              <option value="">Export Dashboard...</option>
+              <option value="excel">Export as Excel</option>
+              <option value="pdf">Export as PDF</option>
+            </select>
+          </div>
+
+          {/* Desktop Export Buttons */}
+          <div className="hidden md:flex gap-3">
+            <button 
+              onClick={handleExportExcel}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl font-bold hover:bg-green-500 transition-colors shadow-lg shadow-green-600/20 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Export Excel
             </button>
-          <button 
-            onClick={handleExportPDF}
-                className="flex items-center gap-2 px-6 py-2 bg-white text-black rounded-xl font-bold hover:bg-gray-200 transition-colors shadow-lg shadow-white/5 cursor-pointer"
-          >
-                <Download className="w-4 h-4" /> Export PDF
-          </button>
+            <button 
+              onClick={handleExportPDF}
+              className="flex items-center gap-2 px-6 py-2 bg-white text-black rounded-xl font-bold hover:bg-gray-200 transition-colors shadow-lg shadow-white/5 cursor-pointer"
+            >
+              <Download className="w-4 h-4" /> Export PDF
+            </button>
           </div>
         </div>
 
