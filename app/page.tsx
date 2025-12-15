@@ -40,19 +40,19 @@ export default function Home() {
     },
     {
       question: "How often are the live sessions available?",
-      answer: "Live sessions are scheduled regularly throughout the week with different celebrity trainers. Due to the exclusive nature of these sessions, they are limited and run on a first-come, first-served basis. Once you join our waitlist, you&apos;ll receive notifications about upcoming sessions."
+      answer: "Live sessions are scheduled regularly throughout the week with different celebrity trainers. Sessions are limited and operate on a first-come, first-served basis to maintain their exclusive nature. Join our waitlist to receive notifications about upcoming sessions."
     },
     {
       question: "Can I replay or rewatch the live sessions?",
-      answer: "No, that&apos;s what makes CelebFitLife special! Our sessions are live and gone - no replays, no reruns. This creates an exclusive, one-time experience that encourages you to show up and give your all. The limited nature adds to the excitement and motivation."
+      answer: "No, and that's what makes CelebFitLife special! Our sessions are exclusively live with no replays or reruns. This creates a one-of-a-kind experience that motivates you to show up and commit fully. The limited-time nature enhances the excitement and encourages maximum engagement."
     },
     {
       question: "What equipment do I need for the workouts?",
-      answer: "Most sessions are designed to be accessible with minimal equipment. Basic workouts might only require your bodyweight, while others may suggest simple items like dumbbells, resistance bands, or a yoga mat. We&apos;ll notify you about any specific equipment needs before each session."
+      answer: "Most sessions are designed to be accessible with minimal equipment. Basic workouts might only require your bodyweight, while others may suggest simple items like dumbbells, resistance bands, or a yoga mat. We'll notify you about any specific equipment needs before each session."
     },
     {
       question: "How do I interact with the celebrity trainers during sessions?",
-      answer: "During live sessions, you can ask questions through our chat feature, and trainers will respond in real-time. They&apos;ll provide form corrections, motivation, and answer your fitness questions throughout the workout and during cooldown periods."
+      answer: "During live sessions, you can ask questions through our chat feature, and trainers will respond in real-time. They'll provide form corrections, motivation, and answer your fitness questions throughout the workout and during cooldown periods."
     }
   ];
 
@@ -510,7 +510,7 @@ export default function Home() {
                   <span className="text-orange-500">LIVE</span>
                 </h1>
                 <p className="text-base sm:text-lg lg:text-xl text-gray-300 leading-relaxed mb-8">
-                  Be part of the world&apos;s first live celebrity training experience. Limited sports. No reruns.
+                  Be part of the world's first live celebrity training experience. Limited spots. No reruns.
                   Claim a seat in the first live cohorts before they disappear.
                 </p>
                 <div className="max-w-md">
@@ -535,7 +535,7 @@ export default function Home() {
           <h3 className="text-sm md:text-base text-white uppercase tracking-widest mb-4">WHAT IS CELEBFIT?</h3>
           <div className="max-w-4xl mx-auto">
             <p className="text-gray-300 text-lg md:text-xl leading-relaxed">
-              CelebFitLife is the world&apos;s first live celebrity fitness platform. We connect fitness enthusiasts with celebrity trainers and athletes through real-time, interactive workout sessions. You can join live streams, ask questions, get personalized feedback, and train alongside your fitness idols in exclusive, limited-time sessions.
+              CelebFitLife is the world's first live celebrity fitness platform. We connect fitness enthusiasts with celebrity trainers and athletes through real-time, interactive workout sessions. You can join live streams, ask questions, get personalized feedback, and train alongside your fitness idols in exclusive, limited-time sessions.
             </p>
           </div>
         </div>
@@ -620,7 +620,7 @@ export default function Home() {
           <div>
             <h2 ref={howItWorksTitleRef} className="text-3xl md:text-5xl font-bold text-gray-100 mb-6 md:mb-8">HOW IT WORKS?</h2>
             <p ref={howItWorksDescRef} className="text-gray-300 text-base md:text-lg leading-relaxed mb-6 md:mb-8">
-              Join the world&apos;s first live celebrity fitness experience. Connect with your favorite athletes and trainers in real-time, interactive workout sessions that push you to achieve your personal best.
+              Join the world's first live celebrity fitness experience. Connect with your favorite athletes and trainers in real-time, interactive workout sessions that push you to achieve your personal best.
             </p>
             <div ref={howItWorksFormRef}>
               <WaitlistForm variant="hero" />
@@ -688,7 +688,7 @@ export default function Home() {
                 </svg>
                 <div>
                   <h3 className="text-xl md:text-2xl font-bold text-gray-100 mb-2">Watch your Gains</h3>
-                  <p className="text-gray-300 text-base md:text-lg">Track your progress and celebrate your transformation as you achieve the fitness goals you&apos;ve always dreamed of reaching.</p>
+                  <p className="text-gray-300 text-base md:text-lg">Track your progress and celebrate your transformation as you achieve the fitness goals you've always dreamed of reaching.</p>
                 </div>
               </div>
             </div>
@@ -955,7 +955,7 @@ export default function Home() {
                         <h3 className="text-xl md:text-2xl font-bold text-white mb-2 uppercase">Watch Your Gains</h3>
                         <p className="text-gray-300 text-base md:text-lg leading-relaxed">
                           Track your progress and celebrate your transformation as you achieve the fitness goals 
-                          you&apos;ve always dreamed of reaching with celebrity guidance.
+                          you've always dreamed of reaching with celebrity guidance.
                         </p>
                       </div>
                     </div>
