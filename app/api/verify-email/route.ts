@@ -12,7 +12,7 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import User from "../lib/models/user";
+import * as User from "../lib/models/user";
 import connectDB from "../lib/models/db";
 
 /**
@@ -45,20 +45,12 @@ export async function GET(req: NextRequest) {
     // ============================================================================
     // STEP 2: Connect to database
     // ============================================================================
-    const db = await connectDB();
-
-    if (!db) {
-      console.error("Database connection failed");
-      const redirectUrl = new URL('/', req.url);
-      redirectUrl.searchParams.set('error', 'server_error');
-      redirectUrl.searchParams.set('message', 'Server error. Please try again later.');
-      return NextResponse.redirect(redirectUrl);
-    }
+    await connectDB();
 
     // ============================================================================
     // STEP 3: Find user by verification token
     // ============================================================================
-    const user = await User.findOne({ verificationToken: token });
+    const user = await User.findOneByVerificationToken(token);
 
     if (!user) {
       console.error(`User not found for token: ${token.substring(0, 8)}...`);
@@ -74,7 +66,7 @@ export async function GET(req: NextRequest) {
     if (user.verificationTokenExpiry && new Date() > user.verificationTokenExpiry) {
       console.error(`Token expired for user: ${user.email}`);
       // Clear expired token
-      await User.findByIdAndUpdate(user._id, {
+      await User.updateById(user._id, {
         verificationToken: null,
         verificationTokenExpiry: null
       });
@@ -88,7 +80,7 @@ export async function GET(req: NextRequest) {
     // ============================================================================
     // STEP 5: Update user verification status
     // ============================================================================
-    await User.findByIdAndUpdate(user._id, {
+    await User.updateById(user._id, {
       isVerified: true,
       verificationToken: null, // Clear token after successful verification
       verificationTokenExpiry: null

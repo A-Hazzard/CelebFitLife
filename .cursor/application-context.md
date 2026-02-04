@@ -8,7 +8,7 @@ Before working on any part of the CelebFitLife platform, **always reference thes
 
 ### Setup & Configuration Documentation
 
-- **[SETUP.md](../SETUP.md)** - Complete setup guide including MongoDB, Stripe, Gmail configuration
+- **[FIREBASE_SETUP.md](../FIREBASE_SETUP.md)** - Firebase/Firestore setup guide
 - **[STRIPE_PRODUCTION_SETUP.md](../STRIPE_PRODUCTION_SETUP.md)** - Stripe test to production migration guide
 - **[WEBHOOK_SETUP_EXPLAINED.md](../WEBHOOK_SETUP_EXPLAINED.md)** - Webhook setup for local vs production
 - **[PAYMENT_TRACKING_IMPROVEMENTS.md](../PAYMENT_TRACKING_IMPROVEMENTS.md)** - Payment status tracking and cross-device support
@@ -47,8 +47,8 @@ CelebFitLife is a live-streaming fitness platform that connects fitness enthusia
 ### Technology Stack
 
 - **Frontend:** Next.js 15.5.3 with TypeScript, React 19
-- **Backend:** Next.js API Routes with MongoDB
-- **Database:** MongoDB with Mongoose ODM
+- **Backend:** Next.js API Routes
+- **Database:** Firebase Firestore
 - **Payments:** Stripe Checkout Sessions
 - **Email:** Nodemailer with Gmail SMTP
 - **Styling:** Tailwind CSS 4
@@ -63,9 +63,9 @@ celebfitlife/
 ├── app/                          # Next.js App Router
 │   ├── api/                     # Backend API routes
 │   │   ├── lib/                 # Shared backend utilities
-│   │   │   ├── models/          # Mongoose schemas
-│   │   │   │   ├── db.ts        # Database connection
-│   │   │   │   └── waitlist.ts  # Waitlist model
+│   │   │   ├── models/          # Firebase/Firestore models
+│   │   │   │   ├── db.ts        # Firebase connection
+│   │   │   │   └── user.ts      # User model & Firestore helpers
 │   │   │   └── rateLimit.ts     # Rate limiting implementation
 │   │   ├── waitlist/            # Waitlist API endpoint
 │   │   ├── contact/             # Contact form endpoint
@@ -173,7 +173,7 @@ interface IUser {
 - Email validation: Regex pattern matching
 - Input sanitization: Trim and lowercase emails
 - Webhook signature verification: Prevents fake webhook calls
-- Database validation: Mongoose schema validation
+- Database validation: Firestore document validation
 - Error handling: Comprehensive try-catch blocks
 - Type safety: Full TypeScript support
 
@@ -315,8 +315,10 @@ The system handles the following Stripe webhook events:
 ### Required Variables
 
 ```env
-# MongoDB Connection
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/celebfitlife
+# Firebase Connection (see FIREBASE_SETUP.md)
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 
 # Stripe Configuration
 STRIPE_SECRET_KEY=sk_test_... or sk_live_...

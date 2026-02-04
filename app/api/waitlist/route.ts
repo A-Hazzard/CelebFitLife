@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import User from "../lib/models/user";
+import * as User from "../lib/models/user";
 import connectDB from "../lib/models/db";
 import { rateLimitErrors, recordError, recordSuccess, getClientIdentifier } from "../lib/rateLimit";
 import { sendEmail, generateVerificationEmail } from "@/lib/email";
@@ -80,17 +80,7 @@ export async function POST(request: Request) {
 
     const sanitizedEmail = email.trim().toLowerCase();
 
-    const db = await connectDB();
-
-    if (!db) {
-      console.error("Network Error, Please Try Again Later.");
-      return NextResponse.json(
-        {
-          error: "Network Error, Please Try Again Later.",
-        },
-        { status: 200 }
-      );
-    }
+    await connectDB();
 
     // Get origin from request headers for dynamic link generation
     const origin = request.headers.get('origin') || 
@@ -103,7 +93,7 @@ export async function POST(request: Request) {
     const verificationTokenExpiry = new Date();
     verificationTokenExpiry.setHours(verificationTokenExpiry.getHours() + 24); // 24 hour expiry
 
-    const existingUser = await User.findOne({ email: sanitizedEmail });
+    const existingUser = await User.findOneByEmail(sanitizedEmail);
     const isNewUser = !existingUser;
 
     // Use existing entry if it exists, otherwise create new
@@ -111,7 +101,7 @@ export async function POST(request: Request) {
     
     if (!user) {
       // Create new user with isVerified: false
-      user = await User.create({
+      user = await User.createUser({
         email: sanitizedEmail,
         paymentStatus: "unpaid",
         isVerified: false,
@@ -127,16 +117,13 @@ export async function POST(request: Request) {
     } else {
       // For existing users, always send verification email (re-verification)
       // Update verification token even if already verified (allows re-verification)
-      user = await User.findByIdAndUpdate(
-        user._id,
-        {
-          verificationToken,
-          verificationTokenExpiry,
-          // Reset payment status to unpaid if not paid (allows retrying)
-          ...(user.paymentStatus !== 'paid' && { paymentStatus: "unpaid" })
-        },
-        { new: true }
-      );
+      const updated = await User.updateById(user._id, {
+        verificationToken,
+        verificationTokenExpiry,
+        // Reset payment status to unpaid if not paid (allows retrying)
+        ...(user.paymentStatus !== 'paid' && { paymentStatus: "unpaid" as const })
+      });
+      user = updated ?? user;
       console.log(`Sending verification email to existing user: ${sanitizedEmail}`);
     }
 
@@ -191,21 +178,11 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
-    const db = await connectDB();
-
-    if (!db) {
-      console.log("Network Error, Please Try Again Later.");
-      return NextResponse.json(
-        {
-          error: "Network Error, Please Try Again Later.",
-        },
-        { status: 500 }
-      );
-    }
+    await connectDB();
 
     const [allUsers, count] = await Promise.all([
-      User.find({}),
-      User.countDocuments({}),
+      User.findAll(),
+      User.countDocuments(),
     ]);
 
     console.log("Got Users");

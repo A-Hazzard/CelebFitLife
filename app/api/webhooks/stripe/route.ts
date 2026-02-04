@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { stripe } from '@/lib/stripe';
 import connectDB from '../../lib/models/db';
-import User from '../../lib/models/user';
+import * as User from '../../lib/models/user';
 import Stripe from 'stripe';
 import { sendEmail, generateWelcomeEmail } from '@/lib/email';
 export const runtime = 'nodejs';
@@ -58,14 +58,13 @@ export async function POST(request: Request) {
         
         // Update user to paid
         if (session.client_reference_id) {
-          const updatedUser = await User.findByIdAndUpdate(
+          const updatedUser = await User.updateById(
             session.client_reference_id,
             {
               paymentStatus: 'paid',
               stripeCheckoutId: session.id,
-              stripeCustomerId: session.customer as string || undefined
-            },
-            { new: true }
+              stripeCustomerId: (session.customer as string) || undefined
+            }
           );
           
           console.log(`✅ Payment successful for user: ${session.client_reference_id}`);
@@ -77,9 +76,9 @@ export async function POST(request: Request) {
               // Send email to the customer's email address
               const emailOptions = generateWelcomeEmail(customerEmail);
               const emailSent = await sendEmail(emailOptions);
-              if (emailSent) {
+              if (emailSent && updatedUser) {
                 // Mark email as sent
-                await User.findByIdAndUpdate(updatedUser._id, {
+                await User.updateById(updatedUser._id, {
                   waitListEmailSent: true
                 });
                 console.log(`✅ Welcome email sent to: ${customerEmail}`);
@@ -103,14 +102,13 @@ export async function POST(request: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         
         if (session.client_reference_id) {
-          const updatedUser = await User.findByIdAndUpdate(
+          const updatedUser = await User.updateById(
             session.client_reference_id,
             {
               paymentStatus: 'paid',
               stripeCheckoutId: session.id,
-              stripeCustomerId: session.customer as string || undefined
-            },
-            { new: true }
+              stripeCustomerId: (session.customer as string) || undefined
+            }
           );
           
           // Send welcome email for async payments too (only if not already sent)
@@ -120,9 +118,9 @@ export async function POST(request: Request) {
               // Send email to the customer's email address
               const emailOptions = generateWelcomeEmail(customerEmail);
               const emailSent = await sendEmail(emailOptions);
-              if (emailSent) {
+              if (emailSent && updatedUser) {
                 // Mark email as sent
-                await User.findByIdAndUpdate(updatedUser._id, {
+                await User.updateById(updatedUser._id, {
                   waitListEmailSent: true
                 });
                 console.log(`✅ Welcome email sent to: ${customerEmail}`);
@@ -141,12 +139,9 @@ export async function POST(request: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         
         if (session.client_reference_id) {
-          await User.findByIdAndUpdate(
-            session.client_reference_id,
-            {
-              paymentStatus: 'failed'
-            }
-          );
+          await User.updateById(session.client_reference_id, {
+            paymentStatus: 'failed'
+          });
           console.log(`❌ Async payment failed for user: ${session.client_reference_id}`);
         }
         break;
@@ -156,13 +151,10 @@ export async function POST(request: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         
         if (session.client_reference_id) {
-          await User.findByIdAndUpdate(
-            session.client_reference_id,
-            {
-              paymentStatus: 'unpaid',
-              stripeCheckoutId: null // Clear expired checkout ID
-            }
-          );
+          await User.updateById(session.client_reference_id, {
+            paymentStatus: 'unpaid',
+            stripeCheckoutId: null // Clear expired checkout ID
+          });
           console.log(`⏰ Checkout session expired for user: ${session.client_reference_id}`);
         }
         break;
@@ -173,12 +165,12 @@ export async function POST(request: Request) {
         
         // Find user by customer ID
         if (charge.customer) {
-          await User.findOneAndUpdate(
-            { stripeCustomerId: charge.customer as string },
-            {
+          const refundUser = await User.findOneByStripeCustomerId(charge.customer as string);
+          if (refundUser) {
+            await User.updateById(refundUser._id, {
               paymentStatus: 'refunded'
-            }
-          );
+            });
+          }
         }
         break;
       }

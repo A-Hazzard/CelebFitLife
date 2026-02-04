@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import User from "@/app/api/lib/models/user";
+import * as User from "@/app/api/lib/models/user";
 import connectDB from "@/app/api/lib/models/db";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
@@ -10,7 +10,7 @@ export async function POST(request: Request) {
 
     await connectDB();
 
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOneByEmailWithPassword(email);
 
     if (!user || user.role !== 'admin') {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });

@@ -1,53 +1,66 @@
-import mongoose from "mongoose";
+/**
+ * Firebase Admin DB Configuration
+ *
+ * Initializes Firebase Admin SDK and provides Firestore access.
+ * Uses connection caching to prevent multiple initializations during hot reloads.
+ *
+ * @module app/api/lib/models/db
+ */
 
-const MONGODB_URI = process.env.MONGODB_URI as string
+import admin from 'firebase-admin';
+import type { Firestore } from 'firebase-admin/firestore';
 
-if(!MONGODB_URI) throw new Error('Please define the MONGODB_URI environment variable inside .env.local')
+function getFirebaseConfig() {
+  const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
+  const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL;
+  const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY;
+
+  if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
+    throw new Error(
+      'Please define FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in .env.local'
+    );
+  }
+  return { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY };
+}
+
+function formatFirebasePrivateKey(key: string): string {
+  return key.replace(/\\n/g, '\n');
+}
+
+let firestoreInstance: Firestore | null = null;
 
 /**
- * Global is used here to maintain a cached connection across hot reloads
- * in development. This prevents connections growing exponentially
- * during API Route usage.
+ * Initialize Firebase Admin and return Firestore instance.
+ * Reuses existing connection across hot reloads.
  */
-interface MongooseCache {
-    conn: typeof mongoose | null;
-    promise: Promise<typeof mongoose> | null;
+function getFirestore(): Firestore {
+  if (!admin.apps.length) {
+    const config = getFirebaseConfig();
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: config.FIREBASE_PROJECT_ID,
+        clientEmail: config.FIREBASE_CLIENT_EMAIL,
+        privateKey: formatFirebasePrivateKey(config.FIREBASE_PRIVATE_KEY),
+      }),
+      projectId: config.FIREBASE_PROJECT_ID,
+    });
+    console.log('✅ Firebase connected successfully');
   }
-  
-  declare global {
-    var mongoose: MongooseCache | undefined;
+
+  if (!firestoreInstance) {
+    firestoreInstance = admin.firestore();
   }
-  
-  const cached: MongooseCache = global.mongoose || { conn: null, promise: null };
-  
-  if (!global.mongoose) {
-    global.mongoose = cached;
-  }
-  
-  async function connectDB() {
-    if (cached.conn) {
-      return cached.conn;
-    }
-  
-    if (!cached.promise) {
-      const opts = {
-        bufferCommands: false,
-      };
-  
-      cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongoose) => {
-        console.log('✅ MongoDB connected successfully');
-        return mongoose;
-      });
-    }
-  
-    try {
-      cached.conn = await cached.promise;
-    } catch (e) {
-      cached.promise = null;
-      throw e;
-    }
-  
-    return cached.conn;
-  }
-  
-  export default connectDB;
+
+  return firestoreInstance;
+}
+
+/**
+ * Connect to Firebase/Firestore.
+ * Returns Firestore instance for compatibility with existing code that awaited connectDB().
+ */
+async function connectDB(): Promise<Firestore> {
+  return getFirestore();
+}
+
+export default connectDB;
+export { getFirestore };

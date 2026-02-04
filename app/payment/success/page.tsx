@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { stripe } from '@/lib/stripe';
 import connectDB from '@/app/api/lib/models/db';
-import User from '@/app/api/lib/models/user';
+import * as User from '@/app/api/lib/models/user';
 import ContactSupportButton from '@/components/ContactSupportButton';
 import { sendEmail, generateWelcomeEmail } from '@/lib/email';
 
@@ -33,19 +33,12 @@ export default async function SuccessPage({
     await connectDB();
     let user = null;
     if (session.client_reference_id) {
-      // First, get the current user to check email status
-      user = await User.findById(session.client_reference_id);
-      
       // Update payment status
-      user = await User.findByIdAndUpdate(
-        session.client_reference_id,
-        {
-          paymentStatus: 'paid',
-          stripeCheckoutId: session.id,
-          stripeCustomerId: session.customer as string || undefined
-        },
-        { new: true }
-      );
+      user = await User.updateById(session.client_reference_id, {
+        paymentStatus: 'paid',
+        stripeCheckoutId: session.id,
+        stripeCustomerId: (session.customer as string) || undefined
+      });
     }
 
     const customerEmail = session.customer_details?.email || session.customer_email || user?.email;
@@ -61,9 +54,9 @@ export default async function SuccessPage({
         const emailOptions = generateWelcomeEmail(customerEmail);
         const emailSent = await sendEmail(emailOptions);
         
-        if (emailSent) {
+        if (emailSent && user) {
           // Mark email as sent to prevent duplicate on refresh
-          await User.findByIdAndUpdate(user._id, {
+          await User.updateById(user._id, {
             waitListEmailSent: true
           });
           console.log(`✅ Confirmation email sent from success page to: ${customerEmail}`);

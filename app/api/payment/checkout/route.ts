@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import User from "@/app/api/lib/models/user";
+import * as User from "@/app/api/lib/models/user";
 import connectDB from "@/app/api/lib/models/db";
 
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL as string;
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     }
 
     await connectDB();
-    const user = await User.findOne({ email });
+    const user = await User.findOneByEmail(email);
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       },
     });
 
-    await User.findByIdAndUpdate(user._id, {
+    await User.updateById(user._id, {
         stripeCheckoutId: session.id,
         paymentStatus: "pending",
     });

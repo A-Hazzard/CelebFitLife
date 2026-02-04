@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import User from "@/app/api/lib/models/user";
+import * as User from "@/app/api/lib/models/user";
 import connectDB from "@/app/api/lib/models/db";
 import Stripe from "stripe";
 
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     await connectDB();
     
     // 1. Fetch Global Metrics (Totals)
-    const allUsers = await User.find({});
+    const allUsers = await User.findAll();
     const totalUsers = allUsers.length;
     let paidUsersCount = 0;
     
@@ -105,10 +105,7 @@ export async function GET(request: Request) {
     // Note: If you want 'paidAt' sort, we might need a different index, but 'createdAt' is standard for "Recent Signups"
     // The user asked for "Date Paid" to be displayed, but usually lists are sorted by latest activity.
     // We'll keep sorting by createdAt for "New Signups", but display paidAt.
-    const paginatedUsers = await User.find({})
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit);
+    const paginatedUsers = await User.findWithPagination(skip, limit);
 
     const recentActivity = paginatedUsers.map(u => ({
         email: u.email,

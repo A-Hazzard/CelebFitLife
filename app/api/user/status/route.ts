@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import User from "../../lib/models/user";
+import * as User from "../../lib/models/user";
 import connectDB from "../../lib/models/db";
 
 export async function GET(request: Request) {
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     }
     
     await connectDB();
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const user = await User.findOneByEmail(email.toLowerCase().trim());
     
     if (!user) {
       return NextResponse.json({ 

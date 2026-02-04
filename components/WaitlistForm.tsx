@@ -1,59 +1,54 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface WaitlistFormProps {
   variant?: "mobile" | "desktop" | "inline" | "hero";
 }
 
 export default function WaitlistForm({ variant = "desktop" }: WaitlistFormProps) {
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [emailSent, setEmailSent] = useState(false);
-  const [isNewUser, setIsNewUser] = useState<boolean | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    setEmailSent(false);
 
     try {
-      // Validate email
+      // Basic validation
       if (!email || !email.includes("@")) {
         setError("Please enter a valid email address");
         setLoading(false);
         return;
       }
 
-      // Call API to create waitlist entry and send verification email
+      // Save email ONLY (no verification yet)
       const response = await fetch("/api/waitlist", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
+      if (!response.ok || !data.success) {
         throw new Error(data.error || "Something went wrong");
       }
 
-      if (data.success) {
-        // Show success message instead of redirecting
-        setEmailSent(true);
-        setIsNewUser(data.data?.isNewUser ?? null);
-        setLoading(false);
-      } else {
-        throw new Error(data.error || "Something went wrong");
-      }
+      // 🚀 IMMEDIATELY GO TO VOTING
+      router.push(`/onboarding/vote?email=${encodeURIComponent(email)}`);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to join waitlist. Please try again.";
-      console.error("Waitlist signup error:", errorMessage);
-      setError(errorMessage);
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to join waitlist. Please try again.";
+      console.error("Waitlist signup error:", message);
+      setError(message);
       setLoading(false);
     }
   };
@@ -108,36 +103,14 @@ export default function WaitlistForm({ variant = "desktop" }: WaitlistFormProps)
           {loading ? "Processing..." : "Join Waitlist"}
         </button>
       </div>
+
       {error && (
         <p className="mt-3 text-red-400 text-sm text-center">{error}</p>
       )}
-      {emailSent && (
-        <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
-          <p className="text-green-400 text-sm text-center font-semibold mb-2">
-            ✓ Verification email sent!
-          </p>
-          <p className="text-gray-300 text-sm text-center">
-            {isNewUser === false ? (
-              <>
-                Please check your inbox at <span className="text-white font-medium">{email}</span> and click the verification link to verify your email address.
-              </>
-            ) : (
-              <>
-                Please check your inbox at <span className="text-white font-medium">{email}</span> and click the verification link to complete your registration.
-              </>
-            )}
-          </p>
-          <p className="text-gray-400 text-xs text-center mt-2">
-            Didn&apos;t receive the email? Check your spam folder or try again.
-          </p>
-        </div>
-      )}
-      {!emailSent && (variant === "mobile" || variant === "desktop" || variant === "hero") ? (
-        <p className="text-gray-300 text-sm text-center mt-4">
-          First live sessions drops soon. Reserve your spot now.
-        </p>
-      ) : null}
+
+      <p className="text-gray-300 text-sm text-center mt-4">
+        First live session drops soon. Reserve your spot now.
+      </p>
     </form>
   );
 }
-

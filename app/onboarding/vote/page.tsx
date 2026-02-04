@@ -32,54 +32,33 @@ function VotePageContent() {
   const router = useRouter();
   const email = searchParams.get("email");
   const [votingFor, setVotingFor] = useState<string | null>(null);
-  const [verificationChecked, setVerificationChecked] = useState(false);
+ 
 
-  // Check verification status on mount
+
   useEffect(() => {
     if (!email) {
       router.push("/");
-      return;
     }
-
-    const checkVerification = async () => {
-      try {
-        const response = await fetch(`/api/user/status?email=${encodeURIComponent(email)}`);
-        const data = await response.json();
-        
-        if (response.ok && !data.isVerified) {
-          // Redirect to landing page if not verified
-          const redirectUrl = new URL('/', window.location.origin);
-          redirectUrl.searchParams.set('error', 'verification_required');
-          redirectUrl.searchParams.set('message', 'Please verify your email to access this page. Check your inbox for the verification link.');
-          router.push(redirectUrl.toString());
-          return;
-        }
-      } catch (error) {
-        console.error("Error checking verification:", error);
-      } finally {
-        setVerificationChecked(true);
-      }
-    };
-
-    checkVerification();
   }, [email, router]);
 
+  
   const handleVote = async (celebId: string) => {
     if (!email) return;
+  
     setVotingFor(celebId);
-
+  
     try {
       const response = await fetch("/api/vote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, candidateId: celebId }),
       });
-
+  
       const data = await response.json();
-      
+  
       if (data.success) {
-        // Redirect back to options page after successful vote
-        router.push(`/onboarding/options?email=${encodeURIComponent(email)}`);
+        // After Vote → Premium Upsell
+        router.push(`/onboarding/premium?email=${encodeURIComponent(email)}`);
       } else {
         alert(data.error || "Failed to vote");
       }
@@ -90,16 +69,8 @@ function VotePageContent() {
       setVotingFor(null);
     }
   };
+  
 
-  if (!email || !verificationChecked) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
 
 
   return (
@@ -203,3 +174,4 @@ export default function VotePage() {
     </Suspense>
   );
 }
+
