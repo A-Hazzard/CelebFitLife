@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { generateOrganizationSchema, generateWebSiteSchema } from "@/lib/seo/schema";
+import { NavigationRestorer } from "@/components/NavigationRestorer";
 
 const geist = Geist({
   variable: "--font-geist",
@@ -129,6 +131,9 @@ export default function RootLayout({
         />
       </head>
       <body className={`${geist.variable} antialiased bg-black text-white`}>
+        <Suspense fallback={null}>
+          <NavigationRestorer />
+        </Suspense>
         {children}
       </body>
     </html>
