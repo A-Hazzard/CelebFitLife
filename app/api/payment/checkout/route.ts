@@ -35,7 +35,7 @@ export async function POST(request: Request) {
  
        const price = await stripe.prices.create({
          product: product.id,
-         unit_amount: 100,
+         unit_amount: 1000,
          currency: "usd",
        });
        priceId = price.id;

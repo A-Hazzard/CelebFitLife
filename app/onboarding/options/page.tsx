@@ -99,7 +99,7 @@ function OnboardingOptionsContent() {
             </p>
 
             <p className="text-gray-400 mb-6">
-              We’ll notify you when results are in and when sessions begin.
+              We&apos;ll notify you when results are in and when sessions begin.
             </p>
 
             <button

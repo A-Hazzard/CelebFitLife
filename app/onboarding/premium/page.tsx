@@ -123,38 +123,38 @@ function PremiumOnboardingContent() {
         </div>
       </div>
 
-      {/* VERIFY EMAIL REMINDER MODAL */}
-      {showVerifyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#0f0f0f] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 text-center">
-            <h2 className="text-2xl font-bold mb-3">
-              One last step ✉️
-            </h2>
+     {/* VERIFY EMAIL REMINDER MODAL */}
+{showVerifyModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="bg-[#0f0f0f] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 text-center relative">
+      {/* Close button (X) */}
+      <button
+        onClick={() => setShowVerifyModal(false)}
+        className="absolute top-2 right-2 text-white text-xl"
+      >
+        &times; {/* This is the X symbol */}
+      </button>
 
-            <p className="text-gray-300 mb-6">
-              Please verify your email to confirm your vote and secure your spot.
-            </p>
+      <h2 className="text-2xl font-bold mb-3">
+        One last step ✉️
+      </h2>
 
-            <div className="flex flex-col gap-3">
-              <button
-               
-                onClick={() => router.push("/")}
-                
-                className="w-full py-3 bg-orange-500 hover:bg-orange-400 text-black font-bold rounded-xl transition-all"
-              >
-                Go Home
-              </button>
+      <p className="text-gray-300 mb-6">
+        Please verify your email to confirm your vote and secure your spot.
+      </p>
 
-              {/* <button
-                onClick={() => setShowVerifyModal(false)}
-                className="w-full py-3 text-gray-400 hover:text-white text-sm underline"
-              >
-                I’ll do it later
-              </button> */}
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="flex flex-col gap-3">
+        <button
+          onClick={() => router.push("/")}
+          className="w-full py-3 bg-orange-500 hover:bg-orange-400 text-black font-bold rounded-xl transition-all"
+        >
+          Go Home
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   );
 }
