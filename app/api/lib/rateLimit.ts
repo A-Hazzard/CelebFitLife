@@ -10,7 +10,17 @@ interface RateLimitStore {
   };
 }
 
+interface SignupRateLimitStore {
+  [key: string]: {
+    hourlySignups: number; // Number of signups in the current hour
+    dailySignups: number; // Number of signups in the current day
+    hourlyResetTime: number; // When the hourly window resets
+    dailyResetTime: number; // When the daily window resets
+  };
+}
+
 const store: RateLimitStore = {};
+const signupStore: SignupRateLimitStore = {};
 
 // Progressive timeout durations in milliseconds
 const TIMEOUT_DURATIONS = [
@@ -19,6 +29,79 @@ const TIMEOUT_DURATIONS = [
   10 * 60 * 1000,     // 10 minutes
   24 * 60 * 60 * 1000 // 24 hours (tomorrow)
 ];
+
+// Signup rate limiting constants
+const MAX_SIGNUPS_PER_HOUR = 5;
+const MAX_SIGNUPS_PER_DAY = 10;
+const HOUR_IN_MS = 60 * 60 * 1000; // 1 hour
+const DAY_IN_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Rate limiter for signups to prevent spam
+ * Enforces: max 5 signups per hour OR max 10 signups per day per IP
+ */
+export function rateLimitSignups(
+  identifier: string
+): { allowed: boolean; reason?: string; resetTime?: number; hourlyRemaining?: number; dailyRemaining?: number } {
+  const now = Date.now();
+  const key = identifier;
+
+  // Initialize or clean expired entries
+  if (!signupStore[key]) {
+    signupStore[key] = {
+      hourlySignups: 0,
+      dailySignups: 0,
+      hourlyResetTime: now + HOUR_IN_MS,
+      dailyResetTime: now + DAY_IN_MS,
+    };
+  }
+
+  // Reset hourly counter if window expired
+  if (signupStore[key].hourlyResetTime < now) {
+    signupStore[key].hourlySignups = 0;
+    signupStore[key].hourlyResetTime = now + HOUR_IN_MS;
+  }
+
+  // Reset daily counter if window expired
+  if (signupStore[key].dailyResetTime < now) {
+    signupStore[key].dailySignups = 0;
+    signupStore[key].dailyResetTime = now + DAY_IN_MS;
+  }
+
+  // Check hourly limit
+  if (signupStore[key].hourlySignups >= MAX_SIGNUPS_PER_HOUR) {
+    const minutesRemaining = Math.ceil((signupStore[key].hourlyResetTime - now) / (60 * 1000));
+    return {
+      allowed: false,
+      reason: `Too many signups. Maximum ${MAX_SIGNUPS_PER_HOUR} signups per hour. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
+      resetTime: signupStore[key].hourlyResetTime,
+      hourlyRemaining: 0,
+      dailyRemaining: Math.max(0, MAX_SIGNUPS_PER_DAY - signupStore[key].dailySignups),
+    };
+  }
+
+  // Check daily limit
+  if (signupStore[key].dailySignups >= MAX_SIGNUPS_PER_DAY) {
+    const hoursRemaining = Math.ceil((signupStore[key].dailyResetTime - now) / (60 * 60 * 1000));
+    return {
+      allowed: false,
+      reason: `Too many signups. Maximum ${MAX_SIGNUPS_PER_DAY} signups per day. Try again in ${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}.`,
+      resetTime: signupStore[key].dailyResetTime,
+      hourlyRemaining: Math.max(0, MAX_SIGNUPS_PER_HOUR - signupStore[key].hourlySignups),
+      dailyRemaining: 0,
+    };
+  }
+
+  // Increment both counters
+  signupStore[key].hourlySignups++;
+  signupStore[key].dailySignups++;
+
+  return {
+    allowed: true,
+    hourlyRemaining: Math.max(0, MAX_SIGNUPS_PER_HOUR - signupStore[key].hourlySignups),
+    dailyRemaining: Math.max(0, MAX_SIGNUPS_PER_DAY - signupStore[key].dailySignups),
+  };
+}
 
 export function rateLimitErrors(
   identifier: string
@@ -62,10 +145,11 @@ export function rateLimitErrors(
   };
 }
 
+
 export function recordError(identifier: string): { shouldTimeout: boolean; timeoutMinutes: number; resetTime: number } {
   const key = identifier;
   const now = Date.now();
-  
+
   if (!store[key]) {
     store[key] = {
       errorCount: 0,
@@ -93,14 +177,14 @@ export function recordError(identifier: string): { shouldTimeout: boolean; timeo
     // Use current timeout level to determine duration
     const timeoutIndex = Math.min(store[key].timeoutLevel, TIMEOUT_DURATIONS.length - 1);
     const timeoutDuration = TIMEOUT_DURATIONS[timeoutIndex];
-    
+
     store[key].resetTime = now + timeoutDuration;
-    
+
     // Increment timeout level for next time (but cap at max)
     if (store[key].timeoutLevel < TIMEOUT_DURATIONS.length - 1) {
       store[key].timeoutLevel++;
     }
-    
+
     const timeoutMinutes = Math.ceil(timeoutDuration / (60 * 1000));
     return {
       shouldTimeout: true,
@@ -118,7 +202,7 @@ export function recordError(identifier: string): { shouldTimeout: boolean; timeo
 
 export function recordSuccess(identifier: string): void {
   const key = identifier;
-  
+
   // Reset error count and timeout level on successful request
   if (store[key]) {
     store[key].errorCount = 0;
@@ -175,7 +259,7 @@ export function getClientIdentifier(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
   const realIp = request.headers.get('x-real-ip');
   const ip = forwarded?.split(',')[0] || realIp || 'unknown';
-  
+
   return ip;
 }
 

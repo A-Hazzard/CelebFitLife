@@ -63,12 +63,6 @@ function PremiumOnboardingContent() {
           </div>
 
           <div className="relative z-10">
-            <button
-              onClick={() => router.back()}
-              className="mb-6 text-gray-400 hover:text-white transition-colors flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-white/5 rounded-lg w-fit"
-            >
-              ← Back
-            </button>
 
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/20 text-orange-400 font-bold text-sm uppercase tracking-wider mb-6 border border-orange-500/20">
               <Crown className="w-4 h-4" />
@@ -123,37 +117,44 @@ function PremiumOnboardingContent() {
         </div>
       </div>
 
-     {/* VERIFY EMAIL REMINDER MODAL */}
-{showVerifyModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-    <div className="bg-[#0f0f0f] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 text-center relative">
-      {/* Close button (X) */}
-      <button
-        onClick={() => setShowVerifyModal(false)}
-        className="absolute top-2 right-2 text-white text-xl"
-      >
-        &times; {/* This is the X symbol */}
-      </button>
+      {/* VERIFY EMAIL REMINDER MODAL */}
+      {showVerifyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#0f0f0f] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 text-center relative">
+            {/* Close button (X) */}
+            <button
+              onClick={() => setShowVerifyModal(false)}
+              className="absolute top-2 right-2 text-white text-xl"
+            >
+              &times; {/* This is the X symbol */}
+            </button>
 
-      <h2 className="text-2xl font-bold mb-3">
-        One last step ✉️
-      </h2>
+            <h2 className="text-2xl font-bold mb-3">
+              One last step ✉️
+            </h2>
 
-      <p className="text-gray-300 mb-6">
-        Please verify your email to confirm your vote and secure your spot.
-      </p>
+            <p className="text-gray-300 mb-6">
+              Please verify your email to confirm your vote and secure your spot.
+            </p>
 
-      <div className="flex flex-col gap-3">
-        <button
-          onClick={() => router.push("/")}
-          className="w-full py-3 bg-orange-500 hover:bg-orange-400 text-black font-bold rounded-xl transition-all"
-        >
-          Go Home
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  // Remove session recovery email from localStorage
+                  localStorage.removeItem('sessionRecoveryEmail');
+                  // Clear navigation history to prevent NavigationRestorer from redirecting back
+                  sessionStorage.removeItem('celebfit_last_path');
+                  // Use window.location.href for direct navigation without Next.js redirects
+                  window.location.href = "/";
+                }}
+                className="w-full py-3 bg-orange-500 hover:bg-orange-400 text-black font-bold rounded-xl transition-all"
+              >
+                Go Home
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

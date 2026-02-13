@@ -130,7 +130,11 @@ function OnboardingOptionsContent() {
 
         {/* Home Button */}
         <button
-          onClick={() => router.push("/")}
+          onClick={() => {
+            // Assuming 'sessionRecoveryEmail' is the key for session recovery in local storage
+            localStorage.removeItem('sessionRecoveryEmail');
+            router.push("/");
+          }}
           className="mt-4 w-full py-4 bg-orange-500 hover:bg-orange-400 text-black font-bold rounded-xl flex items-center justify-center gap-2"
         >
           <Home className="w-5 h-5" />

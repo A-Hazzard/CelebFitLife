@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import * as User from "../lib/models/user";
 import connectDB from "../lib/models/db";
-import { rateLimitErrors, recordError, recordSuccess, getClientIdentifier } from "../lib/rateLimit";
+import { rateLimitErrors, rateLimitSignups, recordError, recordSuccess, getClientIdentifier } from "../lib/rateLimit";
 import { sendEmail, generateVerificationEmail } from "@/lib/email";
 import crypto from "crypto";
 
@@ -11,6 +11,25 @@ export async function POST(request: Request) {
   try {
     const { email } = await request.json();
     const clientId = getClientIdentifier(request);
+
+    // Check signup rate limit FIRST to prevent spam
+    const signupLimit = rateLimitSignups(clientId);
+    if (!signupLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: signupLimit.reason,
+          retryAfter: signupLimit.resetTime ? Math.ceil((signupLimit.resetTime - Date.now()) / 1000) : undefined,
+          hourlyRemaining: signupLimit.hourlyRemaining,
+          dailyRemaining: signupLimit.dailyRemaining,
+        },
+        {
+          status: 429,
+          headers: signupLimit.resetTime ? {
+            "Retry-After": Math.ceil((signupLimit.resetTime - Date.now()) / 1000).toString(),
+          } : {},
+        }
+      );
+    }
 
     // Check rate limit before processing
     const errorLimit = rateLimitErrors(clientId);
@@ -41,7 +60,7 @@ export async function POST(request: Request) {
             retryAfter: Math.ceil((errorResult.resetTime - Date.now()) / 1000),
             timeoutMinutes: errorResult.timeoutMinutes,
           },
-          { 
+          {
             status: 429,
             headers: {
               "Retry-After": Math.ceil((errorResult.resetTime - Date.now()) / 1000).toString(),
@@ -64,7 +83,7 @@ export async function POST(request: Request) {
             retryAfter: Math.ceil((errorResult.resetTime - Date.now()) / 1000),
             timeoutMinutes: errorResult.timeoutMinutes,
           },
-          { 
+          {
             status: 429,
             headers: {
               "Retry-After": Math.ceil((errorResult.resetTime - Date.now()) / 1000).toString(),
@@ -83,10 +102,10 @@ export async function POST(request: Request) {
     await connectDB();
 
     // Get origin from request headers for dynamic link generation
-    const origin = request.headers.get('origin') || 
-                   request.headers.get('referer')?.split('/').slice(0, 3).join('/') ||
-                   APP_BASE_URL?.trim() ||
-                   'https://celebfitlife.vercel.app';
+    const origin = request.headers.get('origin') ||
+      request.headers.get('referer')?.split('/').slice(0, 3).join('/') ||
+      APP_BASE_URL?.trim() ||
+      'https://celebfitlife.vercel.app';
 
     // Generate verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -98,7 +117,7 @@ export async function POST(request: Request) {
 
     // Use existing entry if it exists, otherwise create new
     let user = existingUser;
-    
+
     if (!user) {
       // Create new user with isVerified: false
       user = await User.createUser({
@@ -131,7 +150,7 @@ export async function POST(request: Request) {
     try {
       const emailOptions = generateVerificationEmail(sanitizedEmail, verificationToken, origin, isNewUser);
       const emailSent = await sendEmail(emailOptions);
-      
+
       if (!emailSent) {
         console.error(`Failed to send verification email to: ${sanitizedEmail}`);
         // Don't fail the request, but log the error
@@ -155,14 +174,14 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: true,
-        message: isNewUser 
+        message: isNewUser
           ? "Verification email sent. Please check your inbox to complete your registration."
           : "Verification email sent. Please check your inbox to verify your email address.",
         data: {
-            id: user._id,
-            email: user.email,
-            isVerified: user.isVerified,
-            isNewUser: isNewUser
+          id: user._id,
+          email: user.email,
+          isVerified: user.isVerified,
+          isNewUser: isNewUser
         }
       },
       { status: 201 }
