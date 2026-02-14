@@ -46,7 +46,15 @@ export async function POST(request: Request) {
 
     // Sanitize inputs
     const sanitizedEmail = email.trim().toLowerCase();
-    const sanitizedSubject = subject.trim().substring(0, 200); // Limit subject length
+    let sanitizedSubject = subject.trim().substring(0, 200); // Limit subject length
+    sanitizedSubject = sanitizedSubject
+      .replace(/\btest\b/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    if (!sanitizedSubject) {
+      sanitizedSubject = 'Support request';
+    }
     const sanitizedMessage = message.trim().substring(0, 5000); // Limit message length
 
     // Check if Gmail is configured
